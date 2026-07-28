@@ -1,0 +1,48 @@
+/* Silk · type tokens
+ *
+ * Two voices. Sans (SF Pro) is the interface: names, labels, prose.
+ * Serif (New York) is the *editorial* voice and it is LOCKED to two jobs —
+ * numerals and the sentences Silk speaks in its own voice (the greeting,
+ * the ask, the equation). Never set an interface label in serif, and never
+ * set a numeral in sans.
+ *
+ * Every serif numeral is tabular + lining so digits don't shift as they tick.
+ */
+
+:root {
+  --silk-font-sans:  'SF Pro Text', 'SF Pro Display', -apple-system, BlinkMacSystemFont,
+                     'Helvetica Neue', Arial, sans-serif;
+  --silk-font-serif: 'New York', 'New York Medium', Georgia, 'Times New Roman', serif;
+  --silk-font-mono:  ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* role sizes */
+  --silk-size-hero:   92px;   /* the numeral that owns the screen */
+  --silk-size-shield: 40px;   /* the numeral on a shield */
+  --silk-size-greet:  21px;
+  --silk-size-ask:    17px;
+  --silk-size-body:   15px;
+  --silk-size-eq:     14.5px;
+  --silk-size-time:   14px;
+  --silk-size-obs:    13.5px;
+  --silk-size-label:  12.5px;
+  --silk-size-chart:  12px;
+  --silk-size-mark:   11px;
+  --silk-size-tick:   10px;
+
+  /* role tracking — Silk tightens display type and opens small caps-y type */
+  --silk-track-hero:  -.045em;
+  --silk-track-tight: -.005em;  /* greeting, body, door name */
+  --silk-track-label: .015em;
+  --silk-track-chart: .04em;
+  --silk-track-mark:  .34em;    /* the wordmark, and only the wordmark */
+}
+
+/* The serif voice. Apply with `.silk-serif` (or `.ny` for parity with the
+ * original mockups — both are defined and identical). */
+.silk-serif,
+.ny {
+  font-family: var(--silk-font-serif);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}

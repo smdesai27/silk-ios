@@ -1,0 +1,25 @@
+/* Silk — design system entry point.
+ *
+ * This file is the ONLY stylesheet a rendered design receives, along with
+ * everything it @imports. If a rule is not reachable from here, designs
+ * will not have it. Add new layers by @import, never by linking elsewhere.
+ */
+
+@import url("./tokens/color.css");
+@import url("./tokens/type.css");
+@import url("./_ds_bundle.css");
+
+/* Silk's mockups are authored against a zeroed box model. Every canonical
+ * measurement in silk.css assumes it. */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--silk-font-sans);
+  -webkit-font-smoothing: antialiased;
+  color: var(--silk-ink);
+  background: var(--silk-paper);
+}

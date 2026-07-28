@@ -1,0 +1,163 @@
+<!-- @dsCard group="Screens" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Silk — Now (down hours)</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;
+    background:radial-gradient(1900px 1000px at 50% 38%, #EAE5D8 0%, #E2DBC9 68%, #DCD4C0 100%);
+    font-family:'SF Pro Text','SF Pro Display',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; color:#211E17; }
+  .ny { font-family:'New York','New York Medium',Georgia,'Times New Roman',serif; font-weight:400;
+    font-variant-numeric:tabular-nums lining-nums; font-feature-settings:'tnum' 1,'lnum' 1; }
+  .screen { position:relative; width:390px; height:800px; border-radius:46px; overflow:hidden; background:#F6F3EC; }
+  .screen.night { background:#16130E; }
+  .island { position:absolute; top:13px; left:50%; transform:translateX(-50%); width:100px; height:29px;
+    border-radius:15px; background:#0D0B08; z-index:6; }
+  .home { position:absolute; bottom:9px; left:50%; transform:translateX(-50%); width:128px; height:5px;
+    border-radius:3px; background:rgba(33,30,23,.24); z-index:6; }
+  .screen.night .home { background:rgba(246,243,236,.26); }
+  .moonwash { position:absolute; top:110px; left:50%; transform:translateX(-50%); width:340px; height:340px;
+    pointer-events:none;
+    background:radial-gradient(closest-side, rgba(110,127,138,.09), transparent 74%); }
+
+  /* ---------- wordmark / greeting ---------- */
+  .wordmark { margin-top:62px; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .wordmark .mark { width:13px; height:13px; }
+  .wordmark .wm { font-size:11px; font-weight:500; letter-spacing:.34em; margin-right:-.34em; }
+  .screen.night .wordmark .mark { color:rgba(246,243,236,.4); }
+  .screen.night .wordmark .wm { color:rgba(246,243,236,.5); }
+  .greet { margin-top:32px; text-align:center; font-size:21px; letter-spacing:-.005em; }
+  .screen.night .greet { color:rgba(246,243,236,.82); }
+
+  /* ---------- hero / living circle ---------- */
+  .hero { margin-top:22px; display:flex; justify-content:center; }
+  .enso-wrap { position:relative; width:232px; height:232px; }
+  .enso-wrap svg.ring { position:absolute; inset:0; width:100%; height:100%; }
+  .screen.night .enso-wrap svg.ring { color:#6E7F8A; }
+  .hero-inner { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .hero-num { font-size:92px; line-height:1; letter-spacing:-.045em; }
+  .hero-label { margin-top:8px; font-size:12.5px; letter-spacing:.015em; }
+  .screen.night .hero-num { color:rgba(246,243,236,.92); }
+  .screen.night .hero-label { color:rgba(246,243,236,.44); }
+
+  /* ---------- aperture ---------- */
+  .aperture { position:relative; margin:18px auto 0; width:234px; height:56px; border-radius:27px;
+    display:flex; align-items:center; justify-content:center; }
+  .aperture .ap-t { font-size:13.5px; letter-spacing:.01em; }
+  .screen.night .aperture {
+    background:
+      radial-gradient(174px 50px at 50% 108%, rgba(126,156,184,.28), rgba(126,156,184,0) 74%),
+      radial-gradient(192px 58px at 50% -12px, rgba(110,140,168,.4), rgba(110,140,168,0) 76%),
+      linear-gradient(180deg, #3D5264 0%, #263440 58%, #1B2731 100%);
+    box-shadow: inset 0 2px 8px rgba(0,0,0,.45), inset 0 0 12px 4px rgba(14,18,24,.32),
+      inset 0 -1px 0 rgba(163,187,206,.12), 0 0 34px 2px rgba(78,134,184,.16); }
+  .screen.night .aperture .ap-t { color:rgba(214,224,232,.85); }
+
+  /* ---------- doors ---------- */
+  .doors { margin:26px 46px 0; }
+  .door { display:flex; align-items:center; height:52px; }
+  .door:last-child { border-bottom:none; }
+  .door .name { font-size:15px; font-weight:500; letter-spacing:-.005em; }
+  .door .t { font-size:14px; }
+  .door.rest .name { font-weight:400; }
+  .door .state { margin-left:auto; width:6px; height:6px; border-radius:50%; }
+  .screen.night .door { border-bottom:1px solid rgba(246,243,236,.05); }
+  .screen.night .door:last-child { border-bottom:none; }
+  .screen.night .door .name { color:rgba(246,243,236,.36); }
+  .screen.night .door .t { color:rgba(246,243,236,.26); }
+  .screen.night .door.rest .name { color:rgba(246,243,236,.24); }
+  .screen.night .door.live .state { background:rgba(246,243,236,.3); }
+  .screen.night .door.rest .state { box-shadow:inset 0 0 0 1px rgba(246,243,236,.18); }
+
+  /* ---------- command bar ---------- */
+  .cmdbar { position:absolute; left:28px; right:28px; bottom:44px; height:52px; display:flex; align-items:center;
+    padding:0 20px; border-radius:26px; background:transparent; border:1px solid rgba(33,30,23,.14); z-index:5; }
+  .cmdbar input { flex:1; border:none; outline:none; background:transparent; font-size:15px; letter-spacing:-.005em;
+    font-family:inherit; }
+  .cmdbar .micb { margin-left:12px; width:18px; height:18px; background:none; border:none; padding:0; }
+  .screen.night .cmdbar { border-color:rgba(246,243,236,.12); }
+  .screen.night .cmdbar input { color:rgba(246,243,236,.85); }
+  .screen.night .cmdbar input::placeholder { color:rgba(246,243,236,.32); }
+  .screen.night .cmdbar .micb { color:rgba(246,243,236,.42); }
+  .dots { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); display:flex; gap:7px; z-index:5; }
+  .dot { width:5px; height:5px; border-radius:50%; }
+  .screen.night .dot { background:rgba(246,243,236,.14); }
+  .screen.night .dot.active { background:rgba(246,243,236,.5); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="enso-full" viewBox="0 0 200 200">
+      <g fill="none" stroke="currentColor" stroke-linecap="round">
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="2.2" pathLength="100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="2.6" pathLength="100" stroke-dasharray="80 100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="3.0" pathLength="100" stroke-dasharray="58 100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="3.8" pathLength="100" stroke-dasharray="34 100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="4.6" pathLength="100" stroke-dasharray="16 100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="0.7" opacity="0.45" pathLength="100" stroke-dasharray="14 100" stroke-dashoffset="-31" transform="translate(4 4) scale(0.96)"/>
+        <path d="M 146 36 C 139 31.5, 133 28.5, 127 26.5" stroke-width="1.1" opacity="0.85"/>
+      </g>
+    </symbol>
+    <symbol id="enso-s" viewBox="0 0 200 200">
+      <g fill="none" stroke="currentColor" stroke-linecap="round">
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="14" pathLength="100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="17" pathLength="100" stroke-dasharray="55 100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="21" pathLength="100" stroke-dasharray="22 100"/>
+      </g>
+    </symbol>
+    <symbol id="mic" viewBox="0 0 24 24">
+      <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="3" width="6" height="11" rx="3"/>
+        <path d="M 5.5 11.5 a 6.5 6.5 0 0 0 13 0"/>
+        <path d="M 12 18 L 12 21"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="screen night">
+  <div class="moonwash"></div>
+  <div class="island"></div>
+
+  <div class="wordmark">
+    <svg class="mark" viewBox="0 0 200 200"><use href="#enso-s"/></svg><span class="wm">SILK</span>
+  </div>
+  <div class="greet ny">Good evening.</div>
+
+  <div class="hero">
+    <div class="enso-wrap">
+      <svg class="ring" viewBox="0 0 200 200"><use href="#enso-full"/></svg>
+      <div class="hero-inner">
+        <div class="hero-num ny" style="font-size:80px">☾</div>
+        <div class="hero-label">7:00 AM</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="aperture"><span class="ap-t ny">☾&nbsp; 10:00 PM – 7:00 AM</span></div>
+
+  <div class="doors">
+    <div class="door live"><span class="name">Instagram</span><span class="t ny">&nbsp;· 5:00</span><span class="state"></span></div>
+    <div class="door live"><span class="name">TikTok</span><span class="t ny">&nbsp;· 5:00</span><span class="state"></span></div>
+    <div class="door rest"><span class="name">Clash</span><span class="t ny"></span><span class="state"></span></div>
+    <div class="door rest"><span class="name">YouTube</span><span class="t ny"></span><span class="state"></span></div>
+  </div>
+
+  <div class="cmdbar">
+    <input type="text" placeholder="Tell Silk…" autocomplete="off">
+    <span class="micb" title="Speak"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#mic"/></svg></span>
+  </div>
+  <div class="dots">
+    <span class="dot active"></span>
+    <span class="dot"></span>
+  </div>
+  <div class="home"></div>
+</div>
+
+</body>
+</html>

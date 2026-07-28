@@ -1,0 +1,76 @@
+<!-- @dsCard group="Foundations" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Silk DS — Type</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { min-height:100vh; padding:44px 40px; background:#F6F3EC;
+    font-family:'SF Pro Text','SF Pro Display',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; color:#211E17; }
+  /* ---------- serif numeral / editorial voice (LOCKED) ---------- */
+  .ny { font-family:'New York','New York Medium',Georgia,'Times New Roman',serif; font-weight:400;
+    font-variant-numeric:tabular-nums lining-nums; font-feature-settings:'tnum' 1,'lnum' 1; }
+  h1 { font-size:11px; font-weight:500; letter-spacing:.34em; color:rgba(33,30,23,.62); margin-bottom:34px; }
+  .row { display:flex; align-items:baseline; gap:36px; padding:26px 0; border-bottom:1px solid rgba(33,30,23,.07); max-width:920px; }
+  .row:last-of-type { border-bottom:none; }
+  .spec { flex:0 0 320px; font-size:11px; line-height:1.75; letter-spacing:.02em; color:rgba(33,30,23,.5);
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .spec b { color:rgba(33,30,23,.78); font-weight:600; font-family:inherit; }
+
+  /* the locked numeral voice (hero) */
+  .t-hero { font-size:92px; line-height:1; letter-spacing:-.045em; color:#211E17; }
+  /* greeting */
+  .t-greet { font-size:21px; letter-spacing:-.005em; color:rgba(33,30,23,.9); }
+  /* label */
+  .t-label { font-size:12.5px; letter-spacing:.015em; color:rgba(33,30,23,.52); }
+  /* wordmark */
+  .t-wm { font-size:11px; font-weight:500; letter-spacing:.34em; margin-right:-.34em; color:rgba(33,30,23,.62); }
+  /* body */
+  .t-body { font-size:15px; letter-spacing:-.005em; color:rgba(33,30,23,.84); }
+</style>
+</head>
+<body>
+  <h1>SILK · TYPE</h1>
+
+  <div class="row">
+    <div style="flex:1"><span class="t-hero ny">40</span></div>
+    <div class="spec"><b>Numeral voice (locked)</b><br>
+      font-family:'New York','New York Medium',Georgia,'Times New Roman',serif;<br>
+      font-weight:400; letter-spacing:-.045em;<br>
+      font-variant-numeric:tabular-nums lining-nums;<br>
+      font-feature-settings:'tnum' 1,'lnum' 1;<br>
+      hero: 92px / line-height:1</div>
+  </div>
+
+  <div class="row">
+    <div style="flex:1"><span class="t-greet ny">Good afternoon.</span></div>
+    <div class="spec"><b>Greeting</b><br>
+      serif (.ny); font-size:21px;<br>
+      letter-spacing:-.005em; color:rgba(33,30,23,.9)</div>
+  </div>
+
+  <div class="row">
+    <div style="flex:1"><span class="t-label">min left today</span></div>
+    <div class="spec"><b>Label</b><br>
+      sans; font-size:12.5px;<br>
+      letter-spacing:.015em; color:rgba(33,30,23,.52)</div>
+  </div>
+
+  <div class="row">
+    <div style="flex:1"><span class="t-wm">SILK</span></div>
+    <div class="spec"><b>Wordmark</b><br>
+      sans; font-size:11px; font-weight:500;<br>
+      letter-spacing:.34em; margin-right:-.34em;<br>
+      color:rgba(33,30,23,.62)</div>
+  </div>
+
+  <div class="row">
+    <div style="flex:1"><span class="t-body">Most of your Instagram time follows the 9&nbsp;PM pickup.</span></div>
+    <div class="spec"><b>Body</b><br>
+      sans; font-size:15px;<br>
+      letter-spacing:-.005em; color:rgba(33,30,23,.84)</div>
+  </div>
+</body>
+</html>

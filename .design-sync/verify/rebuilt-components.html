@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VERIFY — components rebuilt from styles.css only</title>
+<link rel="stylesheet" href="../../ds-bundle/styles.css">
+<style>
+  /* harness only */
+  body { background: var(--silk-paper); padding: 40px; }
+  h2 { font-size:11px; font-weight:500; letter-spacing:.34em; color:var(--silk-ink-62);
+       margin: 34px 0 18px; }
+  .rowset { display:flex; gap:26px; flex-wrap:wrap; align-items:flex-start; }
+  .frame { position:relative; width:280px; height:420px; border-radius:24px; overflow:hidden;
+           background:var(--silk-paper); box-shadow: inset 0 0 0 1px var(--silk-ink-08); }
+  .frame.silk-night { background:var(--silk-lacquer); box-shadow:none; }
+  .panel { width:390px; border-radius:20px; padding:2px 0 24px; background:var(--silk-paper);
+           box-shadow: inset 0 0 0 1px var(--silk-ink-08); }
+  .cap { margin-top:10px; font-size:12.5px; letter-spacing:.015em; color:var(--silk-ink-52); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="enso-s" viewBox="0 0 200 200">
+      <g fill="none" stroke="currentColor" stroke-linecap="round">
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="14" pathLength="100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="17" pathLength="100" stroke-dasharray="55 100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="21" pathLength="100" stroke-dasharray="22 100"/>
+      </g>
+    </symbol>
+    <symbol id="enso-82" viewBox="0 0 200 200">
+      <g fill="none" stroke="currentColor" stroke-linecap="round">
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="2.2" pathLength="100" stroke-dasharray="82 100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="2.6" pathLength="100" stroke-dasharray="65.5 100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="3.0" pathLength="100" stroke-dasharray="47.5 100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="3.8" pathLength="100" stroke-dasharray="28 100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="4.6" pathLength="100" stroke-dasharray="13 100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="0.7" opacity="0.45" pathLength="100" stroke-dasharray="14 100" stroke-dashoffset="-31" transform="translate(4 4) scale(0.96)"/>
+        <path d="M 180.1 102.2 C 179.9 95.2, 179.4 88.2, 178.7 81.3" stroke-width="1.1" opacity="0.85"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<h2>SHIELD</h2>
+<div class="rowset">
+  <div>
+    <div class="frame">
+      <div class="silk-shield">
+        <svg class="silk-shield__mark" viewBox="0 0 200 200"><use href="#enso-s"/></svg>
+        <div class="silk-shield__until silk-serif">Instagram</div>
+        <div class="silk-shield__app"></div>
+        <button class="silk-shield__ok">OK</button>
+      </div>
+    </div>
+    <div class="cap">Wall</div>
+  </div>
+  <div>
+    <div class="frame">
+      <div class="silk-shield">
+        <svg class="silk-shield__mark" viewBox="0 0 200 200"><use href="#enso-s"/></svg>
+        <div class="silk-shield__until silk-serif">Until 5:00</div>
+        <div class="silk-shield__app">Instagram</div>
+        <button class="silk-shield__ok">OK</button>
+      </div>
+    </div>
+    <div class="cap">Ruled</div>
+  </div>
+  <div>
+    <div class="frame silk-night">
+      <div class="silk-shield">
+        <svg class="silk-shield__mark" viewBox="0 0 200 200"><use href="#enso-s"/></svg>
+        <div class="silk-shield__until silk-serif">☾ 7:00 AM</div>
+        <div class="silk-shield__app">Instagram</div>
+        <button class="silk-shield__ok">OK</button>
+      </div>
+    </div>
+    <div class="cap">Down hours</div>
+  </div>
+</div>
+
+<h2>MIRROR — HERO, EQUATION, CHART, PROPOSAL</h2>
+<div class="panel">
+  <div class="silk-hero" style="margin-top:40px">
+    <div class="silk-enso-wrap silk-enso-wrap--mirror">
+      <svg viewBox="0 0 200 200"><use href="#enso-82"/></svg>
+      <div class="silk-hero-inner">
+        <div class="silk-hero-num silk-serif">82</div>
+        <div class="silk-hero-label">Sunday</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="silk-eq silk-serif">82 = 100 − 12 attempts − 6 late</div>
+
+  <div class="silk-chart">
+    <div class="silk-chart__title">Attempts</div>
+    <div class="silk-bars">
+      <div class="silk-bars__col"><div class="silk-bar" style="height:53px"></div></div>
+      <div class="silk-bars__col"><div class="silk-bar" style="height:32px"></div></div>
+      <div class="silk-bars__col"><div class="silk-bar" style="height:43px"></div></div>
+      <div class="silk-bars__col"><div class="silk-bar" style="height:21px"></div></div>
+      <div class="silk-bars__col"><div class="silk-bar" style="height:64px"></div></div>
+      <div class="silk-bars__col"><div class="silk-bar" style="height:21px"></div></div>
+      <div class="silk-bars__col silk-bars__col--today"><div class="silk-bar" style="height:11px"></div></div>
+    </div>
+    <div class="silk-xlabels">
+      <div class="silk-xlabels__col">Tu</div><div class="silk-xlabels__col">We</div>
+      <div class="silk-xlabels__col">Th</div><div class="silk-xlabels__col">Fr</div>
+      <div class="silk-xlabels__col">Sa</div><div class="silk-xlabels__col">Su</div>
+      <div class="silk-xlabels__col silk-xlabels__col--today">Today</div>
+    </div>
+  </div>
+
+  <div class="silk-card">
+    <div class="silk-card__obs">Most of your Instagram time follows the 9&nbsp;PM pickup.</div>
+    <div class="silk-card__ask silk-serif">Start down hours at 9:30&nbsp;PM?</div>
+    <div class="silk-card__actions">
+      <button class="silk-btn-accept">Accept</button>
+      <button class="silk-btn-later">Not now</button>
+    </div>
+  </div>
+
+  <div class="silk-footnote silk-serif" style="margin-top:24px">⚿ 1 · Jul 12</div>
+</div>
+
+<h2>DOORS — ALL FOUR STATES</h2>
+<div class="rowset">
+  <div>
+    <div class="panel" style="width:340px; padding:8px 26px">
+      <div class="silk-door silk-door--live"><span class="silk-door__name">Instagram</span><span class="silk-door__time silk-serif">&nbsp;· 5:00</span><span class="silk-door__state"></span></div>
+      <div class="silk-door silk-door--live"><span class="silk-door__name">TikTok</span><span class="silk-door__time silk-serif">&nbsp;· 5:00</span><span class="silk-door__state"></span></div>
+      <div class="silk-door silk-door--open"><span class="silk-door__name">Clash</span><span class="silk-door__time silk-serif">&nbsp;· 20:00</span><span class="silk-door__state"></span></div>
+      <div class="silk-door silk-door--rest"><span class="silk-door__name">YouTube</span><span class="silk-door__time silk-serif"></span><span class="silk-door__state"></span></div>
+    </div>
+    <div class="cap">Day — live, live, open (leaf), rest</div>
+  </div>
+  <div>
+    <div class="panel silk-night" style="width:340px; padding:8px 26px; background:var(--silk-lacquer); box-shadow:none">
+      <div class="silk-door silk-door--live"><span class="silk-door__name">Instagram</span><span class="silk-door__time silk-serif">&nbsp;· 5:00</span><span class="silk-door__state"></span></div>
+      <div class="silk-door silk-door--live"><span class="silk-door__name">TikTok</span><span class="silk-door__time silk-serif">&nbsp;· 5:00</span><span class="silk-door__state"></span></div>
+      <div class="silk-door silk-door--open"><span class="silk-door__name">Clash</span><span class="silk-door__time silk-serif">&nbsp;· 20:00</span><span class="silk-door__state"></span></div>
+      <div class="silk-door silk-door--rest"><span class="silk-door__name">YouTube</span><span class="silk-door__time silk-serif"></span><span class="silk-door__state"></span></div>
+    </div>
+    <div class="cap">Night</div>
+  </div>
+</div>
+
+</body>
+</html>

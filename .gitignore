@@ -1,0 +1,5 @@
+.DS_Store
+
+# ds-bundle/ is intentionally NOT ignored. There is no converter script that
+# regenerates it — the extracted CSS and the per-component docs are authored
+# content, so losing them would mean redoing real work.

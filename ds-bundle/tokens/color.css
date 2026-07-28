@@ -1,0 +1,79 @@
+/* Silk · color tokens
+ *
+ * Two grounds: warm paper (day) and night lacquer (night).
+ * Everything else is an alpha ramp on ink (day) or paper (night) —
+ * Silk almost never introduces a new hue. The two "pop" colors are
+ * rationed: one pop moment per screen, a wall not wallpaper.
+ */
+
+:root {
+  /* ---- grounds ---- */
+  --silk-paper:            #F6F3EC;  /* warm paper — the day ground */
+  --silk-linen:            #EFE9DB;  /* unbleached linen — raised surfaces on paper */
+  --silk-ink:              #211E17;  /* warm ink — day foreground */
+  --silk-lacquer:          #16130E;  /* night lacquer — the night ground */
+
+  /* ---- muted hues ---- */
+  --silk-washed-sky:       #D8DCD3;
+  --silk-moss:             #8A9484;
+  --silk-pine-shadow:      #4A5A50;
+  --silk-dusk-blue:        #6E7F8A;
+
+  /* ---- pops (ration these) ---- */
+  --silk-leaf:             #5F8A52;  /* the day accent — progress, today, granted */
+  --silk-open-sky:         #4E86B8;  /* the night accent — glow inside the aperture */
+
+  /* ---- ink ramp (day foreground on paper) ---- */
+  --silk-ink-92:  rgba(33, 30, 23, .92);  /* the ask — highest-emphasis prose */
+  --silk-ink-90:  rgba(33, 30, 23, .90);  /* greeting, opened door */
+  --silk-ink-84:  rgba(33, 30, 23, .84);  /* body, door name */
+  --silk-ink-72:  rgba(33, 30, 23, .72);  /* live door dot, today label */
+  --silk-ink-70:  rgba(33, 30, 23, .70);  /* observation prose */
+  --silk-ink-62:  rgba(33, 30, 23, .62);  /* wordmark, section eyebrow */
+  --silk-ink-60:  rgba(33, 30, 23, .60);  /* shield mark, active page dot */
+  --silk-ink-58:  rgba(33, 30, 23, .58);  /* caption, equation */
+  --silk-ink-55:  rgba(33, 30, 23, .55);  /* mic glyph */
+  --silk-ink-52:  rgba(33, 30, 23, .52);  /* label under the numeral */
+  --silk-ink-50:  rgba(33, 30, 23, .50);  /* door time, quiet exit */
+  --silk-ink-48:  rgba(33, 30, 23, .48);  /* chart title */
+  --silk-ink-45:  rgba(33, 30, 23, .45);  /* footer */
+  --silk-ink-44:  rgba(33, 30, 23, .44);  /* resting door name */
+  --silk-ink-42:  rgba(33, 30, 23, .42);  /* chart x-labels */
+  --silk-ink-40:  rgba(33, 30, 23, .40);  /* placeholder */
+  --silk-ink-35:  rgba(33, 30, 23, .35);  /* resting door ring */
+  --silk-ink-28:  rgba(33, 30, 23, .28);  /* chart bar */
+  --silk-ink-24:  rgba(33, 30, 23, .24);  /* home indicator */
+  --silk-ink-16:  rgba(33, 30, 23, .16);  /* page dot, shield button border */
+  --silk-ink-14:  rgba(33, 30, 23, .14);  /* command bar hairline */
+  --silk-ink-10:  rgba(33, 30, 23, .10);  /* chart baseline, swatch edge */
+  --silk-ink-08:  rgba(33, 30, 23, .08);  /* card inset ring */
+  --silk-ink-07:  rgba(33, 30, 23, .07);  /* spec row rule */
+  --silk-ink-055: rgba(33, 30, 23, .055); /* door rule — the faintest line Silk draws */
+
+  /* ---- paper ramp (night foreground on lacquer) ---- */
+  --silk-paper-92: rgba(246, 243, 236, .92);  /* night hero numeral */
+  --silk-paper-85: rgba(246, 243, 236, .85);  /* night input text */
+  --silk-paper-82: rgba(246, 243, 236, .82);  /* night greeting */
+  --silk-paper-80: rgba(246, 243, 236, .80);  /* night shield button */
+  --silk-paper-50: rgba(246, 243, 236, .50);  /* night wordmark, active dot */
+  --silk-paper-44: rgba(246, 243, 236, .44);  /* night hero label */
+  --silk-paper-42: rgba(246, 243, 236, .42);  /* night mic glyph */
+  --silk-paper-40: rgba(246, 243, 236, .40);  /* night mark */
+  --silk-paper-36: rgba(246, 243, 236, .36);  /* night door name */
+  --silk-paper-32: rgba(246, 243, 236, .32);  /* night placeholder */
+  --silk-paper-30: rgba(246, 243, 236, .30);  /* night live door dot */
+  --silk-paper-26: rgba(246, 243, 236, .26);  /* night door time, home indicator */
+  --silk-paper-24: rgba(246, 243, 236, .24);  /* night resting door name */
+  --silk-paper-18: rgba(246, 243, 236, .18);  /* night resting door ring */
+  --silk-paper-16: rgba(246, 243, 236, .16);  /* night shield button border */
+  --silk-paper-14: rgba(246, 243, 236, .14);  /* night page dot */
+  --silk-paper-12: rgba(246, 243, 236, .12);  /* night command bar hairline */
+  --silk-paper-05: rgba(246, 243, 236, .05); /* night door rule */
+
+  /* ---- atmospheres ----
+   * The page behind a Silk screen. Never flat: the day ground is a wide
+   * radial that warms toward the top, the way paper sits under a window.
+   */
+  --silk-atmosphere-day: radial-gradient(1900px 1000px at 50% 38%,
+                           #EAE5D8 0%, #E2DBC9 68%, #DCD4C0 100%);
+}

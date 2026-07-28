@@ -1,0 +1,9 @@
+{
+  "projectId": "727ccb6e-98bc-4700-bf7e-73188332e597",
+  "projectName": "Silk — Design System",
+  "shape": "static-html",
+  "sourceDir": "silk-ds",
+  "outDir": "ds-bundle",
+  "readmeHeader": ".design-sync/conventions.md",
+  "notes": "Off-converter layout. Silk has no JS/React component library — the source is 12 self-contained HTML+CSS mockups, so there is no dist/ to bundle and no _ds_bundle.js. The design language is shipped instead: tokens/ + _ds_bundle.css (extracted verbatim from the mockups, namespaced silk-*), reachable from styles.css. Preview cards are the original mockups, unmodified. See .design-sync/NOTES.md."
+}

@@ -1,0 +1,36 @@
+{
+  "shape": "static-html",
+  "note": "Not converter-produced. Silk has no JS component library; this layout was authored off-script from 12 static HTML+CSS mockups. Any resync driver keying on shape==storybook|package will not match this envelope and will correctly re-verify everything. See .design-sync/NOTES.md.",
+  "keyRecipe": "sha256[:12] per file; sourceHashes over silk-ds/**, renderHashes over each uploaded card, styleSha over styles.css+tokens+_ds_bundle.css concatenated",
+  "styleSha": "1651e0102fba",
+  "bundleSha12": "66e2b7431ec6",
+  "auxSha": "32c33a02b16b",
+  "sourceHashes": {
+    "silk-ds/components/aperture.html": "512ff6fda7ba",
+    "silk-ds/components/chart.html": "19871971b2f0",
+    "silk-ds/components/command-bar.html": "0196d8a77342",
+    "silk-ds/components/doors.html": "eb85cefbf77d",
+    "silk-ds/components/enso.html": "5b8d1f5a133f",
+    "silk-ds/components/proposal-card.html": "2e1194541354",
+    "silk-ds/components/shield.html": "758b674e4c73",
+    "silk-ds/foundations/colors.html": "26ee1ec9768d",
+    "silk-ds/foundations/type.html": "2b57e1526627",
+    "silk-ds/screens/mirror.html": "56d20c2eae52",
+    "silk-ds/screens/now-day.html": "8c4f03fa68a2",
+    "silk-ds/screens/now-night.html": "5c47083ad21e"
+  },
+  "renderHashes": {
+    "Aperture": "512ff6fda7ba",
+    "AttemptsChart": "19871971b2f0",
+    "CommandBar": "0196d8a77342",
+    "Doors": "eb85cefbf77d",
+    "Enso": "5b8d1f5a133f",
+    "ProposalCard": "2e1194541354",
+    "Shield": "758b674e4c73",
+    "Colors": "26ee1ec9768d",
+    "Type": "2b57e1526627",
+    "Mirror": "56d20c2eae52",
+    "NowDay": "8c4f03fa68a2",
+    "NowNight": "5c47083ad21e"
+  }
+}

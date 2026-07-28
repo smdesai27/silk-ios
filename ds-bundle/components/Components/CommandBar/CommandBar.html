@@ -1,0 +1,74 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Silk DS — Command bar</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { min-height:100vh; padding:44px 40px; background:#F6F3EC;
+    font-family:'SF Pro Text','SF Pro Display',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; color:#211E17; }
+  h1 { font-size:11px; font-weight:500; letter-spacing:.34em; color:rgba(33,30,23,.62); margin-bottom:30px; }
+  .rowset { display:flex; gap:26px; flex-wrap:wrap; align-items:flex-start; }
+  .screen { position:relative; width:340px; height:120px; border-radius:20px; background:#F6F3EC;
+    box-shadow:inset 0 0 0 1px rgba(33,30,23,.08); }
+  .screen.night { background:#16130E; box-shadow:none; }
+  .cap { margin-top:10px; font-size:12.5px; letter-spacing:.015em; color:rgba(33,30,23,.52); }
+
+  /* ---------- command bar (verbatim from canonical) ---------- */
+  .cmdbar { position:absolute; left:28px; right:28px; bottom:44px; height:52px; display:flex; align-items:center;
+    padding:0 20px; border-radius:26px; background:transparent; border:1px solid rgba(33,30,23,.14); z-index:5;
+    transition:border-color .8s ease; }
+  .cmdbar input { flex:1; border:none; outline:none; background:transparent; font-size:15px; letter-spacing:-.005em;
+    font-family:inherit; color:#211E17; }
+  .cmdbar input::placeholder { color:rgba(33,30,23,.4); }
+  .cmdbar .micb { margin-left:12px; width:18px; height:18px; color:rgba(33,30,23,.55); background:none; border:none;
+    cursor:pointer; padding:0; }
+  .screen.night .cmdbar { border-color:rgba(246,243,236,.12); }
+  .screen.night .cmdbar input { color:rgba(246,243,236,.85); }
+  .screen.night .cmdbar input::placeholder { color:rgba(246,243,236,.32); }
+  .screen.night .cmdbar .micb { color:rgba(246,243,236,.42); }
+
+  .screen .cmdbar { bottom:34px; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="mic" viewBox="0 0 24 24">
+      <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="3" width="6" height="11" rx="3"/>
+        <path d="M 5.5 11.5 a 6.5 6.5 0 0 0 13 0"/>
+        <path d="M 12 18 L 12 21"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+  <h1>SILK · COMMAND BAR</h1>
+
+  <div class="rowset">
+    <div>
+      <div class="screen">
+        <div class="cmdbar">
+          <input type="text" placeholder="Tell Silk…" autocomplete="off">
+          <span class="micb" title="Speak"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#mic"/></svg></span>
+        </div>
+      </div>
+      <div class="cap">Day — a hairline on the paper, nothing more</div>
+    </div>
+
+    <div>
+      <div class="screen night">
+        <div class="cmdbar">
+          <input type="text" placeholder="Tell Silk…" autocomplete="off">
+          <span class="micb" title="Speak"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#mic"/></svg></span>
+        </div>
+      </div>
+      <div class="cap">Night — the hairline dims under lacquer</div>
+    </div>
+  </div>
+</body>
+</html>

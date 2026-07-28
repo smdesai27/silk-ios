@@ -1,0 +1,65 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Silk DS — Doors</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { min-height:100vh; padding:44px 40px; background:#F6F3EC;
+    font-family:'SF Pro Text','SF Pro Display',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; color:#211E17; }
+  .ny { font-family:'New York','New York Medium',Georgia,'Times New Roman',serif; font-weight:400;
+    font-variant-numeric:tabular-nums lining-nums; font-feature-settings:'tnum' 1,'lnum' 1; }
+  h1 { font-size:11px; font-weight:500; letter-spacing:.34em; color:rgba(33,30,23,.62); margin-bottom:30px; }
+  .rowset { display:flex; gap:26px; flex-wrap:wrap; align-items:flex-start; }
+  .screen { width:340px; border-radius:20px; padding:8px 26px; background:#F6F3EC;
+    box-shadow:inset 0 0 0 1px rgba(33,30,23,.08); }
+  .screen.night { background:#16130E; box-shadow:none; }
+  .cap { margin-top:10px; font-size:12.5px; letter-spacing:.015em; color:rgba(33,30,23,.52); }
+
+  /* ---------- doors (verbatim from canonical) ---------- */
+  .door { display:flex; align-items:center; height:52px; border-bottom:1px solid rgba(33,30,23,.055); cursor:pointer; }
+  .door:last-child { border-bottom:none; }
+  .door .name { font-size:15px; font-weight:500; letter-spacing:-.005em; color:rgba(33,30,23,.84); transition:color .5s; }
+  .door .t { font-size:14px; color:rgba(33,30,23,.5); transition:color .5s; }
+  .door.rest .name { font-weight:400; color:rgba(33,30,23,.44); }
+  .door .state { margin-left:auto; width:6px; height:6px; border-radius:50%; transition:all .5s; }
+  .door.live .state { background:rgba(33,30,23,.72); }
+  .door.rest .state { background:transparent; box-shadow:inset 0 0 0 1px rgba(33,30,23,.35); }
+  .door.open .name { color:rgba(33,30,23,.9); font-weight:500; }
+  .door.open .state { background:#5F8A52; }
+  .screen.night .door { border-bottom-color:rgba(246,243,236,.05); }
+  .screen.night .door .name { color:rgba(246,243,236,.36); }
+  .screen.night .door .t { color:rgba(246,243,236,.26); }
+  .screen.night .door.rest .name { color:rgba(246,243,236,.24); }
+  .screen.night .door.live .state { background:rgba(246,243,236,.3); }
+  .screen.night .door.rest .state { box-shadow:inset 0 0 0 1px rgba(246,243,236,.18); }
+</style>
+</head>
+<body>
+  <h1>SILK · DOORS</h1>
+
+  <div class="rowset">
+    <div>
+      <div class="screen">
+        <div class="door live"><span class="name">Instagram</span><span class="t ny">&nbsp;· 5:00</span><span class="state"></span></div>
+        <div class="door live"><span class="name">TikTok</span><span class="t ny">&nbsp;· 5:00</span><span class="state"></span></div>
+        <div class="door open"><span class="name">Clash</span><span class="t ny">&nbsp;· 20:00</span><span class="state"></span></div>
+        <div class="door rest"><span class="name">YouTube</span><span class="t ny"></span><span class="state"></span></div>
+      </div>
+      <div class="cap">Day — live (filled dot), open/granted (leaf dot + countdown), rest (outline dot)</div>
+    </div>
+
+    <div>
+      <div class="screen night">
+        <div class="door live"><span class="name">Instagram</span><span class="t ny">&nbsp;· 5:00</span><span class="state"></span></div>
+        <div class="door live"><span class="name">TikTok</span><span class="t ny">&nbsp;· 5:00</span><span class="state"></span></div>
+        <div class="door open"><span class="name">Clash</span><span class="t ny">&nbsp;· 20:00</span><span class="state"></span></div>
+        <div class="door rest"><span class="name">YouTube</span><span class="t ny"></span><span class="state"></span></div>
+      </div>
+      <div class="cap">Night — the same doors, dimmed under lacquer</div>
+    </div>
+  </div>
+</body>
+</html>

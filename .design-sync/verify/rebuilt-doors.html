@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VERIFY — doors, all states</title>
+<link rel="stylesheet" href="../../ds-bundle/styles.css">
+<style>
+  body { background: var(--silk-paper); padding: 30px; }
+  .rowset { display:flex; gap:26px; align-items:flex-start; }
+  .panel { width:340px; border-radius:20px; padding:8px 26px; background:var(--silk-paper);
+           box-shadow: inset 0 0 0 1px var(--silk-ink-08); }
+  .panel.silk-night { background:var(--silk-lacquer); box-shadow:none; }
+  .cap { margin-top:10px; font-size:12.5px; letter-spacing:.015em; color:var(--silk-ink-52); }
+</style>
+</head>
+<body>
+<div class="rowset">
+  <div>
+    <div class="panel">
+      <div class="silk-door silk-door--live"><span class="silk-door__name">Instagram</span><span class="silk-door__time silk-serif">&nbsp;· 5:00</span><span class="silk-door__state"></span></div>
+      <div class="silk-door silk-door--live"><span class="silk-door__name">TikTok</span><span class="silk-door__time silk-serif">&nbsp;· 5:00</span><span class="silk-door__state"></span></div>
+      <div class="silk-door silk-door--open"><span class="silk-door__name">Clash</span><span class="silk-door__time silk-serif">&nbsp;· 20:00</span><span class="silk-door__state"></span></div>
+      <div class="silk-door silk-door--rest"><span class="silk-door__name">YouTube</span><span class="silk-door__time silk-serif"></span><span class="silk-door__state"></span></div>
+    </div>
+    <div class="cap">Day — live, live, open (leaf dot + countdown), rest</div>
+  </div>
+  <div>
+    <div class="panel silk-night">
+      <div class="silk-door silk-door--live"><span class="silk-door__name">Instagram</span><span class="silk-door__time silk-serif">&nbsp;· 5:00</span><span class="silk-door__state"></span></div>
+      <div class="silk-door silk-door--live"><span class="silk-door__name">TikTok</span><span class="silk-door__time silk-serif">&nbsp;· 5:00</span><span class="silk-door__state"></span></div>
+      <div class="silk-door silk-door--open"><span class="silk-door__name">Clash</span><span class="silk-door__time silk-serif">&nbsp;· 20:00</span><span class="silk-door__state"></span></div>
+      <div class="silk-door silk-door--rest"><span class="silk-door__name">YouTube</span><span class="silk-door__time silk-serif"></span><span class="silk-door__state"></span></div>
+    </div>
+    <div class="cap">Night — dimmed under lacquer; the leaf dot survives</div>
+  </div>
+</div>
+</body>
+</html>

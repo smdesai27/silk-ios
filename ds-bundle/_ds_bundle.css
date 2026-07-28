@@ -1,0 +1,467 @@
+/* Silk · components
+ *
+ * Every rule here is lifted verbatim from the canonical mockups; only the
+ * class names are namespaced (`silk-`) so they can live in a shared sheet.
+ *
+ * THEMING: night is a container modifier, not a media query. Put
+ * `.silk-night` on the screen (or any ancestor) and every child restyles.
+ * Silk's night is not "dark mode" — it is the same room after sunset:
+ * the doors dim, the aperture wakes up and becomes the one lit thing.
+ */
+
+/* ============================================================
+ * Ground
+ * ========================================================== */
+
+/* The page behind the device. Warm, never flat, never pure white. */
+.silk-atmosphere {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--silk-atmosphere-day);
+  font-family: var(--silk-font-sans);
+  -webkit-font-smoothing: antialiased;
+  color: var(--silk-ink);
+}
+
+/* A phone-sized surface. Silk is designed at 390×800. */
+.silk-screen {
+  position: relative;
+  width: 390px;
+  height: 800px;
+  border-radius: 46px;
+  overflow: hidden;
+  background: var(--silk-paper);
+  font-family: var(--silk-font-sans);
+  -webkit-font-smoothing: antialiased;
+  color: var(--silk-ink);
+}
+.silk-screen.silk-night,
+.silk-night .silk-screen { background: var(--silk-lacquer); }
+
+/* Dappled light — the day screen's only texture. Sunlight through leaves,
+ * pooled in the top half. Barely visible by design (peak alpha .045). */
+.silk-dapple {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 46%;
+  pointer-events: none;
+  background:
+    radial-gradient(150px 100px at 16%  5%, rgba(240, 214, 150, .045), transparent 72%),
+    radial-gradient(100px 130px at 47% -3%, rgba(238, 208, 138, .034), transparent 70%),
+    radial-gradient(170px 120px at 85%  9%, rgba(236, 206, 142, .040), transparent 72%),
+    radial-gradient( 80px 100px at 33% 15%, rgba(150, 160, 132, .028), transparent 70%);
+}
+
+/* Moonwash — the night counterpart, a single cool pool behind the hero. */
+.silk-moonwash {
+  position: absolute;
+  top: 110px; left: 50%;
+  transform: translateX(-50%);
+  width: 340px; height: 340px;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(110, 127, 138, .09), transparent 74%);
+}
+
+/* iOS furniture */
+.silk-island {
+  position: absolute;
+  top: 13px; left: 50%;
+  transform: translateX(-50%);
+  width: 100px; height: 29px;
+  border-radius: 15px;
+  background: #0D0B08;
+  z-index: 6;
+}
+.silk-home {
+  position: absolute;
+  bottom: 9px; left: 50%;
+  transform: translateX(-50%);
+  width: 128px; height: 5px;
+  border-radius: 3px;
+  background: var(--silk-ink-24);
+  z-index: 6;
+}
+.silk-night .silk-home { background: var(--silk-paper-26); }
+
+/* ============================================================
+ * Wordmark + greeting
+ * ========================================================== */
+
+.silk-wordmark {
+  margin-top: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.silk-wordmark__mark { width: 13px; height: 13px; color: rgba(33, 30, 23, .68); }
+.silk-wordmark__text {
+  font-size: var(--silk-size-mark);
+  font-weight: 500;
+  letter-spacing: var(--silk-track-mark);
+  margin-right: -.34em;          /* claw back the trailing letterspace so it optically centers */
+  color: var(--silk-ink-62);
+}
+.silk-night .silk-wordmark__mark { color: var(--silk-paper-40); }
+.silk-night .silk-wordmark__text { color: var(--silk-paper-50); }
+
+/* Silk speaks here — always serif, always a complete sentence with a period. */
+.silk-greet {
+  margin-top: 32px;
+  text-align: center;
+  font-size: var(--silk-size-greet);
+  letter-spacing: var(--silk-track-tight);
+  color: var(--silk-ink-90);
+}
+.silk-night .silk-greet { color: var(--silk-paper-82); }
+
+/* ============================================================
+ * Ensō — the living circle
+ * ========================================================== */
+
+.silk-enso-wrap { position: relative; width: 232px; height: 232px; }
+.silk-enso-wrap > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--silk-leaf);        /* the stroke inherits currentColor */
+}
+.silk-night .silk-enso-wrap > svg { color: var(--silk-dusk-blue); }
+
+.silk-hero {
+  margin-top: 22px;
+  display: flex;
+  justify-content: center;
+}
+.silk-hero-inner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.silk-hero-num {
+  font-size: var(--silk-size-hero);
+  line-height: 1;
+  letter-spacing: var(--silk-track-hero);
+  color: var(--silk-ink);
+}
+.silk-hero-label {
+  margin-top: 8px;
+  font-size: var(--silk-size-label);
+  letter-spacing: var(--silk-track-label);
+  color: var(--silk-ink-52);
+}
+.silk-night .silk-hero-num   { color: var(--silk-paper-92); }
+.silk-night .silk-hero-label { color: var(--silk-paper-44); }
+
+/* Mirror draws its ensō smaller, in ink rather than leaf, with a smaller
+ * numeral — the score is a reflection, not the live budget. */
+.silk-enso-wrap--mirror { width: 190px; height: 190px; }
+.silk-enso-wrap--mirror > svg { color: var(--silk-ink); }
+.silk-enso-wrap--mirror .silk-hero-num { font-size: 72px; }
+.silk-enso-wrap--mirror .silk-hero-label { margin-top: 6px; font-size: 12px; }
+
+/* ============================================================
+ * Aperture — a piece of sky held by the page
+ * ========================================================== */
+
+.silk-aperture {
+  position: relative;
+  width: 234px; height: 56px;
+  margin: 18px auto 0;
+  border-radius: 27px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .8s ease, box-shadow .8s ease;
+  background:
+    radial-gradient(152px 46px at 50%  -8px, rgba( 78, 134, 184, .16), rgba( 78, 134, 184, 0) 78%),
+    radial-gradient(190px 40px at 50% 108%, rgba(226, 229, 220, .85), rgba(226, 229, 220, 0) 70%),
+    linear-gradient(180deg, #CCD4D6 0%, #D3D8D3 54%, #D8DCD3 100%);
+  box-shadow:
+    inset 0  2px  6px    rgba(33, 30, 23, .14),
+    inset 0  9px 16px -9px rgba(33, 30, 23, .18),
+    inset 0 -1px  0      rgba(255, 255, 255, .40),
+          0  1px  0      rgba(255, 255, 255, .55);
+}
+.silk-aperture__text {
+  font-size: 13.5px;
+  letter-spacing: .01em;
+  color: rgba(40, 56, 70, .82);
+  transition: color .8s ease;
+}
+/* At night the aperture is the screen's single lit object — it holds dusk
+ * and throws a faint open-sky glow onto the lacquer around it. */
+.silk-night .silk-aperture {
+  background:
+    radial-gradient(174px 50px at 50% 108%, rgba(126, 156, 184, .28), rgba(126, 156, 184, 0) 74%),
+    radial-gradient(192px 58px at 50% -12px, rgba(110, 140, 168, .40), rgba(110, 140, 168, 0) 76%),
+    linear-gradient(180deg, #3D5264 0%, #263440 58%, #1B2731 100%);
+  box-shadow:
+    inset 0 2px  8px     rgba(0, 0, 0, .45),
+    inset 0 0   12px 4px rgba(14, 18, 24, .32),
+    inset 0 -1px 0       rgba(163, 187, 206, .12),
+          0 0   34px 2px rgba(78, 134, 184, .16);
+}
+.silk-night .silk-aperture__text { color: rgba(214, 224, 232, .85); }
+
+/* ============================================================
+ * Doors — apps, as thresholds rather than list rows
+ * ========================================================== */
+
+.silk-doors { margin: 26px 46px 0; }
+
+.silk-door {
+  display: flex;
+  align-items: center;
+  height: 52px;
+  border-bottom: 1px solid var(--silk-ink-055);
+  cursor: pointer;
+}
+.silk-door:last-child { border-bottom: none; }
+
+.silk-door__name {
+  font-size: var(--silk-size-body);
+  font-weight: 500;
+  letter-spacing: var(--silk-track-tight);
+  color: var(--silk-ink-84);
+  transition: color .5s;
+}
+.silk-door__time {
+  font-size: var(--silk-size-time);
+  color: var(--silk-ink-50);
+  transition: color .5s;
+}
+.silk-door__state {
+  margin-left: auto;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  transition: all .5s;
+}
+
+/* live — in play today, dot filled in ink */
+.silk-door--live .silk-door__state { background: var(--silk-ink-72); }
+/* rest — not in play, dot is an empty outline */
+.silk-door--rest .silk-door__name  { font-weight: 400; color: var(--silk-ink-44); }
+.silk-door--rest .silk-door__state { background: transparent; box-shadow: inset 0 0 0 1px var(--silk-ink-35); }
+/* open — a grant is running; this is the ONLY door that gets the leaf pop */
+.silk-door--open .silk-door__name  { color: var(--silk-ink-90); font-weight: 500; }
+.silk-door--open .silk-door__state { background: var(--silk-leaf); }
+
+.silk-night .silk-door { border-bottom-color: var(--silk-paper-05); }
+.silk-night .silk-door__name { color: var(--silk-paper-36); }
+.silk-night .silk-door__time { color: var(--silk-paper-26); }
+.silk-night .silk-door--rest .silk-door__name  { color: var(--silk-paper-24); }
+.silk-night .silk-door--live .silk-door__state { background: var(--silk-paper-30); }
+.silk-night .silk-door--rest .silk-door__state { box-shadow: inset 0 0 0 1px var(--silk-paper-18); }
+
+/* ============================================================
+ * Command bar — "Tell Silk…"
+ * ========================================================== */
+
+.silk-cmdbar {
+  position: absolute;
+  left: 28px; right: 28px; bottom: 44px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  border-radius: 26px;
+  background: transparent;         /* never filled — it is a hairline on paper */
+  border: 1px solid var(--silk-ink-14);
+  z-index: 5;
+  transition: border-color .8s ease;
+}
+.silk-cmdbar input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--silk-size-body);
+  letter-spacing: var(--silk-track-tight);
+  font-family: inherit;
+  color: var(--silk-ink);
+}
+.silk-cmdbar input::placeholder { color: var(--silk-ink-40); }
+.silk-cmdbar__mic {
+  margin-left: 12px;
+  width: 18px; height: 18px;
+  color: var(--silk-ink-55);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.silk-night .silk-cmdbar { border-color: var(--silk-paper-12); }
+.silk-night .silk-cmdbar input { color: var(--silk-paper-85); }
+.silk-night .silk-cmdbar input::placeholder { color: var(--silk-paper-32); }
+.silk-night .silk-cmdbar__mic { color: var(--silk-paper-42); }
+
+/* Page dots */
+.silk-dots {
+  position: absolute;
+  bottom: 24px; left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 7px;
+  z-index: 5;
+}
+.silk-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--silk-ink-16); }
+.silk-dot--active { background: var(--silk-ink-60); }
+.silk-night .silk-dot { background: var(--silk-paper-14); }
+.silk-night .silk-dot--active { background: var(--silk-paper-50); }
+
+/* ============================================================
+ * Proposal card — Silk asks, you answer
+ * ========================================================== */
+
+.silk-card {
+  margin: 34px 40px 0;
+  background: var(--silk-linen);
+  border-radius: 20px;
+  padding: 20px 22px 18px;
+}
+/* the observation: sans, quiet, factual */
+.silk-card__obs {
+  font-size: var(--silk-size-obs);
+  line-height: 1.5;
+  color: var(--silk-ink-70);
+}
+/* the ask: serif, louder, always a question */
+.silk-card__ask {
+  margin-top: 8px;
+  font-size: var(--silk-size-ask);
+  line-height: 1.35;
+  color: var(--silk-ink-92);
+}
+.silk-card__actions {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* One pill, one quiet exit. The exit is never a second pill. */
+.silk-btn-accept {
+  padding: 9px 22px;
+  border-radius: 999px;
+  background: var(--silk-ink);
+  color: var(--silk-paper);
+  font-size: var(--silk-size-obs);
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+.silk-btn-later {
+  padding: 9px 14px;
+  font-size: var(--silk-size-obs);
+  color: var(--silk-ink-50);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ============================================================
+ * Attempts chart — seven bare strokes
+ * ========================================================== */
+
+.silk-chart { margin: 44px 46px 0; }
+.silk-chart__title {
+  font-size: var(--silk-size-chart);
+  letter-spacing: var(--silk-track-chart);
+  color: var(--silk-ink-48);
+  margin-bottom: 16px;
+}
+.silk-bars {
+  display: flex;
+  align-items: flex-end;
+  height: 64px;
+  border-bottom: 1px solid var(--silk-ink-10);
+}
+.silk-bars__col,
+.silk-xlabels__col { flex: 1; display: flex; justify-content: center; }
+.silk-bar {
+  width: 3px;
+  border-radius: 2px 2px 0 0;
+  background: var(--silk-ink-28);
+}
+/* today is the pop — wider and in leaf */
+.silk-bars__col--today .silk-bar { width: 5px; background: var(--silk-leaf); }
+.silk-xlabels { display: flex; margin-top: 9px; }
+.silk-xlabels__col {
+  font-size: var(--silk-size-tick);
+  letter-spacing: .02em;
+  color: var(--silk-ink-42);
+}
+.silk-xlabels__col--today { color: var(--silk-ink-72); font-weight: 500; }
+
+/* The Mirror equation, e.g. "82 = 100 − 12 attempts − 6 late" */
+.silk-eq {
+  margin-top: 22px;
+  text-align: center;
+  font-size: var(--silk-size-eq);
+  letter-spacing: .005em;
+  color: var(--silk-ink-58);
+}
+.silk-footnote {
+  font-size: var(--silk-size-label);
+  letter-spacing: .02em;
+  color: var(--silk-ink-45);
+  text-align: center;
+}
+
+/* ============================================================
+ * Shield — the wall that answers instead of the app
+ * ========================================================== */
+
+.silk-shield {
+  position: absolute;
+  inset: 0;
+  background: rgba(246, 243, 236, .92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.silk-night .silk-shield { background: rgba(22, 19, 14, .93); }
+
+.silk-shield__mark {
+  width: 15px; height: 15px;
+  color: var(--silk-ink-60);
+  margin-bottom: 16px;
+}
+/* the hour, or the app name — serif, and the largest thing on the wall */
+.silk-shield__until {
+  font-size: var(--silk-size-shield);
+  letter-spacing: -.02em;
+  color: var(--silk-ink);
+}
+.silk-shield__app { font-size: 13.5px; color: var(--silk-ink-50); }
+/* a single acknowledgement. Not "Dismiss", not "15 more minutes". */
+.silk-shield__ok {
+  margin-top: 30px;
+  padding: 11px 44px;
+  border-radius: 16px;
+  background: none;
+  border: 1px solid var(--silk-ink-16);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--silk-ink);
+  cursor: pointer;
+  font-family: inherit;
+}
+.silk-night .silk-shield__mark  { color: var(--silk-paper-40); }
+.silk-night .silk-shield__until { color: rgba(246, 243, 236, .90); }
+.silk-night .silk-shield__app   { color: var(--silk-paper-40); }
+.silk-night .silk-shield__ok    { border-color: var(--silk-paper-16); color: var(--silk-paper-80); }

@@ -1,0 +1,44 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Silk DS — Proposal card</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { min-height:100vh; padding:44px 40px; background:#F6F3EC;
+    font-family:'SF Pro Text','SF Pro Display',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; color:#211E17; }
+  .ny { font-family:'New York','New York Medium',Georgia,'Times New Roman',serif; font-weight:400;
+    font-variant-numeric:tabular-nums lining-nums; font-feature-settings:'tnum' 1,'lnum' 1; }
+  h1 { font-size:11px; font-weight:500; letter-spacing:.34em; color:rgba(33,30,23,.62); margin-bottom:30px; }
+  .screen { width:390px; border-radius:20px; padding:2px 0 34px; background:#F6F3EC;
+    box-shadow:inset 0 0 0 1px rgba(33,30,23,.08); }
+  .cap { margin-top:10px; font-size:12.5px; letter-spacing:.015em; color:rgba(33,30,23,.52); }
+
+  /* ---------- proposal card (verbatim from canonical) ---------- */
+  .card { margin:34px 40px 0; background:#EFE9DB; border-radius:20px; padding:20px 22px 18px; }
+  .card .obs { font-size:13.5px; line-height:1.5; color:rgba(33,30,23,.7); }
+  .card .ask { margin-top:8px; font-size:17px; line-height:1.35; color:rgba(33,30,23,.92); }
+  .card .actions { margin-top:16px; display:flex; align-items:center; gap:10px; }
+  .btn-accept { padding:9px 22px; border-radius:999px; background:#211E17; color:#F6F3EC; font-size:13.5px;
+    font-weight:500; border:none; cursor:pointer; font-family:inherit; }
+  .btn-later { padding:9px 14px; font-size:13.5px; color:rgba(33,30,23,.5); background:none; border:none; cursor:pointer; font-family:inherit; }
+</style>
+</head>
+<body>
+  <h1>SILK · PROPOSAL CARD</h1>
+
+  <div class="screen">
+    <div class="card">
+      <div class="obs">Most of your Instagram time follows the 9&nbsp;PM pickup.</div>
+      <div class="ask ny">Start down hours at 9:30&nbsp;PM?</div>
+      <div class="actions">
+        <button class="btn-accept">Accept</button>
+        <button class="btn-later">Not now</button>
+      </div>
+    </div>
+  </div>
+  <div class="cap">Linen ground, sans observation, serif ask — one pill, one quiet exit</div>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Silk DS — Aperture</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { min-height:100vh; padding:44px 40px; background:#F6F3EC;
+    font-family:'SF Pro Text','SF Pro Display',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; color:#211E17; }
+  .ny { font-family:'New York','New York Medium',Georgia,'Times New Roman',serif; font-weight:400;
+    font-variant-numeric:tabular-nums lining-nums; font-feature-settings:'tnum' 1,'lnum' 1; }
+  h1 { font-size:11px; font-weight:500; letter-spacing:.34em; color:rgba(33,30,23,.62); margin-bottom:30px; }
+  .rowset { display:flex; gap:26px; flex-wrap:wrap; align-items:flex-start; }
+  .screen { width:340px; height:150px; border-radius:20px; background:#F6F3EC; display:flex;
+    align-items:center; justify-content:center; box-shadow:inset 0 0 0 1px rgba(33,30,23,.08); }
+  .screen.night { background:#16130E; box-shadow:none; }
+  .cap { margin-top:10px; font-size:12.5px; letter-spacing:.015em; color:rgba(33,30,23,.52); }
+
+  /* ---------- aperture (verbatim from canonical) ---------- */
+  .aperture { position:relative; margin:18px auto 0; width:234px; height:56px; border-radius:27px;
+    display:flex; align-items:center; justify-content:center; transition:background .8s ease, box-shadow .8s ease;
+    background:
+      radial-gradient(152px 46px at 50% -8px, rgba(78,134,184,.16), rgba(78,134,184,0) 78%),
+      radial-gradient(190px 40px at 50% 108%, rgba(226,229,220,.85), rgba(226,229,220,0) 70%),
+      linear-gradient(180deg, #CCD4D6 0%, #D3D8D3 54%, #D8DCD3 100%);
+    box-shadow: inset 0 2px 6px rgba(33,30,23,.14), inset 0 9px 16px -9px rgba(33,30,23,.18),
+      inset 0 -1px 0 rgba(255,255,255,.4), 0 1px 0 rgba(255,255,255,.55); }
+  .aperture .ap-t { font-size:13.5px; letter-spacing:.01em; color:rgba(40,56,70,.82); transition:color .8s ease; }
+  .screen.night .aperture {
+    background:
+      radial-gradient(174px 50px at 50% 108%, rgba(126,156,184,.28), rgba(126,156,184,0) 74%),
+      radial-gradient(192px 58px at 50% -12px, rgba(110,140,168,.4), rgba(110,140,168,0) 76%),
+      linear-gradient(180deg, #3D5264 0%, #263440 58%, #1B2731 100%);
+    box-shadow: inset 0 2px 8px rgba(0,0,0,.45), inset 0 0 12px 4px rgba(14,18,24,.32),
+      inset 0 -1px 0 rgba(163,187,206,.12), 0 0 34px 2px rgba(78,134,184,.16); }
+  .screen.night .aperture .ap-t { color:rgba(214,224,232,.85); }
+
+  .screen .aperture { margin:0; }
+</style>
+</head>
+<body>
+  <h1>SILK · APERTURE — A PIECE OF SKY HELD BY THE PAGE</h1>
+
+  <div class="rowset">
+    <div>
+      <div class="screen">
+        <div class="aperture"><span class="ap-t ny">☾&nbsp; 10:00 PM – 7:00 AM</span></div>
+      </div>
+      <div class="cap">Day — washed sky, recessed into the paper</div>
+    </div>
+
+    <div>
+      <div class="screen night">
+        <div class="aperture"><span class="ap-t ny">☾&nbsp; 10:00 PM – 7:00 AM</span></div>
+      </div>
+      <div class="cap">Night — the same window, now holding dusk; the screen's one accent</div>
+    </div>
+  </div>
+</body>
+</html>
