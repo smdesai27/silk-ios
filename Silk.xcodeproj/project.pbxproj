@@ -7,35 +7,143 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		08F432E8544B6B2823DB14B5 /* ConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15288FA96D9B3050754D686 /* ConversationView.swift */; };
+		0F34172CD5594C0E74AF23BD /* NowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A928E6FABAA8B87E0F4C9975 /* NowView.swift */; };
+		192AA7C5AEA91053B6345E24 /* WallController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFF8CA4B6D8F6E393B396D1B /* WallController.swift */; };
+		2580302DF762798F7E8BB26F /* ApertureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B533DAEE56A4E18702C13CB /* ApertureView.swift */; };
 		29D791169E236E4BB1294C01 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8C8E4D9BB944356CB0771523 /* SilkCore */; };
+		42ECF7C34173F4CF8B02AC9B /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE8AE616C5B452F9B71C9309 /* OnboardingView.swift */; };
+		4432749FB254CF3A908C4E84 /* WheelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1657C506FCDDFE73884FD015 /* WheelPicker.swift */; };
+		44D77529D4F6F30068A42C1D /* MirrorParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0B8D10154233A0BF5424C9 /* MirrorParts.swift */; };
+		49ACAB6F16F6E0A58DA185C5 /* SpendIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C417C7CA0E5D215A9487363E /* SpendIntent.swift */; };
 		4DF4A22565FFC52E7D1BFB0A /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
+		4EFC6BA6B84C4195AA795BE9 /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
+		50D124B181BBCAD73D2F26C7 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = F378250B1A4E80F37CEC94A5 /* SilkCore */; };
+		50F825EA744CB136C7D8C8D3 /* SilkMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0EDCB2B02761CEED91D4C989 /* SilkMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		55995C6CC2BD2DF0568FD646 /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A951AB92F382D74496B1D7F /* Toast.swift */; };
 		5ADAB23DE5445332AA5BAB10 /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
 		7F5EAEB1710BBA6C6EE3EED3 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3350D55FC9E5CD602108266F /* SilkCore */; };
+		887AC1C3DE1DB42BED5A67AA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 704D0FDD76C4A32996253007 /* AppModel.swift */; };
 		909C10E2DD8695AC737E92FE /* ShieldConfigurationExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7314275C7464407E4787F3B /* ShieldConfigurationExtension.swift */; };
 		969518E52EEBCC905EE6B755 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = EBD9E28473C5EB7129F8AD9A /* SilkCore */; };
 		9D68046401F49C696D8E8AAA /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
+		A974522AA74846A7F45F9521 /* SilkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CA53F3207E7AE5880420E33 /* SilkApp.swift */; };
+		B028428C92F3B85F24B8DFCD /* AppPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FBF0ECF1CBB627FAB4E6B33 /* AppPickerSheet.swift */; };
+		B413BC5B70A31DCA05E3E74D /* MirrorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2915B4038B33955C859B21BE /* MirrorView.swift */; };
+		BF536F6D32AE0FB218BF7990 /* Atmosphere.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5153837888EC82703E243C5E /* Atmosphere.swift */; };
 		C17B8DA5C889BE567F2D4AB3 /* ShieldActionExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29CD52B79915A13CAA670FF6 /* ShieldActionExtension.swift */; };
+		CA4E8FCF303869A243A38DA9 /* SilkShield.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 83AFCFC6FDE154FD9AF4E017 /* SilkShield.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		D478CBF0FE548D503C4D9F03 /* Chrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB1C355D83F2A45FDCC9520A /* Chrome.swift */; };
+		D7954D932A6572357CDD6908 /* SilkShieldAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3EBD012E973AE09683DBFE68 /* SilkShieldAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		DB790AA519D804B0C5C2841A /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300E8AEF4E4B414B82D4799C /* DesignSystem.swift */; };
+		DFFDE67631866FCFAA953E18 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BFDAD382D87C5DBF1C20B6C /* SettingsView.swift */; };
+		E6B4F1900C18BAC1F044851F /* OnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC55F66C7151E4B8038294C3 /* OnboardingUITests.swift */; };
+		E991680108C07B056D17D6B6 /* EnsoPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 654CED2E86E7E41374DA5E0E /* EnsoPath.swift */; };
+		FA9BB7287ECC81A8761D23DC /* SilkModelParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 382B5C7BD5FC37F7B7734E1C /* SilkModelParser.swift */; };
+		FC88E375AB3C3A6F905AC76D /* LaunchCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A15D91F5D0F1DB70D57FE88 /* LaunchCatalog.swift */; };
 		FD54862787CE76BAE51FC78E /* MonitorExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ED1664BC1F72D50F45C0343 /* MonitorExtension.swift */; };
+		FF214AF23E475C10C2D345A8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 27EDA627293EF4107309F42E /* Assets.xcassets */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		055DC3FE6B47B7F8C017754B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C72D2C1E22A00A97DD181A44 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6FD3716FA5181C1E06C149E0;
+			remoteInfo = SilkMonitor;
+		};
+		70D11B784D0EF0DA7EBB7DD3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C72D2C1E22A00A97DD181A44 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EF885524CFBB8791521BD974;
+			remoteInfo = Silk;
+		};
+		7E6452C47FA7B1DC1D10562E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C72D2C1E22A00A97DD181A44 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 86618DC95DBA3A9A52A7AF78;
+			remoteInfo = SilkShieldAction;
+		};
+		F41B940A7CB5DA69FAC414EE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C72D2C1E22A00A97DD181A44 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 179612AE0E639B93F40C3C0A;
+			remoteInfo = SilkShield;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B1D534C4817FC7674F994072 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				50F825EA744CB136C7D8C8D3 /* SilkMonitor.appex in Embed Foundation Extensions */,
+				CA4E8FCF303869A243A38DA9 /* SilkShield.appex in Embed Foundation Extensions */,
+				D7954D932A6572357CDD6908 /* SilkShieldAction.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0517AF5402B0AEB586771BE6 /* SharedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedStore.swift; sourceTree = "<group>"; };
+		0BFDAD382D87C5DBF1C20B6C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		0EDCB2B02761CEED91D4C989 /* SilkMonitor.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SilkMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		0F18F9D3B21FF645636EA9CB /* SilkShield.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SilkShield.entitlements; sourceTree = "<group>"; };
+		0FBF0ECF1CBB627FAB4E6B33 /* AppPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPickerSheet.swift; sourceTree = "<group>"; };
+		1657C506FCDDFE73884FD015 /* WheelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WheelPicker.swift; sourceTree = "<group>"; };
+		1B533DAEE56A4E18702C13CB /* ApertureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApertureView.swift; sourceTree = "<group>"; };
 		1FF6348E7234169E8FB0E68E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		27EDA627293EF4107309F42E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2915B4038B33955C859B21BE /* MirrorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorView.swift; sourceTree = "<group>"; };
 		29CD52B79915A13CAA670FF6 /* ShieldActionExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShieldActionExtension.swift; sourceTree = "<group>"; };
+		300E8AEF4E4B414B82D4799C /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
+		382B5C7BD5FC37F7B7734E1C /* SilkModelParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilkModelParser.swift; sourceTree = "<group>"; };
+		3A951AB92F382D74496B1D7F /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
 		3EBD012E973AE09683DBFE68 /* SilkShieldAction.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SilkShieldAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		4D0B8D10154233A0BF5424C9 /* MirrorParts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorParts.swift; sourceTree = "<group>"; };
+		5153837888EC82703E243C5E /* Atmosphere.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atmosphere.swift; sourceTree = "<group>"; };
+		5CA53F3207E7AE5880420E33 /* SilkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilkApp.swift; sourceTree = "<group>"; };
+		654CED2E86E7E41374DA5E0E /* EnsoPath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnsoPath.swift; sourceTree = "<group>"; };
+		6C6DED393598F43B120448A1 /* SilkUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SilkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6ED1664BC1F72D50F45C0343 /* MonitorExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonitorExtension.swift; sourceTree = "<group>"; };
+		704D0FDD76C4A32996253007 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		7A15D91F5D0F1DB70D57FE88 /* LaunchCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchCatalog.swift; sourceTree = "<group>"; };
 		83AFCFC6FDE154FD9AF4E017 /* SilkShield.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SilkShield.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		96C4334FB17778A6059FE0C6 /* SilkMonitor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SilkMonitor.entitlements; sourceTree = "<group>"; };
 		A186A7DEBA377C94B39E83B5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A928E6FABAA8B87E0F4C9975 /* NowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowView.swift; sourceTree = "<group>"; };
+		AC55F66C7151E4B8038294C3 /* OnboardingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingUITests.swift; sourceTree = "<group>"; };
 		B3E26835042D124A346A8827 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B7314275C7464407E4787F3B /* ShieldConfigurationExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShieldConfigurationExtension.swift; sourceTree = "<group>"; };
+		BE8AE616C5B452F9B71C9309 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		BFCEE19215144BAFC002220E /* SilkCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SilkCore; path = SilkCore; sourceTree = SOURCE_ROOT; };
 		C100E4F5C7D591C01AECFACB /* SilkShieldAction.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SilkShieldAction.entitlements; sourceTree = "<group>"; };
+		C417C7CA0E5D215A9487363E /* SpendIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendIntent.swift; sourceTree = "<group>"; };
+		C840695F3CB1140C74898A68 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		DFF8CA4B6D8F6E393B396D1B /* WallController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallController.swift; sourceTree = "<group>"; };
+		E15288FA96D9B3050754D686 /* ConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationView.swift; sourceTree = "<group>"; };
+		EB1C355D83F2A45FDCC9520A /* Chrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chrome.swift; sourceTree = "<group>"; };
+		F34C80471DDBDB280CBA65A4 /* Silk.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Silk.entitlements; sourceTree = "<group>"; };
+		FD9F14434B56F59EAB0DA9DB /* Silk.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Silk.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		175C4CF1C5F9E567C27058E6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				50D124B181BBCAD73D2F26C7 /* SilkCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		61990A1B60EB829B6BA9E85F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -63,6 +171,36 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		4374C0E9CED3A71671000473 /* Silk */ = {
+			isa = PBXGroup;
+			children = (
+				1B533DAEE56A4E18702C13CB /* ApertureView.swift */,
+				704D0FDD76C4A32996253007 /* AppModel.swift */,
+				0FBF0ECF1CBB627FAB4E6B33 /* AppPickerSheet.swift */,
+				27EDA627293EF4107309F42E /* Assets.xcassets */,
+				5153837888EC82703E243C5E /* Atmosphere.swift */,
+				EB1C355D83F2A45FDCC9520A /* Chrome.swift */,
+				E15288FA96D9B3050754D686 /* ConversationView.swift */,
+				300E8AEF4E4B414B82D4799C /* DesignSystem.swift */,
+				654CED2E86E7E41374DA5E0E /* EnsoPath.swift */,
+				C840695F3CB1140C74898A68 /* Info.plist */,
+				7A15D91F5D0F1DB70D57FE88 /* LaunchCatalog.swift */,
+				4D0B8D10154233A0BF5424C9 /* MirrorParts.swift */,
+				2915B4038B33955C859B21BE /* MirrorView.swift */,
+				A928E6FABAA8B87E0F4C9975 /* NowView.swift */,
+				BE8AE616C5B452F9B71C9309 /* OnboardingView.swift */,
+				0BFDAD382D87C5DBF1C20B6C /* SettingsView.swift */,
+				F34C80471DDBDB280CBA65A4 /* Silk.entitlements */,
+				5CA53F3207E7AE5880420E33 /* SilkApp.swift */,
+				382B5C7BD5FC37F7B7734E1C /* SilkModelParser.swift */,
+				C417C7CA0E5D215A9487363E /* SpendIntent.swift */,
+				3A951AB92F382D74496B1D7F /* Toast.swift */,
+				DFF8CA4B6D8F6E393B396D1B /* WallController.swift */,
+				1657C506FCDDFE73884FD015 /* WheelPicker.swift */,
+			);
+			path = Silk;
+			sourceTree = "<group>";
+		};
 		476E29A3B49A66DC1519EEDD /* Shared */ = {
 			isa = PBXGroup;
 			children = (
@@ -76,9 +214,11 @@
 			children = (
 				93039753CE8CB86FB0EB87AD /* Packages */,
 				476E29A3B49A66DC1519EEDD /* Shared */,
+				4374C0E9CED3A71671000473 /* Silk */,
 				AAD38A1D4A562FECB8F9C10A /* SilkMonitor */,
 				D3D2BF2C8AAFB1C28E9A3899 /* SilkShield */,
 				E770490DC91150B5F720021F /* SilkShieldAction */,
+				E173E8E50C41BB0E25449DBB /* SilkUITests */,
 				9B4992A562C43C4A959DF3FB /* Products */,
 			);
 			sourceTree = "<group>";
@@ -94,9 +234,11 @@
 		9B4992A562C43C4A959DF3FB /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				FD9F14434B56F59EAB0DA9DB /* Silk.app */,
 				0EDCB2B02761CEED91D4C989 /* SilkMonitor.appex */,
 				83AFCFC6FDE154FD9AF4E017 /* SilkShield.appex */,
 				3EBD012E973AE09683DBFE68 /* SilkShieldAction.appex */,
+				6C6DED393598F43B120448A1 /* SilkUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -119,6 +261,14 @@
 				0F18F9D3B21FF645636EA9CB /* SilkShield.entitlements */,
 			);
 			path = SilkShield;
+			sourceTree = "<group>";
+		};
+		E173E8E50C41BB0E25449DBB /* SilkUITests */ = {
+			isa = PBXGroup;
+			children = (
+				AC55F66C7151E4B8038294C3 /* OnboardingUITests.swift */,
+			);
+			path = SilkUITests;
 			sourceTree = "<group>";
 		};
 		E770490DC91150B5F720021F /* SilkShieldAction */ = {
@@ -191,6 +341,48 @@
 			productReference = 3EBD012E973AE09683DBFE68 /* SilkShieldAction.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		B750C267C9929F1ED2A70D72 /* SilkUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 159431521449E017C5B9AEF7 /* Build configuration list for PBXNativeTarget "SilkUITests" */;
+			buildPhases = (
+				0664B1B0863B2D61BEF71E8D /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				800527B8F59CB2B6736DE408 /* PBXTargetDependency */,
+			);
+			name = SilkUITests;
+			packageProductDependencies = (
+			);
+			productName = SilkUITests;
+			productReference = 6C6DED393598F43B120448A1 /* SilkUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		EF885524CFBB8791521BD974 /* Silk */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6D63A4E2F369ED2CAB88DB78 /* Build configuration list for PBXNativeTarget "Silk" */;
+			buildPhases = (
+				5367F3A821E59E37AFFDB2E0 /* Sources */,
+				03A848B373E0C507BF8B2BAA /* Resources */,
+				175C4CF1C5F9E567C27058E6 /* Frameworks */,
+				B1D534C4817FC7674F994072 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DA9C1EC5692E9F5F5C4A43D8 /* PBXTargetDependency */,
+				4B683F28C32E7B65AFB6655E /* PBXTargetDependency */,
+				AB4CE3C33AB76A937B1B55FE /* PBXTargetDependency */,
+			);
+			name = Silk;
+			packageProductDependencies = (
+				F378250B1A4E80F37CEC94A5 /* SilkCore */,
+			);
+			productName = Silk;
+			productReference = FD9F14434B56F59EAB0DA9DB /* Silk.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -209,6 +401,15 @@
 						ProvisioningStyle = Automatic;
 					};
 					86618DC95DBA3A9A52A7AF78 = {
+						DevelopmentTeam = 85Y5HLW3RN;
+						ProvisioningStyle = Automatic;
+					};
+					B750C267C9929F1ED2A70D72 = {
+						DevelopmentTeam = 85Y5HLW3RN;
+						ProvisioningStyle = Automatic;
+						TestTargetID = EF885524CFBB8791521BD974;
+					};
+					EF885524CFBB8791521BD974 = {
 						DevelopmentTeam = 85Y5HLW3RN;
 						ProvisioningStyle = Automatic;
 					};
@@ -231,14 +432,63 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				EF885524CFBB8791521BD974 /* Silk */,
 				6FD3716FA5181C1E06C149E0 /* SilkMonitor */,
 				179612AE0E639B93F40C3C0A /* SilkShield */,
 				86618DC95DBA3A9A52A7AF78 /* SilkShieldAction */,
+				B750C267C9929F1ED2A70D72 /* SilkUITests */,
 			);
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		03A848B373E0C507BF8B2BAA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FF214AF23E475C10C2D345A8 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
+		0664B1B0863B2D61BEF71E8D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E6B4F1900C18BAC1F044851F /* OnboardingUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5367F3A821E59E37AFFDB2E0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2580302DF762798F7E8BB26F /* ApertureView.swift in Sources */,
+				887AC1C3DE1DB42BED5A67AA /* AppModel.swift in Sources */,
+				B028428C92F3B85F24B8DFCD /* AppPickerSheet.swift in Sources */,
+				BF536F6D32AE0FB218BF7990 /* Atmosphere.swift in Sources */,
+				D478CBF0FE548D503C4D9F03 /* Chrome.swift in Sources */,
+				08F432E8544B6B2823DB14B5 /* ConversationView.swift in Sources */,
+				DB790AA519D804B0C5C2841A /* DesignSystem.swift in Sources */,
+				E991680108C07B056D17D6B6 /* EnsoPath.swift in Sources */,
+				FC88E375AB3C3A6F905AC76D /* LaunchCatalog.swift in Sources */,
+				44D77529D4F6F30068A42C1D /* MirrorParts.swift in Sources */,
+				B413BC5B70A31DCA05E3E74D /* MirrorView.swift in Sources */,
+				0F34172CD5594C0E74AF23BD /* NowView.swift in Sources */,
+				42ECF7C34173F4CF8B02AC9B /* OnboardingView.swift in Sources */,
+				DFFDE67631866FCFAA953E18 /* SettingsView.swift in Sources */,
+				4EFC6BA6B84C4195AA795BE9 /* SharedStore.swift in Sources */,
+				A974522AA74846A7F45F9521 /* SilkApp.swift in Sources */,
+				FA9BB7287ECC81A8761D23DC /* SilkModelParser.swift in Sources */,
+				49ACAB6F16F6E0A58DA185C5 /* SpendIntent.swift in Sources */,
+				55995C6CC2BD2DF0568FD646 /* Toast.swift in Sources */,
+				192AA7C5AEA91053B6345E24 /* WallController.swift in Sources */,
+				4432749FB254CF3A908C4E84 /* WheelPicker.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		546E662A48DCA6C3897D7BDB /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -268,7 +518,47 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		4B683F28C32E7B65AFB6655E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 179612AE0E639B93F40C3C0A /* SilkShield */;
+			targetProxy = F41B940A7CB5DA69FAC414EE /* PBXContainerItemProxy */;
+		};
+		800527B8F59CB2B6736DE408 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EF885524CFBB8791521BD974 /* Silk */;
+			targetProxy = 70D11B784D0EF0DA7EBB7DD3 /* PBXContainerItemProxy */;
+		};
+		AB4CE3C33AB76A937B1B55FE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 86618DC95DBA3A9A52A7AF78 /* SilkShieldAction */;
+			targetProxy = 7E6452C47FA7B1DC1D10562E /* PBXContainerItemProxy */;
+		};
+		DA9C1EC5692E9F5F5C4A43D8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6FD3716FA5181C1E06C149E0 /* SilkMonitor */;
+			targetProxy = 055DC3FE6B47B7F8C017754B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		04AA3DC5743209B9FEDE613F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.SilkUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Silk;
+			};
+			name = Release;
+		};
 		0D605FC489D98E8C243B48FD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -327,6 +617,57 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		194A22B276D5650F2A2403DB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.SilkUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Silk;
+			};
+			name = Debug;
+		};
+		1D79DA9D0835C9AD57D582F1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Silk/Silk.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = Silk/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2726865B3080541953D6DD41 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Silk/Silk.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = Silk/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -506,11 +847,29 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		159431521449E017C5B9AEF7 /* Build configuration list for PBXNativeTarget "SilkUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				194A22B276D5650F2A2403DB /* Debug */,
+				04AA3DC5743209B9FEDE613F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		2C269F03EA4025DC85207E4E /* Build configuration list for PBXNativeTarget "SilkShield" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A85B5F70DF54FFFA3D41DDD2 /* Debug */,
 				50C4EF4748FFBCCC16C917EB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6D63A4E2F369ED2CAB88DB78 /* Build configuration list for PBXNativeTarget "Silk" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1D79DA9D0835C9AD57D582F1 /* Debug */,
+				2726865B3080541953D6DD41 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -552,6 +911,10 @@
 			productName = SilkCore;
 		};
 		EBD9E28473C5EB7129F8AD9A /* SilkCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SilkCore;
+		};
+		F378250B1A4E80F37CEC94A5 /* SilkCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SilkCore;
 		};

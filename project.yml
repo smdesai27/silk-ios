@@ -1,10 +1,5 @@
 # XcodeGen project spec. Regenerate with: xcodegen generate
 #
-# This spec is the wall and its three extensions only. The Silk app target and
-# the SilkUITests bundle arrive in the next change, together, because the app
-# declares all three extensions as dependencies and xcodegen rejects a spec
-# whose dependencies name targets that do not exist.
-#
 # NOTE: bundle IDs use a placeholder prefix. Before TestFlight:
 #   1. change com.sanildesai → your real org identifier (all four targets + app group)
 #   2. request the FamilyControls (Distribution) entitlement for ALL FOUR bundle IDs
@@ -30,6 +25,30 @@ packages:
     path: SilkCore
 
 targets:
+  Silk:
+    type: application
+    platform: iOS
+    settings: { base: { PRODUCT_BUNDLE_IDENTIFIER: com.sanildesai.silk } }
+    sources: [Silk, Shared]
+    dependencies:
+      - package: SilkCore
+      - target: SilkMonitor
+      - target: SilkShield
+      - target: SilkShieldAction
+    entitlements:
+      path: Silk/Silk.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups: [group.com.sanildesai.silk]
+    info:
+      path: Silk/Info.plist
+      properties:
+        CFBundleDisplayName: Silk
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # Deliberately absent, forever: notification entitlements/usage keys.
+        # Mic + speech keys arrive only with Silk's own mic session (not in spine).
+
   SilkMonitor:
     type: app-extension
     platform: iOS
@@ -90,12 +109,22 @@ targets:
           NSExtensionPointIdentifier: com.apple.ManagedSettings.shield-action-service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShieldActionExtension
 
+  SilkUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    # A test bundle brings no plist of its own; without this the build stops
+    # at code signing asking for one.
+    settings: { base: { GENERATE_INFOPLIST_FILE: YES } }
+    sources: [SilkUITests]
+    dependencies:
+      - target: Silk
+
 schemes:
   Silk:
     build:
-      targets:
-        SilkMonitor: all
-        SilkShield: all
-        SilkShieldAction: all
+      targets: { Silk: all }
     run:
       config: Debug
+    test:
+      config: Debug
+      targets: [SilkUITests]

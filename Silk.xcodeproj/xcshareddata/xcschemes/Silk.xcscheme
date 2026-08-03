@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
    LastUpgradeVersion = "1430"
-   wasCreatedForAppExtension = "YES"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
@@ -16,37 +15,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "6FD3716FA5181C1E06C149E0"
-               BuildableName = "SilkMonitor.appex"
-               BlueprintName = "SilkMonitor"
-               ReferencedContainer = "container:Silk.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "179612AE0E639B93F40C3C0A"
-               BuildableName = "SilkShield.appex"
-               BlueprintName = "SilkShield"
-               ReferencedContainer = "container:Silk.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "86618DC95DBA3A9A52A7AF78"
-               BuildableName = "SilkShieldAction.appex"
-               BlueprintName = "SilkShieldAction"
+               BlueprintIdentifier = "EF885524CFBB8791521BD974"
+               BuildableName = "Silk.app"
+               BlueprintName = "Silk"
                ReferencedContainer = "container:Silk.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -61,33 +32,45 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "6FD3716FA5181C1E06C149E0"
-            BuildableName = "SilkMonitor.appex"
-            BlueprintName = "SilkMonitor"
+            BlueprintIdentifier = "EF885524CFBB8791521BD974"
+            BuildableName = "Silk.app"
+            BlueprintName = "Silk"
             ReferencedContainer = "container:Silk.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "B750C267C9929F1ED2A70D72"
+               BuildableName = "SilkUITests.xctest"
+               BlueprintName = "SilkUITests"
+               ReferencedContainer = "container:Silk.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
-      selectedDebuggerIdentifier = ""
-      selectedLauncherIdentifier = "Xcode.IDEFoundation.Launcher.PosixSpawn"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       launchStyle = "0"
       useCustomWorkingDirectory = "NO"
       ignoresPersistentStateOnLaunch = "NO"
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
-      allowLocationSimulation = "YES"
-      launchAutomaticallySubstyle = "2">
+      allowLocationSimulation = "YES">
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "6FD3716FA5181C1E06C149E0"
-            BuildableName = "SilkMonitor.appex"
-            BlueprintName = "SilkMonitor"
+            BlueprintIdentifier = "EF885524CFBB8791521BD974"
+            BuildableName = "Silk.app"
+            BlueprintName = "Silk"
             ReferencedContainer = "container:Silk.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -104,9 +87,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "6FD3716FA5181C1E06C149E0"
-            BuildableName = "SilkMonitor.appex"
-            BlueprintName = "SilkMonitor"
+            BlueprintIdentifier = "EF885524CFBB8791521BD974"
+            BuildableName = "Silk.app"
+            BlueprintName = "Silk"
             ReferencedContainer = "container:Silk.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
