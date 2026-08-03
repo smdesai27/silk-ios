@@ -91,52 +91,79 @@ final class WallController {
     /// If every layer fails, the door closes at the next wake: late, never never.
     func open(door: Door, until relockAt: Date) {
         Wall.reconcile()   // ledger already contains the grant; this opens the door
+        arm(door: door, until: relockAt)
+    }
 
-        // DeviceActivitySchedule refuses intervals under 15 minutes; a grant
-        // shorter than that must still arm SOMETHING. Clamp the schedule ends
-        // to the floor (plus margin against clock skew) and let reconcile
-        // close the door at true expiry the moment anything wakes.
-        let scheduleFloor: TimeInterval = 15 * 60 + 30
-        let clamped = relockAt.timeIntervalSinceNow < scheduleFloor
-        let primaryEnd = clamped ? Date.now.addingTimeInterval(scheduleFloor) : relockAt
+    /// The scheduling half of `open`, without the unshielding, reporting
+    /// whether BOTH schedules took. The Spend intent gates a grant on the
+    /// answer, because nothing wakes that path: Shortcuts performs the intent
+    /// in a background launch with no scene, so `foregrounded()` never runs,
+    /// the process is suspended the moment `perform` returns, and the granted
+    /// door is unshielded — so its own shield never renders either. A door
+    /// opened there with nothing scheduled behind it stays open until Silk is
+    /// next opened by hand, which is invariant 4 read backwards.
+    ///
+    /// Both schedules, and not either: a schedule end carries hours and
+    /// minutes only, so the primary can fire on the minute below expiry while
+    /// the ledger still calls the grant live, and its reconcile then closes
+    /// nothing. The stagger is what clears that minute.
+    ///
+    /// In the app the answer is discarded, and not because a wake is
+    /// guaranteed there — `apply(.grant)` hands the phone straight to the
+    /// granted app, which suspends Silk's own clock. Refusing a spend she
+    /// asked for out loud is a product decision and waits for its own change.
+    @discardableResult
+    func arm(door: Door, until relockAt: Date) -> Bool {
+        // One clock read for both ends and the threshold. The ledger keeps the
+        // true expiry; every move RelockWindow makes is late, never early.
+        let now = Date.now
+        let window = RelockWindow(now: now, relockAt: relockAt)
 
         let cal = Calendar.current
-        let start = cal.dateComponents([.hour, .minute], from: .now)
-        let end = cal.dateComponents([.hour, .minute], from: primaryEnd)
-        let endStagger = cal.dateComponents([.hour, .minute],
-                                            from: primaryEnd.addingTimeInterval(120))
+        let start = cal.dateComponents([.hour, .minute], from: now)
+        let end = cal.dateComponents([.hour, .minute], from: window.primaryEnd)
+        let endStagger = cal.dateComponents([.hour, .minute], from: window.backupEnd)
 
         // Layer 3 rides the primary schedule: N minutes actually spent inside
-        // the door fires eventDidReachThreshold, which reconciles. Ceil, so
-        // the threshold never undercuts the grant it polices. The threshold
-        // keeps the TRUE granted minutes even when the schedule is clamped —
-        // thresholds may not share the schedule's 15-minute minimum, and the
-        // device test will say.
+        // the door fires eventDidReachThreshold, which reconciles. The
+        // threshold keeps the TRUE granted minutes even when the schedule is
+        // clamped — thresholds may not share the schedule's 15-minute minimum,
+        // and the device test will say.
         var events: [DeviceActivityEvent.Name: DeviceActivityEvent] = [:]
         let sel = SharedStore.loadDoorSelections()[door.id]
         if let sel, !(sel.applicationTokens.isEmpty && sel.categoryTokens.isEmpty) {
-            let minutes = max(1, Int(ceil(relockAt.timeIntervalSinceNow / 60)))
             events[DeviceActivityEvent.Name("used.\(door.id.uuidString)")] =
                 DeviceActivityEvent(applications: sel.applicationTokens,
                                     categories: sel.categoryTokens,
-                                    threshold: DateComponents(minute: minutes))
+                                    threshold: DateComponents(minute: window.thresholdMinutes))
         }
 
-        // Failures here are not recoverable in code — layer 4 still holds —
-        // but they must be *visible* on the device test.
+        // Failures here are still logged for the device test, and now they are
+        // also what the intent reads before it lets a grant stand.
         let primary = DeviceActivityName("relock.\(door.id.uuidString)")
         let backup = DeviceActivityName("relock2.\(door.id.uuidString)")
-        if clamped {
-            Self.log.notice("schedule floor clamp engaged: relock \(relockAt, privacy: .public) → schedules end \(primaryEnd, privacy: .public); ledger holds true expiry")
+        if window.clamped {
+            Self.log.notice("schedule floor clamp engaged: relock \(relockAt, privacy: .public) → schedules end \(window.primaryEnd, privacy: .public); ledger holds true expiry")
         }
+
+        // Disarm before arming, so arming is a restatement rather than a
+        // second registration. An ended non-repeating activity is not
+        // documented to drop out of the daemon's list, and a spend now fails
+        // when `startMonitoring` throws — without this, one stale name could
+        // make a door permanently unspendable through the intent. Disarming
+        // cannot throw, so it can only help.
+        center.stopMonitoring([primary, backup])
+
+        var armed = true
         do {
             try center.startMonitoring(
                 primary,
                 during: DeviceActivitySchedule(intervalStart: start, intervalEnd: end, repeats: false),
                 events: events
             )
-            Self.log.notice("armed \(primary.rawValue, privacy: .public) until \(primaryEnd, privacy: .public), threshold \(events.isEmpty ? "none" : "set", privacy: .public)")
+            Self.log.notice("armed \(primary.rawValue, privacy: .public) until \(window.primaryEnd, privacy: .public), threshold \(events.isEmpty ? "none" : "set", privacy: .public)")
         } catch {
+            armed = false
             Self.log.error("primary re-lock failed to arm: \(String(describing: error), privacy: .public)")
         }
         do {
@@ -145,8 +172,17 @@ final class WallController {
                 during: DeviceActivitySchedule(intervalStart: start, intervalEnd: endStagger, repeats: false)
             )
         } catch {
+            armed = false
             Self.log.error("backup re-lock failed to arm: \(String(describing: error), privacy: .public)")
         }
+        if !armed {
+            // A half-armed door is worse than an unarmed one: the caller is
+            // about to put the grant back, and a surviving schedule would wake
+            // the monitor to reconcile a grant that no longer exists while
+            // leaving a name registered that nothing in Silk ever clears.
+            center.stopMonitoring([primary, backup])
+        }
+        return armed
     }
 
     private static let log = Logger(subsystem: "com.sanildesai.silk", category: "wall")

@@ -47,6 +47,13 @@ public enum SilkStrings {
     /// holding tokens that no longer shield. Shown on Now the moment either is
     /// detected — a calm screen over dead blocking is the one lie Silk could
     /// accidentally tell. (docs/market/gaps.md #5)
+    ///
+    /// The Spend intent says it too, on exactly the same signal and no other:
+    /// a spend refused because no re-lock would arm answers with this sentence
+    /// only when the wall is not standing, and with nothing at all otherwise.
+    /// Said on any other arming failure it would be that same lie inverted —
+    /// the Shortcut calling blocking dead while Now, which reads authorization
+    /// and tokens and nothing about schedules, draws the wall whole.
     public static let blockingOff = "Blocking is off."
     public static let turnItOn = "Turn it on."
 

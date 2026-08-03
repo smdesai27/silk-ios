@@ -47,8 +47,57 @@ struct SpendIntent: AppIntent {
 
         switch verdict {
         case .grant(let door, let granted, let relockAt):
+            // The door does not open unless the re-lock armed. Nothing else
+            // wakes this path: Shortcuts performs the intent in a background
+            // launch with no scene, the process is suspended the moment
+            // `perform` returns, and the opened door is unshielded, so its own
+            // shield never renders — a grant recorded here with no schedule
+            // behind it keeps Instagram open past 22:00 until Silk is opened
+            // by hand. That is the fail-OPEN invariant 4 forbids.
+            //
+            // Write the ledger first and put it back on failure, rather than
+            // arming first, because this ordering has no stale read in it.
+            // The only thing that can wake the monitor is the `startMonitoring`
+            // inside `arm`, so `intervalDidStart`'s reconcile is causally after
+            // the save below and necessarily sees this grant. Arming first
+            // would let that reconcile read the ledger a beat before the grant
+            // reached it and re-shield a door the dialog has just called open,
+            // on the one path with nothing left to correct it.
+            let previous = ledger
             ledger.record(Grant(door: door, minutes: granted, issuedAt: now, expiresAt: relockAt))
             SharedStore.save(ledger: ledger)
+
+            let (armed, wallIsDown) = await MainActor.run { () -> (Bool, Bool) in
+                let wall = WallController()
+                guard wall.arm(door: door, until: relockAt) else {
+                    // Read on the same hop that failed: the refusal has to
+                    // agree with the row Now will show on the next launch.
+                    return (false, wall.standing != .up)
+                }
+                return (true, false)
+            }
+
+            guard armed else {
+                // `arm` has already disarmed both names, so putting the ledger
+                // back leaves nothing scheduled and nothing granted: no minutes
+                // are debited, and the reconcile shields the door again. That
+                // reconcile is also this background launch's one free chance to
+                // close a door some earlier expiry left standing open.
+                ledger = previous
+                SharedStore.save(ledger: ledger)
+                Wall.reconcile(now: now)
+                // "Blocking is off." is said only when it is. Revocation is the
+                // likeliest reason a schedule will not take, but the other
+                // reasons leave the wall standing, and saying it then would be
+                // the same lie inverted — the Shortcut calling blocking dead
+                // while Now, which reads authorization and tokens and nothing
+                // about schedules, draws it whole. Silk owns no true sentence
+                // for a schedule that would not take, so the door stays shut in
+                // the same silence an unknown door gets.
+                if wallIsDown { return .result(dialog: "\(SilkStrings.blockingOff)") }
+                return .result(dialog: "")
+            }
+
             Wall.reconcile(now: now)
             let time = Validator.timeOfDay(relockAt, calendar: .current).display
             return .result(dialog: "\(door.name) · \(granted) · \(SilkStrings.till.lowercased()) \(time)")
