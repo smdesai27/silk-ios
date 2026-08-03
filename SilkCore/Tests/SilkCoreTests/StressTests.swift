@@ -624,4 +624,113 @@ private func expectClose(_ text: String, door: String, until: TimeOfDay? = nil,
         }
         #expect(d.name == "Instagram")
     }
+
+    @Test func tillEndsTheNightLikeUntil() {
+        // The close has matched all three end markers since it grew a stated
+        // hour, but isStart knew only "until": "down hours till 7" took the
+        // start branch, read its 7 as an evening and moved the start to 7 PM —
+        // three more hours of night, every night, landing instantly because a
+        // longer window tightens, under a reply that never says "down hours".
+        #expect(DeterministicParser.parse("down hours till 7", state: makeState())
+                == .command(.setDownHoursEnd(TimeOfDay(hour: 7))))
+        #expect(DeterministicParser.parse("down hours til 6:30", state: makeState())
+                == .command(.setDownHoursEnd(TimeOfDay(hour: 6, minute: 30))))
+        // An earlier end is a shorter night, so this one waits for tomorrow
+        // rather than landing tonight.
+        guard case .ruleChange(let proposed, let polarity) = verdict("down hours till 6") else {
+            Issue.record("expected a rule change")
+            return
+        }
+        #expect(proposed.downHours.end == TimeOfDay(hour: 6))
+        #expect(polarity == .loosen)
+        // The markers are whole words now, so "still" is not a "till".
+        #expect(DeterministicParser.parse("down hours still start at ten", state: makeState())
+                == .command(.setDownHoursStart(TimeOfDay(hour: 22))))
+    }
+
+    @Test func endedFinishedAndUntillStillEndTheNight() {
+        // These three pass today for the wrong reason — contains("end"),
+        // contains("finish") and contains("until") catch them for free — and
+        // must keep passing for the right one. A whole-word set that trims
+        // them for tidiness sends each to the start branch, where the evening
+        // assumption turns the stated 7 into 19:00: the same instant
+        // twelve-hour night the till fix above exists to remove.
+        for text in ["down hours ended at 7", "down hours finished at 7", "down hours untill 7"] {
+            #expect(DeterministicParser.parse(text, state: makeState())
+                    == .command(.setDownHoursEnd(TimeOfDay(hour: 7))), "failed: \(text)")
+        }
+    }
+
+    @Test func weekendIsNotAnEndMarker() {
+        // "end" was a substring test, so weekend, weekends and calendar all
+        // forced the end branch: "down hours start at 10 on weekends" compiled
+        // to a 10 AM end — a twelve-hour night, instant, from a sentence whose
+        // only slot word was "start".
+        #expect(DeterministicParser.parse("down hours start at 10 on weekends", state: makeState())
+                == .command(.setDownHoursStart(TimeOfDay(hour: 22))))
+        #expect(DeterministicParser.parse("put down hours on my calendar at 11", state: makeState())
+                == .command(.setDownHoursStart(TimeOfDay(hour: 23))))
+        // The untouched edge is asserted too, so a later change that moves the
+        // wrong one cannot pass by getting the polarity right.
+        guard case .ruleChange(let proposed, let polarity) =
+                verdict("down hours start at 11 on the weekend") else {
+            Issue.record("expected a rule change")
+            return
+        }
+        #expect(proposed.downHours.start == TimeOfDay(hour: 23))
+        #expect(proposed.downHours.end == TimeOfDay(hour: 7))
+        #expect(polarity == .loosen)
+    }
+
+    @Test func theMarkerNearestTheStatedTimeOwnsIt() {
+        // A sentence naming both edges still moves one, because the setter
+        // takes one time — the first in the sentence — so the marker that owns
+        // it is the last one before it. Any "end" anywhere used to force the
+        // end branch, which handed "start at 10 and end at 7" a 10 AM end.
+        #expect(DeterministicParser.parse("down hours start at 10 and end at 7", state: makeState())
+                == .command(.setDownHoursStart(TimeOfDay(hour: 22))))
+        #expect(DeterministicParser.parse("down hours end at 6 and start at 9", state: makeState())
+                == .command(.setDownHoursEnd(TimeOfDay(hour: 6))))
+        // A leading marker governs no hour, so it must not outrank the slot
+        // word the sentence actually used. Letting the first marker win reads
+        // these as an 11 AM end and a 6 PM start: two thirteen-hour nights,
+        // both instant, out of sentences that said "start at 11" and "end at 6".
+        #expect(DeterministicParser.parse("until further notice down hours start at 11",
+                                          state: makeState())
+                == .command(.setDownHoursStart(TimeOfDay(hour: 23))))
+        #expect(DeterministicParser.parse("starting tomorrow down hours end at 6", state: makeState())
+                == .command(.setDownHoursEnd(TimeOfDay(hour: 6))))
+        // Which is why the start words carry their inflections too: drop
+        // "started" and the leading "until" takes the 11 back, a thirteen-hour
+        // night the substring test got right for free.
+        #expect(DeterministicParser.parse("until further notice down hours started at 11",
+                                          state: makeState())
+                == .command(.setDownHoursStart(TimeOfDay(hour: 23))))
+        // A window stated whole gives its first time to the start; "from 10
+        // until 7" used to compile to a 10 AM end, twelve hours, instant.
+        #expect(DeterministicParser.parse("down hours from 10 until 7", state: makeState())
+                == .command(.setDownHoursStart(TimeOfDay(hour: 22))))
+        #expect(DeterministicParser.parse("down hours from 10 till 7", state: makeState())
+                == .command(.setDownHoursStart(TimeOfDay(hour: 22))))
+    }
+
+    @Test func tillWithAnEveningHourInheritsUntilsReading() {
+        // Levelling "till"/"til" with "until" hands them whatever is arguable
+        // about "until", and here the reading is wrong AND unsafe: "let me
+        // stay up till 11" plainly moves the start, but both spellings compile
+        // to an 11 AM end — a thirteen-hour night that lands now, where the
+        // old "till" answer was a start, a loosen, and waited for tomorrow.
+        // Pinned as known rather than as correct: one reading, so one fix when
+        // it comes, and neither spelling drifts away from the other in between.
+        #expect(DeterministicParser.parse("bedtime till 11", state: makeState())
+                == .command(.setDownHoursEnd(TimeOfDay(hour: 11))))
+        #expect(DeterministicParser.parse("bedtime until 11", state: makeState())
+                == .command(.setDownHoursEnd(TimeOfDay(hour: 11))))
+        guard case .ruleChange(let proposed, let polarity) = verdict("down hours till 11") else {
+            Issue.record("expected a rule change")
+            return
+        }
+        #expect(proposed.downHours.end == TimeOfDay(hour: 11))
+        #expect(polarity == .tighten)
+    }
 }

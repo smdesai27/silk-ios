@@ -34,9 +34,15 @@ public enum DeterministicParser {
         // door or ask to be let in. Without those two guards, "give me 20
         // minutes of tiktok before bedtime" reads its 20 as 8 PM and a spend
         // request lands as a global tighten.
-        if windowMention, door == nil, !hasOpeningVerb(text),
-           let t = NumberParser.timeOfDay(in: strip(text, of: "down hours"), assumeEvening: isStart(text)) {
-            return .command(isStart(text) ? .setDownHoursStart(t) : .setDownHoursEnd(t))
+        if windowMention, door == nil, !hasOpeningVerb(text) {
+            // One reading of the edge, used twice: the evening assumption and
+            // the setter must never disagree about which edge this is, or a
+            // stated 7 becomes 19:00 and then lands on the end.
+            let edgeIsStart = isStart(text)
+            if let t = NumberParser.timeOfDay(in: strip(text, of: "down hours"),
+                                              assumeEvening: edgeIsStart) {
+                return .command(edgeIsStart ? .setDownHoursStart(t) : .setDownHoursEnd(t))
+            }
         }
         if text.contains("down hour") { return .command(.downHoursQuery) }
         if tokens.contains("night") { return .silence }
@@ -192,12 +198,43 @@ public enum DeterministicParser {
         return true
     }
 
+    /// Which edge of the window a stated time belongs to: "down hours start at
+    /// ten" vs "…end at seven"/"…till seven".
+    ///
+    /// The markers match as whole words for the reason the closing verbs do —
+    /// "end" lives inside "weekend", and the substring test heard "down hours
+    /// start at 10 on weekends" as a 10 AM end, a twelve-hour night that lands
+    /// instantly because a longer window tightens. Missing a marker costs the
+    /// same in reverse: "till" was absent, so "down hours till 7" became a 7 PM
+    /// start. Whole words are only safe if the set is complete, so every
+    /// inflection the substring caught for free is spelled out; a dropped word
+    /// hands the time to the wrong edge, and both directions of that mistake
+    /// buy hours of lockdown under a reply that never mentions the window.
     private static func isStart(_ text: String) -> Bool {
-        // "down hours start at ten" vs "…end at seven"/"…until seven".
-        if text.contains("end") || text.contains("finish") || text.contains("until") && !text.contains("start") {
-            return false
-        }
-        return true
+        let tokens = NumberParser.tokenize(text)
+        let startWords: Set<String> = ["start", "starts", "started", "starting"]
+        let endWords: Set<String> = ["end", "ends", "ended", "ending",
+                                     "finish", "finishes", "finished", "finishing",
+                                     "until", "untill", "till", "til"]
+        // The setter moves one edge and the reader takes one time — the first
+        // one in the sentence — so the word that owns it is the last marker
+        // BEFORE it, not the first in the sentence. "until further notice down
+        // hours start at 11" opens with an end marker governing no hour, and
+        // letting that win reads the 11 as a morning end: a thirteen-hour
+        // night, instant, from a sentence whose only slot word said "start".
+        let statedTime = tokens.firstIndex(where: readsAsHour) ?? tokens.endIndex
+        guard let slot = tokens[..<statedTime].lastIndex(where: {
+            startWords.contains($0) || endWords.contains($0)
+        }) else { return true }
+        return startWords.contains(tokens[slot])
+    }
+
+    /// Whether a token is one NumberParser would read as a clock hour. isStart
+    /// asks the reader itself instead of restating its rules, because the two
+    /// have to agree on which time is the stated one — disagree, and the marker
+    /// chosen governs a different hour than the one that lands.
+    private static func readsAsHour(_ token: String) -> Bool {
+        NumberParser.timeOfDay(in: token, assumeEvening: false) != nil
     }
 
     private static func strip(_ text: String, of phrase: String) -> String {
