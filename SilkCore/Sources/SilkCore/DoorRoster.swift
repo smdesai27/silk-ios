@@ -1,0 +1,27 @@
+/// The roster rules for the doors group: how many doors there can be, and
+/// which catalogue names are still free to become one.
+///
+/// Settings' door editor leans on both — the add row hides at the cap, and
+/// the add overlay only offers names that are not already doors. Pure name
+/// lists in, answers out: FamilyControls and the catalogue itself stay in the
+/// app layer, so the rules run — and are tested — on any platform.
+public enum DoorRoster {
+    /// The existing product rule: at most six doors. Setup enforces the same
+    /// number on its chips.
+    public static let cap = 6
+
+    /// Catalogue names not already claimed by a door, in catalogue order.
+    /// `taken` is every spoken form of every door (name and aliases), so a
+    /// door answering to "x" keeps the catalogue's "X" off the list too.
+    /// Case-insensitive throughout — "instagram" and "Instagram" are one name.
+    public static func available(catalog: [String], taken: [String]) -> [String] {
+        let taken = Set(taken.map { $0.lowercased() })
+        return catalog.filter { !taken.contains($0.lowercased()) }
+    }
+
+    /// Whether `name` may become a door: room under the cap, and no existing
+    /// door already answers to it (case-insensitive).
+    public static func canAdd(_ name: String, taken: [String], count: Int) -> Bool {
+        count < cap && !taken.contains { $0.lowercased() == name.lowercased() }
+    }
+}

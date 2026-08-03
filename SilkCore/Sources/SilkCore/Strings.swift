@@ -1,0 +1,131 @@
+/// Everything Silk says.
+///
+/// The rule is plain language: short sentences that state what is happening.
+/// Apps are apps, blocking is blocking — no metaphors, no coined vocabulary.
+///
+///   - No "I". No sorry, no please, no exclamation marks. Never chatty.
+///   - Replies are short, plain, and state what happened — not what Silk thinks.
+///   - Refusals are time-statements. A "no" weighs less than a decision.
+///   - You speak in durations; a rule answers in deadlines.
+///
+/// App names, numbers and times are user data, not strings; composed
+/// renderings do not count as new ones.
+public enum SilkStrings {
+    // Now
+    public static let goodMorning = "Good morning."
+    public static let goodAfternoon = "Good afternoon."
+    public static let goodEvening = "Good evening."
+    /// Composes with the down-hours start hour: "Down hours at 10."
+    public static let downHoursAt = "Down hours at"
+    public static let minLeftToday = "min left today"
+
+    // Answers — the shapes the handoff's reply table specifies.
+    public static let till = "Till"
+    /// The shield's word. The row's serif slot uses lowercase "till" instead —
+    /// it follows a separator rather than opening a headline.
+    public static let until = "Until"
+    public static let leftToday = "left today"        // composes: "0 left today"
+    public static let minLeft = "min left."           // composes: "40 min left."
+    public static let isOpenFor = "is open for"       // "Instagram is open for 15 min."
+    public static let closedUntil = "closed until"    // "TikTok closed until 9:00."
+    /// The subject of a close-all: "Everything closed until 9:00."
+    public static let everything = "Everything"
+    public static let minutes = "min"
+    public static let howLong = "How long?"
+    public static let didntGetThat = "Didn’t get that."
+    public static let downHoursRun = "Down hours run" // "…run 10:00 PM to 7:00 AM."
+    public static let to = "to"
+    public static let downHoursOpens = "Down hours. Opens"
+    public static let ok = "OK"
+
+    // The shield — whose wall this is, and where to go. The extension links
+    // SilkCore, so its words live here like everyone else's.
+    public static let brand = "Silk"
+    public static let openSilk = "Open Silk"
+
+    /// Blocking's truth-telling row: authorization revoked, or a new phone
+    /// holding tokens that no longer shield. Shown on Now the moment either is
+    /// detected — a calm screen over dead blocking is the one lie Silk could
+    /// accidentally tell. (docs/market/gaps.md #5)
+    public static let blockingOff = "Blocking is off."
+    public static let turnItOn = "Turn it on."
+
+    // Rule changes
+    public static let tomorrow = "Tomorrow:"          // composes: "Tomorrow: 60"
+    public static let appliesTomorrow = "Applies tomorrow."
+    public static let applyNow = "Apply now."
+    public static let undo = "Undo"
+    public static let putBack = "Put back."
+
+    // Mirror
+    public static let week = "Week"
+    /// The hero's day name before any day has closed: the running score is
+    /// today's, and it says so.
+    public static let today = "Today"
+
+    // Settings
+    public static let downHours = "Down hours"
+    public static let budget = "Budget"
+    public static let apps = "Apps"
+    /// A closed app's state word, where no reopen time applies: "closed".
+    public static let closed = "closed"
+    public static let perDay = "day"
+
+    // Setup — three steps, three prompts.
+    public static let setupPermission = "Silk uses Screen Time to block the apps you choose."
+    public static let setupPickApps = "Which apps should Silk block?"
+    public static let howManyMinutesADay = "How many minutes a day?"
+    /// Caption over the night-window wheels on the last setup step.
+    public static let lockedOvernight = "Locked overnight"
+    /// The quiet second path on the apps step: block apps Silk can't open by
+    /// name (anything outside the launch catalogue).
+    public static let otherApps = "Other apps"
+
+    // The picker sheet. Silk owns the sheet the system list sits inside, so
+    // every one of these lines is on screen the whole time the list is —
+    // the earlier design said them once, underneath, and the sheet buried
+    // them. Nothing here corrects a mistake after the fact: the sheet's own
+    // Done refuses to commit until the pick is singular.
+    /// Under the door's name: "Find Instagram below and tap it. Just Instagram."
+    public static func findAndTap(_ name: String) -> String {
+        "Find \(name) below and tap it. Just \(name)."
+    }
+    /// The reason the step exists at all. Without it, naming the app to Silk
+    /// and then hunting the same app in Apple's list reads as a bug.
+    public static let iosWontSay = "iOS won't tell Silk which app is which, so you point once."
+    /// The extras' own header — plural is correct there, and saying so is what
+    /// keeps the one-app rule from reading as arbitrary.
+    public static let pickAsMany = "Pick as many as you like."
+    public static let extrasStayShut = "These stay shut without a name, so Silk never has to speak them."
+
+    /// The footer, before anything is picked.
+    public static let nothingPickedYet = "Nothing picked yet"
+    /// The footer once the pick went plural. Composes: "2 picked — tap one to remove."
+    public static func pickedTapToRemove(_ n: Int) -> String {
+        "\(n) picked — tap one to remove."
+    }
+    /// A category is a whole class of apps; a door is one app with one name.
+    public static let categoryNotADoor = "A category can't be a door — pick one app."
+    /// The extras take apps only, so a category picked there is dropped rather
+    /// than stored and never enforced.
+    public static let categoriesDropped = "Categories are dropped — Silk blocks apps."
+    /// The extras' count. Composes: "1 app" / "4 apps".
+    public static func appsPicked(_ n: Int) -> String {
+        "\(n) app\(n == 1 ? "" : "s")"
+    }
+    public static let done = "Done"
+    public static let cancel = "Cancel"
+
+    // Settings — editing the doors group after setup. The rows opened up
+    // deliberately (they were statements only, once); the editor speaks the
+    // same one-app language setup does.
+    /// The editor's first action: run the one-app binding again. Plain words
+    /// — "rebind" is internal vocabulary (DoorBinding), not a sentence.
+    public static let rebind = "Change app"
+    /// The editor's second action: the door leaves the policy and the wall.
+    public static let remove = "Remove"
+    /// The quiet row after the last door, and the add overlay's title.
+    public static let addAnApp = "Add an app"
+    /// The removal receipt's tail. Composes: "Reddit removed."
+    public static let removed = "removed."
+}
