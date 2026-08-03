@@ -1,0 +1,561 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		29D791169E236E4BB1294C01 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8C8E4D9BB944356CB0771523 /* SilkCore */; };
+		4DF4A22565FFC52E7D1BFB0A /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
+		5ADAB23DE5445332AA5BAB10 /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
+		7F5EAEB1710BBA6C6EE3EED3 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3350D55FC9E5CD602108266F /* SilkCore */; };
+		909C10E2DD8695AC737E92FE /* ShieldConfigurationExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7314275C7464407E4787F3B /* ShieldConfigurationExtension.swift */; };
+		969518E52EEBCC905EE6B755 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = EBD9E28473C5EB7129F8AD9A /* SilkCore */; };
+		9D68046401F49C696D8E8AAA /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
+		C17B8DA5C889BE567F2D4AB3 /* ShieldActionExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29CD52B79915A13CAA670FF6 /* ShieldActionExtension.swift */; };
+		FD54862787CE76BAE51FC78E /* MonitorExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ED1664BC1F72D50F45C0343 /* MonitorExtension.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0517AF5402B0AEB586771BE6 /* SharedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedStore.swift; sourceTree = "<group>"; };
+		0EDCB2B02761CEED91D4C989 /* SilkMonitor.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SilkMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		0F18F9D3B21FF645636EA9CB /* SilkShield.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SilkShield.entitlements; sourceTree = "<group>"; };
+		1FF6348E7234169E8FB0E68E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		29CD52B79915A13CAA670FF6 /* ShieldActionExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShieldActionExtension.swift; sourceTree = "<group>"; };
+		3EBD012E973AE09683DBFE68 /* SilkShieldAction.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SilkShieldAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		6ED1664BC1F72D50F45C0343 /* MonitorExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonitorExtension.swift; sourceTree = "<group>"; };
+		83AFCFC6FDE154FD9AF4E017 /* SilkShield.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SilkShield.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		96C4334FB17778A6059FE0C6 /* SilkMonitor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SilkMonitor.entitlements; sourceTree = "<group>"; };
+		A186A7DEBA377C94B39E83B5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B3E26835042D124A346A8827 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B7314275C7464407E4787F3B /* ShieldConfigurationExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShieldConfigurationExtension.swift; sourceTree = "<group>"; };
+		BFCEE19215144BAFC002220E /* SilkCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SilkCore; path = SilkCore; sourceTree = SOURCE_ROOT; };
+		C100E4F5C7D591C01AECFACB /* SilkShieldAction.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SilkShieldAction.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		61990A1B60EB829B6BA9E85F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7F5EAEB1710BBA6C6EE3EED3 /* SilkCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BE34A03EF157D10CDE79ED5F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				29D791169E236E4BB1294C01 /* SilkCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D695969ED3E3323D513C5C25 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				969518E52EEBCC905EE6B755 /* SilkCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		476E29A3B49A66DC1519EEDD /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				0517AF5402B0AEB586771BE6 /* SharedStore.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		5234AFDD05C04E0E2BA5EC3B = {
+			isa = PBXGroup;
+			children = (
+				93039753CE8CB86FB0EB87AD /* Packages */,
+				476E29A3B49A66DC1519EEDD /* Shared */,
+				AAD38A1D4A562FECB8F9C10A /* SilkMonitor */,
+				D3D2BF2C8AAFB1C28E9A3899 /* SilkShield */,
+				E770490DC91150B5F720021F /* SilkShieldAction */,
+				9B4992A562C43C4A959DF3FB /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		93039753CE8CB86FB0EB87AD /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				BFCEE19215144BAFC002220E /* SilkCore */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		9B4992A562C43C4A959DF3FB /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0EDCB2B02761CEED91D4C989 /* SilkMonitor.appex */,
+				83AFCFC6FDE154FD9AF4E017 /* SilkShield.appex */,
+				3EBD012E973AE09683DBFE68 /* SilkShieldAction.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AAD38A1D4A562FECB8F9C10A /* SilkMonitor */ = {
+			isa = PBXGroup;
+			children = (
+				B3E26835042D124A346A8827 /* Info.plist */,
+				6ED1664BC1F72D50F45C0343 /* MonitorExtension.swift */,
+				96C4334FB17778A6059FE0C6 /* SilkMonitor.entitlements */,
+			);
+			path = SilkMonitor;
+			sourceTree = "<group>";
+		};
+		D3D2BF2C8AAFB1C28E9A3899 /* SilkShield */ = {
+			isa = PBXGroup;
+			children = (
+				A186A7DEBA377C94B39E83B5 /* Info.plist */,
+				B7314275C7464407E4787F3B /* ShieldConfigurationExtension.swift */,
+				0F18F9D3B21FF645636EA9CB /* SilkShield.entitlements */,
+			);
+			path = SilkShield;
+			sourceTree = "<group>";
+		};
+		E770490DC91150B5F720021F /* SilkShieldAction */ = {
+			isa = PBXGroup;
+			children = (
+				1FF6348E7234169E8FB0E68E /* Info.plist */,
+				29CD52B79915A13CAA670FF6 /* ShieldActionExtension.swift */,
+				C100E4F5C7D591C01AECFACB /* SilkShieldAction.entitlements */,
+			);
+			path = SilkShieldAction;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		179612AE0E639B93F40C3C0A /* SilkShield */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2C269F03EA4025DC85207E4E /* Build configuration list for PBXNativeTarget "SilkShield" */;
+			buildPhases = (
+				EA5279F66F7A85592FC2D11E /* Sources */,
+				BE34A03EF157D10CDE79ED5F /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SilkShield;
+			packageProductDependencies = (
+				8C8E4D9BB944356CB0771523 /* SilkCore */,
+			);
+			productName = SilkShield;
+			productReference = 83AFCFC6FDE154FD9AF4E017 /* SilkShield.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		6FD3716FA5181C1E06C149E0 /* SilkMonitor */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1001593E715132F13DDC97E0 /* Build configuration list for PBXNativeTarget "SilkMonitor" */;
+			buildPhases = (
+				546E662A48DCA6C3897D7BDB /* Sources */,
+				61990A1B60EB829B6BA9E85F /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SilkMonitor;
+			packageProductDependencies = (
+				3350D55FC9E5CD602108266F /* SilkCore */,
+			);
+			productName = SilkMonitor;
+			productReference = 0EDCB2B02761CEED91D4C989 /* SilkMonitor.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		86618DC95DBA3A9A52A7AF78 /* SilkShieldAction */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EF5EA18269BFFC3AF9FBF48F /* Build configuration list for PBXNativeTarget "SilkShieldAction" */;
+			buildPhases = (
+				F1807F8EB4EAAD76B26B1296 /* Sources */,
+				D695969ED3E3323D513C5C25 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SilkShieldAction;
+			packageProductDependencies = (
+				EBD9E28473C5EB7129F8AD9A /* SilkCore */,
+			);
+			productName = SilkShieldAction;
+			productReference = 3EBD012E973AE09683DBFE68 /* SilkShieldAction.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C72D2C1E22A00A97DD181A44 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					179612AE0E639B93F40C3C0A = {
+						DevelopmentTeam = 85Y5HLW3RN;
+						ProvisioningStyle = Automatic;
+					};
+					6FD3716FA5181C1E06C149E0 = {
+						DevelopmentTeam = 85Y5HLW3RN;
+						ProvisioningStyle = Automatic;
+					};
+					86618DC95DBA3A9A52A7AF78 = {
+						DevelopmentTeam = 85Y5HLW3RN;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = C89D2068D5ABF692551A4A67 /* Build configuration list for PBXProject "Silk" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 5234AFDD05C04E0E2BA5EC3B;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E61DA97C0A895A8821018393 /* XCLocalSwiftPackageReference "SilkCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 9B4992A562C43C4A959DF3FB /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				6FD3716FA5181C1E06C149E0 /* SilkMonitor */,
+				179612AE0E639B93F40C3C0A /* SilkShield */,
+				86618DC95DBA3A9A52A7AF78 /* SilkShieldAction */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		546E662A48DCA6C3897D7BDB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FD54862787CE76BAE51FC78E /* MonitorExtension.swift in Sources */,
+				4DF4A22565FFC52E7D1BFB0A /* SharedStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EA5279F66F7A85592FC2D11E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9D68046401F49C696D8E8AAA /* SharedStore.swift in Sources */,
+				909C10E2DD8695AC737E92FE /* ShieldConfigurationExtension.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1807F8EB4EAAD76B26B1296 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5ADAB23DE5445332AA5BAB10 /* SharedStore.swift in Sources */,
+				C17B8DA5C889BE567F2D4AB3 /* ShieldActionExtension.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		0D605FC489D98E8C243B48FD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 85Y5HLW3RN;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		50C4EF4748FFBCCC16C917EB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SilkShield/SilkShield.entitlements;
+				INFOPLIST_FILE = SilkShield/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk.shield;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		5C27D5931564F6A41FA621EB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SilkMonitor/SilkMonitor.entitlements;
+				INFOPLIST_FILE = SilkMonitor/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk.monitor;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A85B5F70DF54FFFA3D41DDD2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SilkShield/SilkShield.entitlements;
+				INFOPLIST_FILE = SilkShield/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk.shield;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B1876117A8AB18FEFDB84081 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SilkShieldAction/SilkShieldAction.entitlements;
+				INFOPLIST_FILE = SilkShieldAction/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk.shieldaction;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B27729A8EF3ADC9237881B63 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 85Y5HLW3RN;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		D0E06FBA85A854CDC2DA2ED2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SilkShieldAction/SilkShieldAction.entitlements;
+				INFOPLIST_FILE = SilkShieldAction/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk.shieldaction;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		FCF4FBE33F9D118314B491E3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SilkMonitor/SilkMonitor.entitlements;
+				INFOPLIST_FILE = SilkMonitor/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk.monitor;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1001593E715132F13DDC97E0 /* Build configuration list for PBXNativeTarget "SilkMonitor" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5C27D5931564F6A41FA621EB /* Debug */,
+				FCF4FBE33F9D118314B491E3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		2C269F03EA4025DC85207E4E /* Build configuration list for PBXNativeTarget "SilkShield" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A85B5F70DF54FFFA3D41DDD2 /* Debug */,
+				50C4EF4748FFBCCC16C917EB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C89D2068D5ABF692551A4A67 /* Build configuration list for PBXProject "Silk" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B27729A8EF3ADC9237881B63 /* Debug */,
+				0D605FC489D98E8C243B48FD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		EF5EA18269BFFC3AF9FBF48F /* Build configuration list for PBXNativeTarget "SilkShieldAction" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B1876117A8AB18FEFDB84081 /* Debug */,
+				D0E06FBA85A854CDC2DA2ED2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		E61DA97C0A895A8821018393 /* XCLocalSwiftPackageReference "SilkCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = SilkCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3350D55FC9E5CD602108266F /* SilkCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SilkCore;
+		};
+		8C8E4D9BB944356CB0771523 /* SilkCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SilkCore;
+		};
+		EBD9E28473C5EB7129F8AD9A /* SilkCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SilkCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = C72D2C1E22A00A97DD181A44 /* Project object */;
+}

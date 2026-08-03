@@ -1,0 +1,205 @@
+import ManagedSettings
+import ManagedSettingsUI
+import UIKit
+import SilkCore
+
+/// The wall. A statement, not a control: one word, one quiet line, one button
+/// Apple forces us to render (it dismisses). No menu, no durations, no escape
+/// hatch — "adding an escape hatch here does not make Silk gentler; it makes
+/// the wall a negotiation, and then it is not a wall."
+///
+/// Apple's layout, Silk's ink. Nine tintable properties are all we get:
+/// blur, background, icon, title, subtitle, two button labels, two button
+/// backgrounds. The primary button always dismisses; a secondary button can
+/// only .close/.defer via ShieldActionExtension — it cannot open Silk. So the
+/// wall does not pretend: the title says whose wall this is ("Silk"), the
+/// subtitle says where to go ("Open Silk"), and the walking is the user's.
+final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
+
+    // Silk's grounds, as UIKit colors (tokens/color.css).
+    private let paper = UIColor(red: 0.965, green: 0.953, blue: 0.925, alpha: 1)      // #F6F3EC
+    private let ink = UIColor(red: 0.129, green: 0.118, blue: 0.090, alpha: 1)        // #211E17
+    private let inkSoft = UIColor(red: 0.129, green: 0.118, blue: 0.090, alpha: 0.55)
+    private let lacquer = UIColor(red: 0.086, green: 0.075, blue: 0.055, alpha: 1)    // #16130E
+    private let paperSoft = UIColor(red: 0.965, green: 0.953, blue: 0.925, alpha: 0.6)
+
+    // The ensō mark, pre-rendered once per face. Identity, not information —
+    // it is always whole, like EnsoMark in the app.
+    private lazy var dayEnso: UIImage = Self.ensoIcon(color: ink)
+    private lazy var nightEnso: UIImage = Self.ensoIcon(color: paperSoft)
+
+    override func configuration(shielding application: Application) -> ShieldConfiguration {
+        SharedStore.recordAttempt()
+
+        let now = Date()
+        let policy = SharedStore.loadPolicy()
+
+        // Down hours: the night answers with the hour it opens, not the app.
+        // There is nothing to go ask Silk for until then.
+        if let p = policy, p.downHours.contains(currentTimeOfDay(now)) {
+            return night(subtitle: "☾  \(p.downHours.end.display)")
+        }
+
+        // Every wall also drives layer-4 of the re-lock: any shield render of
+        // any app is a wake, and every wake reconciles.
+        Wall.reconcile(now: now)
+
+        guard let p = policy else { return day(subtitle: SilkStrings.openSilk) }
+
+        // A door with balance shows it — "Open Silk · 30 left today" is the
+        // one line that says where to go ask *and* what there is to ask for.
+        // A non-door or a spent door says only where to go: dangling "0 left
+        // today" on a wall that cannot open is an argument, not a statement.
+        if isDoor(application, policy: p) {
+            let ledger = SharedStore.loadLedger()
+            let dayStart = DayBoundary.dayStart(now: now, downHours: p.downHours)
+            let remaining = ledger.remainingMinutes(budget: p.budgetMinutes, dayStart: dayStart)
+            if remaining > 0 {
+                return day(subtitle: "\(SilkStrings.openSilk) · \(remaining) \(SilkStrings.leftToday)")
+            }
+        }
+        return day(subtitle: SilkStrings.openSilk)
+    }
+
+    override func configuration(shielding webDomain: WebDomain) -> ShieldConfiguration {
+        SharedStore.recordAttempt()
+        // The same two faces as apps — a domain is not a door, so the day
+        // face carries no balance, and the night face answers with the hour.
+        if let p = SharedStore.loadPolicy(), p.downHours.contains(currentTimeOfDay(Date())) {
+            return night(subtitle: "☾  \(p.downHours.end.display)")
+        }
+        return day(subtitle: SilkStrings.openSilk)
+    }
+
+    // MARK: - The two faces
+
+    private func day(subtitle: String) -> ShieldConfiguration {
+        ShieldConfiguration(
+            backgroundBlurStyle: .systemThickMaterialLight,
+            backgroundColor: paper,
+            icon: dayEnso,
+            title: .init(text: SilkStrings.brand, color: ink),
+            subtitle: .init(text: subtitle, color: inkSoft),
+            primaryButtonLabel: .init(text: SilkStrings.ok, color: ink),
+            primaryButtonBackgroundColor: paper
+        )
+    }
+
+    private func night(subtitle: String) -> ShieldConfiguration {
+        ShieldConfiguration(
+            backgroundBlurStyle: .systemThickMaterialDark,
+            backgroundColor: lacquer,
+            icon: nightEnso,
+            title: .init(text: SilkStrings.brand, color: paperSoft),
+            subtitle: .init(text: subtitle, color: paperSoft.withAlphaComponent(0.36)),
+            primaryButtonLabel: .init(text: SilkStrings.ok, color: paperSoft),
+            primaryButtonBackgroundColor: lacquer
+        )
+    }
+
+    // MARK: - The ensō
+
+    /// A small monochrome ensō, drawn the way the wordmark draws it.
+    ///
+    /// This replicates Silk/EnsoPath.swift's `EnsoMark` — the authored gesture
+    /// (four cubics, open on purpose, ds-bundle/guidelines/enso-symbols.svg
+    /// #enso-s) as three fat strokes of increasing width cut at 100/55/22
+    /// percent of arc length, which is what keeps it a brush mark instead of
+    /// mud at small sizes. Replicated rather than shared because extensions
+    /// must stay tiny: no new assets, no new targets, no SwiftUI dependency
+    /// for one image. If EnsoPath.swift's numbers ever change, change these.
+    private static func ensoIcon(color: UIColor) -> UIImage {
+        let side: CGFloat = 64
+        let viewBox: CGFloat = 200
+        let start = CGPoint(x: 86, y: 24)
+        let curves: [(c1: CGPoint, c2: CGPoint, end: CGPoint)] = [
+            (CGPoint(x: 55, y: 28), CGPoint(x: 26, y: 62), CGPoint(x: 23, y: 100)),
+            (CGPoint(x: 20, y: 140), CGPoint(x: 54, y: 178), CGPoint(x: 98, y: 182)),
+            (CGPoint(x: 144, y: 186), CGPoint(x: 178, y: 148), CGPoint(x: 180, y: 104)),
+            (CGPoint(x: 182, y: 72), CGPoint(x: 168, y: 50), CGPoint(x: 146, y: 36)),
+        ]
+
+        // Flatten to a polyline with running length, so the cuts are fractions
+        // of the *stroke*, not of the Bézier parameter — a parameter cut lands
+        // the lift-off in the wrong place (see EnsoGeometry.arcTable).
+        let samples = 64
+        var points: [CGPoint] = [start]
+        var p0 = start
+        for c in curves {
+            for i in 1...samples {
+                let t = CGFloat(i) / CGFloat(samples)
+                let u = 1 - t
+                let a = u * u * u, b = 3 * u * u * t, cc = 3 * u * t * t, d = t * t * t
+                points.append(CGPoint(
+                    x: a * p0.x + b * c.c1.x + cc * c.c2.x + d * c.end.x,
+                    y: a * p0.y + b * c.c1.y + cc * c.c2.y + d * c.end.y
+                ))
+            }
+            p0 = c.end
+        }
+        var cumulative: [CGFloat] = [0]
+        for i in 1..<points.count {
+            let dx = points[i].x - points[i - 1].x
+            let dy = points[i].y - points[i - 1].y
+            cumulative.append(cumulative[i - 1] + (dx * dx + dy * dy).squareRoot())
+        }
+        let total = cumulative[cumulative.count - 1]
+
+        // #enso-s: widths 14/17/21 (viewBox units), cut at 100/55/22 percent.
+        // The widest is the shortest — that inversion is the taper.
+        let widths: [CGFloat] = [14, 17, 21]
+        let factors: [CGFloat] = [1.0, 0.55, 0.22]
+        let s = side / viewBox
+
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side))
+        let image = renderer.image { ctx in
+            let cg = ctx.cgContext
+            cg.setLineCap(.round)
+            cg.setLineJoin(.round)
+            cg.setStrokeColor(color.cgColor)
+            for layer in 0..<widths.count {
+                let target = factors[layer] * total
+                cg.setLineWidth(widths[layer] * s)
+                cg.beginPath()
+                cg.move(to: CGPoint(x: points[0].x * s, y: points[0].y * s))
+                var i = 1
+                while i < points.count, cumulative[i] <= target {
+                    cg.addLine(to: CGPoint(x: points[i].x * s, y: points[i].y * s))
+                    i += 1
+                }
+                if i < points.count {
+                    // Interpolate the final partial segment so the cut lands
+                    // exactly where the hand would have lifted.
+                    let span = cumulative[i] - cumulative[i - 1]
+                    let t = span > 0 ? (target - cumulative[i - 1]) / span : 0
+                    let a = points[i - 1], b = points[i]
+                    cg.addLine(to: CGPoint(
+                        x: (a.x + (b.x - a.x) * t) * s,
+                        y: (a.y + (b.y - a.y) * t) * s
+                    ))
+                }
+                cg.strokePath()
+            }
+        }
+        // Ink is the brand; never let the system re-tint it.
+        return image.withRenderingMode(.alwaysOriginal)
+    }
+
+    // MARK: - Helpers
+
+    private func isDoor(_ application: Application, policy: PolicyState) -> Bool {
+        guard let token = application.token else { return false }
+        let selections = SharedStore.loadDoorSelections()
+        for door in policy.doors {
+            if let sel = selections[door.id], sel.applicationTokens.contains(token) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func currentTimeOfDay(_ date: Date) -> TimeOfDay {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return TimeOfDay(hour: c.hour ?? 0, minute: c.minute ?? 0)
+    }
+}

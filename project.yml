@@ -1,0 +1,101 @@
+# XcodeGen project spec. Regenerate with: xcodegen generate
+#
+# This spec is the wall and its three extensions only. The Silk app target and
+# the SilkUITests bundle arrive in the next change, together, because the app
+# declares all three extensions as dependencies and xcodegen rejects a spec
+# whose dependencies name targets that do not exist.
+#
+# NOTE: bundle IDs use a placeholder prefix. Before TestFlight:
+#   1. change com.sanildesai → your real org identifier (all four targets + app group)
+#   2. request the FamilyControls (Distribution) entitlement for ALL FOUR bundle IDs
+# DEVELOPMENT_TEAM is already set below.
+name: Silk
+options:
+  bundleIdPrefix: com.sanildesai
+  deploymentTarget:
+    iOS: "26.5"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: "85Y5HLW3RN"
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+packages:
+  SilkCore:
+    path: SilkCore
+
+targets:
+  SilkMonitor:
+    type: app-extension
+    platform: iOS
+    settings: { base: { PRODUCT_BUNDLE_IDENTIFIER: com.sanildesai.silk.monitor } }
+    sources: [SilkMonitor, Shared]
+    dependencies:
+      - package: SilkCore
+    entitlements:
+      path: SilkMonitor/SilkMonitor.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups: [group.com.sanildesai.silk]
+    info:
+      path: SilkMonitor/Info.plist
+      properties:
+        CFBundleDisplayName: SilkMonitor
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.deviceactivity.monitor-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).MonitorExtension
+
+  SilkShield:
+    type: app-extension
+    platform: iOS
+    settings: { base: { PRODUCT_BUNDLE_IDENTIFIER: com.sanildesai.silk.shield } }
+    sources: [SilkShield, Shared]
+    dependencies:
+      - package: SilkCore
+    entitlements:
+      path: SilkShield/SilkShield.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups: [group.com.sanildesai.silk]
+    info:
+      path: SilkShield/Info.plist
+      properties:
+        CFBundleDisplayName: SilkShield
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.ManagedSettingsUI.shield-configuration-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShieldConfigurationExtension
+
+  SilkShieldAction:
+    type: app-extension
+    platform: iOS
+    settings: { base: { PRODUCT_BUNDLE_IDENTIFIER: com.sanildesai.silk.shieldaction } }
+    sources: [SilkShieldAction, Shared]
+    dependencies:
+      - package: SilkCore
+    entitlements:
+      path: SilkShieldAction/SilkShieldAction.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups: [group.com.sanildesai.silk]
+    info:
+      path: SilkShieldAction/Info.plist
+      properties:
+        CFBundleDisplayName: SilkShieldAction
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.ManagedSettings.shield-action-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShieldActionExtension
+
+schemes:
+  Silk:
+    build:
+      targets:
+        SilkMonitor: all
+        SilkShield: all
+        SilkShieldAction: all
+    run:
+      config: Debug
