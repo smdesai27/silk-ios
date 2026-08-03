@@ -98,4 +98,15 @@ public struct PolicyState: Hashable, Codable, Sendable {
         let t = utteranceToken.lowercased()
         return doors.first { $0.spokenForms.contains(t) }
     }
+
+    /// The entries of a door-keyed store this policy still owns. Anything keyed
+    /// by door id outlives the door, and the wall unions every stored app
+    /// selection with no policy filter — so one left behind shields its app
+    /// with no row, no grant path and no Settings entry, and only a wipe clears
+    /// it. Generic over the value so FamilyControls stays in the app layer and
+    /// the rule is provable from `swift test`.
+    public func owned<Value>(_ store: [UUID: Value]) -> [UUID: Value] {
+        let live = Set(doors.map(\.id))
+        return store.filter { live.contains($0.key) }
+    }
 }

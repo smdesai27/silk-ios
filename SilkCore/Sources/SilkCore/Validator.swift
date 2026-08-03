@@ -25,6 +25,11 @@ public enum Verdict: Equatable, Sendable {
     case refuseNothingLeft                      // "0 left today."
     case refuseDownHours(until: TimeOfDay)      // "Down hours. Opens 7:00 AM."
     case refuseSayHowManyMinutes                // "How long?"
+    /// A door asked for in a sentence. A door is a name and an app, and only
+    /// Apple's picker can say which app — a sentence carries the name and
+    /// nothing else, and a door made from a name alone parses, launches,
+    /// spends the budget, and can never be excepted from the wall.
+    case refuseDoorNeedsApp                     // "Add it in Settings."
     /// Zero parses, two parses, failed provenance: Silk says nothing new.
     case silence
 }
@@ -41,6 +46,20 @@ public extension Verdict {
             return polarity == .tighten
         default:
             return false
+        }
+    }
+
+    /// Whether the night holds this back. Down hours answer everything with the
+    /// hour they end, and a tighten is the standing exception to that — but the
+    /// hour is a promise to come back for a different answer, and a door asked
+    /// for at the bar is refused at seven exactly as it is at eleven. Quoting
+    /// the hour there sends her back in the morning for nothing.
+    var deferredByDownHours: Bool {
+        switch self {
+        case .refuseDoorNeedsApp:
+            return false
+        default:
+            return !isTighten
         }
     }
 }
@@ -127,7 +146,20 @@ public enum Validator {
             guard granted > 0 else { return .refuseDownHours(until: state.downHours.end) }
             return .grant(door: door, minutes: granted, relockAt: relock)
 
-        case .setBudget, .setDownHoursStart, .setDownHoursEnd, .addDoor, .removeDoor:
+        case .addDoor:
+            // Understandable, not executable — the same shape as a place-bound
+            // ask. The name is all a sentence can carry, and the app behind it
+            // comes from Apple's picker, which cannot be raised at the day
+            // boundary where a loosening matures; the door would arrive as a
+            // name alone, which parses and launches and can never be excepted
+            // from the wall. Refused here rather than in the app layer because
+            // this is the one point every parser passes, so the model's widened
+            // paraphrases meet the same answer the grammar does — and Settings,
+            // where the cap and the launch catalogue are checked, stays the
+            // only place a door is made.
+            return .refuseDoorNeedsApp
+
+        case .setBudget, .setDownHoursStart, .setDownHoursEnd, .removeDoor:
             guard let proposed = PolarityEngine.proposedState(applying: command, to: state) else {
                 return .silence
             }

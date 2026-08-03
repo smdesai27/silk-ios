@@ -48,4 +48,40 @@ import Testing
     @Test func changeAppIsPlainWords() {
         #expect(SilkStrings.rebind == "Change app")
     }
+
+    /// A door asked for at the bar is answered with the one place a name and an
+    /// app are given together. Four words, no hour — nothing here is waiting
+    /// for the morning.
+    @Test func aDoorAskedForAtTheBarNamesWhereDoorsAreMade() {
+        #expect(SilkStrings.addInSettings == "Add it in Settings.")
+    }
+
+    /// A selection whose door has left the policy owns nothing. The wall unions
+    /// every stored selection with no policy filter, so a door removed by
+    /// sentence used to leave its app shielded for good — no row, no grant
+    /// path, no Settings entry, and only a wipe to clear it. The String value
+    /// stands where a FamilyActivitySelection would: it is the key set that
+    /// decides whether an app stays shielded, and the value is beside the rule.
+    @Test func aPolicyOwnsOnlyItsOwnDoorsEntries() {
+        let reddit = Door(name: "Reddit")
+        let tiktok = Door(name: "TikTok")
+        let state = PolicyState(budgetMinutes: 40,
+                                downHours: DownHours(start: TimeOfDay(hour: 22),
+                                                     end: TimeOfDay(hour: 7)),
+                                doors: [reddit])
+        let store = [reddit.id: "reddit's app", tiktok.id: "a door that left"]
+        #expect(state.owned(store) == [reddit.id: "reddit's app"])
+    }
+
+    /// A policy with no doors left owns nothing at all — the last removal has
+    /// to take the last selection with it, or the wall stands over a Settings
+    /// page with nothing on it.
+    @Test func theLastDoorLeavingTakesItsSelection() {
+        let door = Door(name: "Reddit")
+        let empty = PolicyState(budgetMinutes: 40,
+                                downHours: DownHours(start: TimeOfDay(hour: 22),
+                                                     end: TimeOfDay(hour: 7)),
+                                doors: [])
+        #expect(empty.owned([door.id: "reddit's app"]).isEmpty)
+    }
 }

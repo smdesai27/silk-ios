@@ -128,4 +128,8 @@ public enum SilkStrings {
     public static let addAnApp = "Add an app"
     /// The removal receipt's tail. Composes: "Reddit removed."
     public static let removed = "removed."
+    /// The answer to a door asked for at the bar. A name is half a door; the
+    /// app behind it comes from Apple's picker, which no sentence can raise —
+    /// so the reply names the one place both are answered at once.
+    public static let addInSettings = "Add it in Settings."
 }

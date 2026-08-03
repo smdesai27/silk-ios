@@ -347,11 +347,14 @@ final class AppModel {
         }
 
         // Down hours answer everything with the hour they end
-        // (Silk Mockup.dc.html:317, the first line of `reply`) — with one
-        // deliberate departure: a tighten still lands. "Tightening is instant
-        // from anywhere" is a product rule, and refusing to let someone shut a
-        // door at night would be the edge yielding in the wrong direction.
-        if isDownHours, !verdict.isTighten {
+        // (Silk Mockup.dc.html:317, the first line of `reply`) — with two
+        // deliberate departures, both of which `deferredByDownHours` carries. A
+        // tighten still lands, because "tightening is instant from anywhere" is
+        // a product rule and refusing to let someone shut a door at night would
+        // be the edge yielding in the wrong direction. And a door asked for at
+        // the bar is refused at seven exactly as it is at eleven, so quoting
+        // the hour would send her back in the morning for nothing.
+        if isDownHours, verdict.deferredByDownHours {
             conversation.land(
                 refuse("\(SilkStrings.downHoursOpens) \(policy.downHours.end.displayWithMeridiem)."),
                 for: id)
@@ -400,6 +403,10 @@ final class AppModel {
 
         case .refuseSayHowManyMinutes:
             return (refuse(SilkStrings.howLong), nil)
+
+        case .refuseDoorNeedsApp:
+            // A door is a name and an app; the bar can only carry the name.
+            return (refuse(SilkStrings.addInSettings), nil)
 
         case .close(let door, let until):
             // The Validator already resolved the lift — a stated hour's next
@@ -465,18 +472,74 @@ final class AppModel {
             return (receipt(for: policy), nil)
 
         case .tighten:
-            // The undo window to take it back. Undo restores the prior state
-            // directly rather than proposing it: routing a reversal through
+            // The undo window to take it back. Undo restores the prior values
+            // directly rather than proposing them: routing a reversal through
             // the polarity engine would read as a loosening and defer to
             // tomorrow, which is the opposite of what Undo means.
             let previous = policy
+            // Which doors this change drops is read from the state diff, never
+            // from the words — the same discipline polarity itself is held to.
+            let dropped = policy.doors.filter { door in
+                !proposed.doors.contains { $0.id == door.id }
+            }
+            // Kept for the way back, and only read when there is one: a budget
+            // or window tighten drops nothing and has no reason to decode the
+            // whole selections dictionary.
+            let droppedSelections: [UUID: FamilyActivitySelection] = dropped.isEmpty ? [:]
+                : SharedStore.loadDoorSelections().filter { id, _ in
+                    dropped.contains { $0.id == id }
+                }
+            // A door dropped at the bar has to leave the way it leaves the
+            // editor, and it did not: the re-lock layers stayed armed for a
+            // door that no longer exists, and `commit` only wrote the policy
+            // and re-applied the wall — which unions every stored selection
+            // with no policy filter, so the dropped door's app stayed shielded
+            // with no row, no grant path and no Settings entry until a wipe.
+            // `commit` retires the selection now; the timers are this branch's.
+            for door in dropped { wall.stopMonitoring(door: door) }
             policy = proposed
             commit()
             Silk.Haptic.tighten()
             return (receipt(for: proposed), { [weak self] in
                 guard let self else { return }
-                self.policy = previous
+                // Undo puts back what this turn changed and nothing else. The
+                // window runs up to five minutes with Settings usable
+                // underneath, so restoring the whole prior state would silently
+                // destroy a door added — or a budget moved — in between, and a
+                // door destroyed that way now loses its app off the wall too,
+                // because the commit below retires the selection of any door
+                // the policy no longer holds. (Settings' own removal undo is
+                // surgical for the first half of that reason.)
+                var restored = self.policy
+                if proposed.budgetMinutes != previous.budgetMinutes {
+                    restored.budgetMinutes = previous.budgetMinutes
+                }
+                if proposed.downHours != previous.downHours {
+                    restored.downHours = previous.downHours
+                }
+                var selections = SharedStore.loadDoorSelections()
+                var returning: [Door] = []
+                for door in dropped {
+                    // The same yield the editor's undo performs: the same door
+                    // cannot come back twice, and a name re-added meanwhile —
+                    // or a roster refilled to the cap — keeps its seat.
+                    guard !restored.doors.contains(where: { $0.id == door.id }),
+                          DoorRoster.canAdd(door.name,
+                                            taken: restored.doors.flatMap(\.spokenForms),
+                                            count: restored.doors.count) else { continue }
+                    let seat = previous.doors.firstIndex { $0.id == door.id }
+                    restored.doors.insert(door, at: min(seat ?? restored.doors.count,
+                                                        restored.doors.count))
+                    // A door comes back with its app or not at all: a name
+                    // restored alone parses and launches and can never be
+                    // excepted from the wall.
+                    selections[door.id] = droppedSelections[door.id]
+                    returning.append(door)
+                }
+                self.policy = restored
+                if !returning.isEmpty { SharedStore.save(doorSelections: selections) }
                 self.commit()
+                for door in returning { self.rearmLiveGrant(for: door) }
             })
 
         case .loosen:
@@ -657,10 +720,28 @@ final class AppModel {
     }
 
     /// Persist, raise the wall, and let the screen catch up in one motion.
+    ///
+    /// The orphan sweep runs here, before the wall reads anything, because a
+    /// door does not only leave from Settings' editor — it leaves by sentence
+    /// too, and that removal comes through this call. `Wall.reconcile` unions
+    /// every stored selection with no policy filter, so a selection left behind
+    /// shields its app with no row, no grant path and no Settings entry, and
+    /// only a wipe cleared it. `commitDoorChange` never reaches here, so it
+    /// states the same rule itself.
     private func commit() {
         persist()
+        retireOrphanedSelections()
         wall.reconcile()
         now = .now
+    }
+
+    /// Written back only when there is something to retire, so a grant on its
+    /// way through re-encodes nothing.
+    private func retireOrphanedSelections() {
+        let selections = SharedStore.loadDoorSelections()
+        let owned = policy.owned(selections)
+        guard owned.count != selections.count else { return }
+        SharedStore.save(doorSelections: owned)
     }
 
     // MARK: - Editing the doors (Settings' editor overlay)
@@ -749,16 +830,21 @@ final class AppModel {
             var selections = SharedStore.loadDoorSelections()
             selections[door.id] = removedSelection
             self.commitDoorChange(policy: restored, selections: selections)
-            // Removal disarmed the re-lock layers; a restored door with a
-            // grant still live in the ledger reopens on that commit's
-            // reconcile, so the arm has to come back with it — otherwise
-            // only wake-based layer 4 stands. (Inverse of the grant undo.)
-            if let grant = self.ledger.grants
-                .filter({ $0.doorID == door.id && $0.isActive(at: .now) })
-                .max(by: { $0.expiresAt < $1.expiresAt }) {
-                self.wall.open(door: door, until: grant.expiresAt)
-            }
+            self.rearmLiveGrant(for: door)
         })
+    }
+
+    /// A removal disarms the re-lock layers, so an undone removal has to arm
+    /// them again: a restored door with a grant still live in the ledger
+    /// reopens on that commit's reconcile, and without this only wake-based
+    /// layer 4 would ever shut it. (Inverse of the grant undo.) A door dropped
+    /// at the bar undoes through here too, so it comes back armed the same way
+    /// whichever path dropped it.
+    private func rearmLiveGrant(for door: Door) {
+        guard let grant = ledger.grants
+            .filter({ $0.doorID == door.id && $0.isActive(at: .now) })
+            .max(by: { $0.expiresAt < $1.expiresAt }) else { return }
+        wall.open(door: door, until: grant.expiresAt)
     }
 
     /// Add: the chip tap makes the door (name-only, exactly as setup allows),
@@ -832,11 +918,12 @@ final class AppModel {
                                   selections: [UUID: FamilyActivitySelection]) {
         policy = newPolicy
         // A selection with no door is a shield with no row, no grant path and
-        // no way off — retire the whole orphan class at the one gate every
-        // door mutation passes through.
-        let doorIDs = Set(newPolicy.doors.map(\.id))
+        // no way off. This gate does not go through `commit`, so it states the
+        // rule itself: the wall is re-applied two lines down and would read the
+        // orphan otherwise. `commit` carries the same rule for the writes that
+        // do come through it — a door dropped at the bar, among them.
         SharedStore.save(policy: newPolicy)
-        SharedStore.save(doorSelections: selections.filter { doorIDs.contains($0.key) })
+        SharedStore.save(doorSelections: newPolicy.owned(selections))
         wall.reconcile()
         now = .now
     }
@@ -958,7 +1045,7 @@ final class AppModel {
 
     func keyTapped() {
         guard let pending = pendingLoosening else { return }
-        policy = pending
+        policy = matured(pending)
         pendingLoosening = nil
         SharedStore.save(pendingLoosening: nil)
         // An exception spent is an exception journalled: this is what the
@@ -1002,10 +1089,31 @@ final class AppModel {
         }
         let dayStart = DayBoundary.dayStart(now: .now, downHours: policy.downHours)
         guard proposedAt < dayStart else { return }
-        policy = pending
+        policy = matured(pending)
         pendingLoosening = nil
         SharedStore.save(pendingLoosening: nil)
-        persist()
+        // `commit`, not `persist`: the window this just moved decides which
+        // doors count as open, so the wall has to be re-applied, and the orphan
+        // sweep has to run on this write like every other one that goes through
+        // it. At `init` the reconcile on the next line is then redundant rather
+        // than harmful — `now` already holds its declaration default there.
+        commit()
+    }
+
+    /// What a matured pending actually becomes. The pending is a whole-policy
+    /// snapshot taken when the sentence was said, and the door list moves under
+    /// it — Settings edits doors instantly, and a door dropped at the bar is a
+    /// tighten that lands now — so by the day boundary the snapshot's doors can
+    /// be hours stale. Restoring them wholesale would drop a door bound in
+    /// Settings since, taking its app off the wall with it, or bring a dropped
+    /// door back with no selection left to except it: the name-only door setup
+    /// refuses to carry forward. No loosening can change the door list — an add
+    /// asked for at the bar is refused, and a removal never waits — so the live
+    /// list is the truth and only what the sentence moved matures.
+    private func matured(_ pending: PolicyState) -> PolicyState {
+        var next = pending
+        next.doors = policy.doors
+        return next
     }
 
     private func persist() {

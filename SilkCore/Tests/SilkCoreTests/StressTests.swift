@@ -316,15 +316,53 @@ private func expectClose(_ text: String, door: String, until: TimeOfDay? = nil,
         #expect(DeterministicParser.parse("add", state: s) == .silence)
     }
 
-    @Test func addRemovePolarity() {
-        guard case .ruleChange(_, let addPol) = verdict("add snapchat") else {
-            Issue.record("expected rule change"); return
-        }
-        #expect(addPol == .loosen)
+    /// A door dropped at the bar is a tighten and lands as one. A door added at
+    /// the bar is refused instead of proposed: the sentence carries the name,
+    /// and the app behind it comes from a picker no sentence can raise. The
+    /// polarity of an added door is still the truth — PolarityTests.doorDirection
+    /// proves it against the engine — it is simply never the answer to a
+    /// sentence.
+    @Test func addNeedsAnAppAndRemoveTightens() {
+        #expect(verdict("add snapchat") == .refuseDoorNeedsApp)
         guard case .ruleChange(_, let removePol) = verdict("remove reddit") else {
             Issue.record("expected rule change"); return
         }
         #expect(removePol == .tighten)
+    }
+
+    /// The refusal belongs to every parser, not just the grammar: an add the
+    /// model widens its way to meets the same answer. It used to become a
+    /// pending loosening that matured — hours later, at a day boundary, with no
+    /// picker anywhere — into a door with a name and no app: one that parses,
+    /// launches, spends the budget, and can never be excepted from the wall.
+    @Test func noParserCanMintADoorFromANameAlone() {
+        for name in ["snapchat", "focus friend", "an app silk has never heard of"] {
+            let injected = ParseOutcome.command(.addDoor(name: name))
+            let v = Validator.validate(injected, utterance: "add \(name)",
+                                       state: makeState(), ledger: GrantLedger(),
+                                       now: afternoon(), calendar: cal)
+            #expect(v == .refuseDoorNeedsApp, "an add survived as \(v): \(name)")
+        }
+    }
+
+    /// Nothing about the refusal reads as a change: it proposes no state, so
+    /// there is nothing to defer, nothing to undo, and nothing for the pending
+    /// row to promise for tomorrow.
+    @Test func aRefusedAddProposesNoState() {
+        #expect(!verdict("add snapchat").isTighten)
+        if case .ruleChange = verdict("add snapchat") {
+            Issue.record("a refused add still proposed a policy")
+        }
+    }
+
+    /// The night answers everything with the hour it ends, and that hour is a
+    /// promise to come back for a different answer. A door asked for at the bar
+    /// is refused at seven exactly as it is at eleven, so the night must not
+    /// hold it — everything else that is not a tighten still waits.
+    @Test func aDoorAskedForAtNightIsNotHeldBehindTheClock() {
+        #expect(verdict("add snapchat", at: at(23)) == .refuseDoorNeedsApp)
+        #expect(!verdict("add snapchat", at: at(23)).deferredByDownHours)
+        #expect(verdict("make it sixty a day", at: at(23)).deferredByDownHours)
     }
 }
 
