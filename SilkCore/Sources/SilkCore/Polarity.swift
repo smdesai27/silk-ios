@@ -25,9 +25,12 @@ public enum PolarityEngine {
         if proposed.budgetMinutes < current.budgetMinutes { tightens = true }
         if proposed.budgetMinutes > current.budgetMinutes { loosens = true }
 
-        // Night window: longer is tighter.
-        if proposed.downHours.length > current.downHours.length { tightens = true }
-        if proposed.downHours.length < current.downHours.length { loosens = true }
+        // Night window: which minutes it blocks, not how many. Length cannot
+        // see position, so moving 22:00–07:00 to 23:00–08:30 read as a pure
+        // tighten — half an hour longer — and landed instantly, handing the
+        // ten o'clock hour back the same evening.
+        if !proposed.downHours.covers(current.downHours) { loosens = true }
+        if !current.downHours.covers(proposed.downHours) { tightens = true }
 
         // Doors: a door is a permission to ask. Fewer doors is tighter.
         if proposed.doors.count < current.doors.count { tightens = true }

@@ -324,6 +324,96 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         let removed = PolarityEngine.proposedState(applying: .removeDoor(door: reddit), to: state)!
         #expect(PolarityEngine.classify(current: state, proposed: removed) == .tighten)
     }
+
+    @Test func aWindowThatOnlyMovedIsHeardAsAChange() {
+        // Settings writes both endpoints in one commit, so the same length at
+        // a new position reached the engine as a proposal. It came back
+        // .unchanged, settle returned early, and the sheet closed over an edit
+        // that was never saved.
+        let state = makeState()
+        var moved = state
+        moved.downHours = DownHours(start: TimeOfDay(hour: 22, minute: 30),
+                                    end: TimeOfDay(hour: 7, minute: 30))
+        #expect(PolarityEngine.classify(current: state, proposed: moved) == .loosen)
+        // Backwards is a move too, and it gives back the half hour before seven.
+        #expect(PolarityEngine.classify(current: moved, proposed: state) == .loosen)
+    }
+
+    @Test func aLongerWindowAtANewPositionStillGivesMinutesBack() {
+        // Half an hour longer overall, so the length test called it a pure
+        // tighten and enact applied it on the spot — with ten to eleven
+        // tonight quietly unshielded. A freed minute rules, whatever the
+        // length did.
+        let state = makeState()
+        var later = state
+        later.downHours = DownHours(start: TimeOfDay(hour: 23),
+                                    end: TimeOfDay(hour: 8, minute: 30))
+        #expect(later.downHours.length > state.downHours.length)
+        #expect(PolarityEngine.classify(current: state, proposed: later) == .loosen)
+    }
+
+    @Test func unchangedMeansTheSameMinutesBlocked() {
+        let state = makeState()
+        var same = state
+        same.downHours = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7))
+        #expect(PolarityEngine.classify(current: state, proposed: same) == .unchanged)
+        // The end wheel alone still reads the way it always did.
+        var longer = state
+        longer.downHours = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 8))
+        #expect(PolarityEngine.classify(current: state, proposed: longer) == .tighten)
+        var shorter = state
+        shorter.downHours = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 6))
+        #expect(PolarityEngine.classify(current: state, proposed: shorter) == .loosen)
+        // A window collapsed onto itself blocks nothing: the whole night back.
+        var none = state
+        none.downHours = DownHours(start: TimeOfDay(hour: 7), end: TimeOfDay(hour: 7))
+        #expect(PolarityEngine.classify(current: state, proposed: none) == .loosen)
+        #expect(PolarityEngine.classify(current: none, proposed: state) == .tighten)
+        // Which is why .unchanged means the same blocked minutes and not the
+        // same endpoints: two collapsed windows block the same nothing. The
+        // gap is recorded rather than papered over, and it stays unreachable
+        // because the picker seats starts at 20:00–23:30 and ends at
+        // 05:00–08:30, so a committed window is never collapsed, and a parsed
+        // command moves one endpoint at a time.
+        var elsewhere = state
+        elsewhere.downHours = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 22))
+        #expect(none.downHours != elsewhere.downHours)
+        #expect(PolarityEngine.classify(current: none, proposed: elsewhere) == .unchanged)
+    }
+
+    @Test func everyWindowTheWheelsCanReachIsJudgedByTheMinutesItFrees() {
+        // Settings' two wheels seat eight starts and eight ends: 64 windows,
+        // 4032 moves between them. Under the length test 280 of those vanished
+        // as .unchanged and another 644 applied instantly though they handed
+        // minutes back. The seats below mirror `downStartTable` and
+        // `downEndTable` in the app target (Silk/AppModel.swift:544-545,
+        // specified at docs/design/handoff/README.md:185-186), which SilkCore
+        // cannot import — move those tables and this sweep stops covering the
+        // picker it names, so it has to be brought back into line by hand. The
+        // oracle is the day itself, the literal set of blocked minutes, so it
+        // cannot go wrong in the same direction as the arc arithmetic it judges.
+        let windows = (0..<8).flatMap { s in
+            (0..<8).map { e in
+                DownHours(start: TimeOfDay(minutesSinceMidnight: 20 * 60 + s * 30),
+                          end: TimeOfDay(minutesSinceMidnight: 5 * 60 + e * 30))
+            }
+        }
+        let blocked = windows.map { w in
+            Set((0..<1440).filter { w.contains(TimeOfDay(minutesSinceMidnight: $0)) })
+        }
+        var current = makeState()
+        var proposed = makeState()
+        for (i, from) in windows.enumerated() {
+            for (j, to) in windows.enumerated() {
+                current.downHours = from
+                proposed.downHours = to
+                let expected: Polarity = !blocked[j].isSuperset(of: blocked[i]) ? .loosen
+                    : (blocked[i] == blocked[j] ? .unchanged : .tighten)
+                #expect(PolarityEngine.classify(current: current, proposed: proposed) == expected,
+                        "\(from.start.display)-\(from.end.display) to \(to.start.display)-\(to.end.display)")
+            }
+        }
+    }
 }
 
 // MARK: - The ledger and the day boundary

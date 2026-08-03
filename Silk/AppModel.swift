@@ -611,10 +611,12 @@ final class AppModel {
 
     /// A Settings commit is not part of a conversation, so its receipt is a
     /// toast — and a wheel put back where it started asked for nothing, so it
-    /// gets nothing.
+    /// gets nothing. That question is about the state, so it is put to the
+    /// state; classify agrees on both fields committed here, so the guard is a
+    /// plainer way of asking rather than a stronger one.
     private func settle(_ proposed: PolicyState) {
+        guard proposed != policy else { return }
         let polarity = PolarityEngine.classify(current: policy, proposed: proposed)
-        guard polarity != .unchanged else { return }
         let (reply, undo) = enact(proposed, polarity)
         toasts.show(reply, undo: undo)
     }

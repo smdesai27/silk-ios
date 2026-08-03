@@ -65,6 +65,18 @@ public struct DownHours: Hashable, Codable, Sendable {
     public var length: Int {
         ((end.minutes - start.minutes) % 1440 + 1440) % 1440
     }
+
+    /// Whether this window blocks every minute `other` blocks. A window is an
+    /// arc on a 24-hour circle, so what it costs the user is the set of those
+    /// minutes and not the count of them, which is why polarity asks this and
+    /// not `length`. A zero-length window blocks nothing and so is covered by
+    /// every window, including another zero-length one elsewhere, which makes
+    /// mutual coverage mean "blocks the same minutes", not "is the same window".
+    public func covers(_ other: DownHours) -> Bool {
+        if other.length == 0 { return true }
+        let offset = TimeOfDay(minutesSinceMidnight: other.start.minutes - start.minutes)
+        return offset.minutes + other.length <= length
+    }
 }
 
 /// The whole of Silk's policy. Small on purpose: if it doesn't fit here,
