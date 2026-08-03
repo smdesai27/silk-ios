@@ -1,5 +1,11 @@
 # Doors
 
+> **Note, 2 August 2026.** "Door" survives here as the internal name — this component,
+> its `.silk-door…` classes, and Silk's types keep the word — but user-facing copy now
+> says "app": the Settings header over this list reads "Apps", and a closed app's state
+> word is "closed", not "rests". The contract below is unchanged: the component shows
+> state, never a control — no icons, no toggles, no reordering.
+
 Silk's app list. They are called doors, not rows, and the naming is load-bearing:
 a door is a threshold you may or may not pass, so the component shows **state**,
 never a control. There is no toggle, no chevron, no "Manage" button.

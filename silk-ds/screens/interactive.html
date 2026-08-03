@@ -1,0 +1,515 @@
+<!-- @dsCard group="Screens" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Silk — interactive</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    min-height:100vh; display:flex; align-items:center; justify-content:center; gap:56px;
+    padding:64px 44px;
+    background:radial-gradient(1900px 1000px at 50% 38%, #EAE5D8 0%, #E2DBC9 68%, #DCD4C0 100%);
+    font-family:'SF Pro Text','SF Pro Display',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; color:#211E17;
+  }
+  .ny {
+    font-family:'New York','New York Medium',Georgia,'Times New Roman',serif;
+    font-weight:400; font-variant-numeric:tabular-nums lining-nums;
+    font-feature-settings:'tnum' 1,'lnum' 1;
+  }
+  /* ---------- phone ---------- */
+  .phone {
+    flex:0 0 auto; width:414px; height:824px; background:#12100C; border-radius:58px; padding:12px;
+    box-shadow: inset 0 0 0 2px #33302A, inset 0 0 0 3px rgba(255,255,255,.06),
+      0 36px 70px -18px rgba(33,30,23,.38), 0 14px 28px -10px rgba(33,30,23,.22), 0 2px 6px rgba(33,30,23,.14);
+  }
+  .screen { position:relative; width:390px; height:800px; border-radius:46px; overflow:hidden;
+    background:#F6F3EC; transition:background .8s ease; }
+  .screen.night { background:#16130E; }
+  .island { position:absolute; top:13px; left:50%; transform:translateX(-50%); width:100px; height:29px;
+    border-radius:15px; background:#0D0B08; z-index:6; }
+  .home { position:absolute; bottom:9px; left:50%; transform:translateX(-50%); width:128px; height:5px;
+    border-radius:3px; background:rgba(33,30,23,.24); z-index:6; }
+  .screen.night .home { background:rgba(246,243,236,.26); }
+  .dapple { position:absolute; top:0; left:0; right:0; height:46%; pointer-events:none; opacity:1; transition:opacity .8s ease;
+    background:
+      radial-gradient(150px 100px at 16% 5%, rgba(240,214,150,.045), transparent 72%),
+      radial-gradient(100px 130px at 47% -3%, rgba(238,208,138,.034), transparent 70%),
+      radial-gradient(170px 120px at 85% 9%, rgba(236,206,142,.04), transparent 72%),
+      radial-gradient(80px 100px at 33% 15%, rgba(150,160,132,.028), transparent 70%); }
+  .screen.night .dapple { opacity:0; }
+  .moonwash { position:absolute; top:110px; left:50%; transform:translateX(-50%); width:340px; height:340px;
+    pointer-events:none; opacity:0; transition:opacity .8s ease;
+    background:radial-gradient(closest-side, rgba(110,127,138,.09), transparent 74%); }
+  .screen.night .moonwash { opacity:1; }
+
+  /* ---------- pager ---------- */
+  .track { position:absolute; inset:0; display:flex; width:200%; transition:transform .55s cubic-bezier(.22,1,.28,1); }
+  .page { width:50%; height:100%; position:relative; }
+
+  /* ---------- wordmark / greeting ---------- */
+  .wordmark { margin-top:62px; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .wordmark .mark { width:13px; height:13px; color:rgba(33,30,23,.68); }
+  .wordmark .wm { font-size:11px; font-weight:500; letter-spacing:.34em; margin-right:-.34em; color:rgba(33,30,23,.62); }
+  .screen.night .wordmark .mark { color:rgba(246,243,236,.4); }
+  .screen.night .wordmark .wm { color:rgba(246,243,236,.5); }
+  .greet { margin-top:32px; text-align:center; font-size:21px; letter-spacing:-.005em; color:rgba(33,30,23,.9); }
+  .screen.night .greet { color:rgba(246,243,236,.82); }
+
+  /* ---------- hero / living circle ---------- */
+  .hero { margin-top:22px; display:flex; justify-content:center; }
+  .enso-wrap { position:relative; width:232px; height:232px; }
+  .enso-wrap svg.ring { position:absolute; inset:0; width:100%; height:100%; color:#5F8A52; transition:color .8s ease; }
+  .screen.night .enso-wrap svg.ring { color:#6E7F8A; }
+  .ring path { transition:stroke-dasharray .8s cubic-bezier(.22,1,.28,1); }
+  .hero-inner { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .hero-num { font-size:92px; line-height:1; letter-spacing:-.045em; color:#211E17; }
+  .hero-label { margin-top:8px; font-size:12.5px; letter-spacing:.015em; color:rgba(33,30,23,.52); }
+  .screen.night .hero-num { color:rgba(246,243,236,.92); }
+  .screen.night .hero-label { color:rgba(246,243,236,.44); }
+
+  /* ---------- aperture ---------- */
+  .aperture { position:relative; margin:18px auto 0; width:234px; height:56px; border-radius:27px;
+    display:flex; align-items:center; justify-content:center; transition:background .8s ease, box-shadow .8s ease;
+    background:
+      radial-gradient(152px 46px at 50% -8px, rgba(78,134,184,.16), rgba(78,134,184,0) 78%),
+      radial-gradient(190px 40px at 50% 108%, rgba(226,229,220,.85), rgba(226,229,220,0) 70%),
+      linear-gradient(180deg, #CCD4D6 0%, #D3D8D3 54%, #D8DCD3 100%);
+    box-shadow: inset 0 2px 6px rgba(33,30,23,.14), inset 0 9px 16px -9px rgba(33,30,23,.18),
+      inset 0 -1px 0 rgba(255,255,255,.4), 0 1px 0 rgba(255,255,255,.55); }
+  .aperture .ap-t { font-size:13.5px; letter-spacing:.01em; color:rgba(40,56,70,.82); transition:color .8s ease; }
+  .screen.night .aperture {
+    background:
+      radial-gradient(174px 50px at 50% 108%, rgba(126,156,184,.28), rgba(126,156,184,0) 74%),
+      radial-gradient(192px 58px at 50% -12px, rgba(110,140,168,.4), rgba(110,140,168,0) 76%),
+      linear-gradient(180deg, #3D5264 0%, #263440 58%, #1B2731 100%);
+    box-shadow: inset 0 2px 8px rgba(0,0,0,.45), inset 0 0 12px 4px rgba(14,18,24,.32),
+      inset 0 -1px 0 rgba(163,187,206,.12), 0 0 34px 2px rgba(78,134,184,.16); }
+  .screen.night .aperture .ap-t { color:rgba(214,224,232,.85); }
+
+  /* ---------- doors ---------- */
+  .doors { margin:26px 46px 0; }
+  .door { display:flex; align-items:center; height:52px; border-bottom:1px solid rgba(33,30,23,.055); cursor:pointer; }
+  .door:last-child { border-bottom:none; }
+  .door .name { font-size:15px; font-weight:500; letter-spacing:-.005em; color:rgba(33,30,23,.84); transition:color .5s; }
+  .door .t { font-size:14px; color:rgba(33,30,23,.5); transition:color .5s; }
+  .door.rest .name { font-weight:400; color:rgba(33,30,23,.44); }
+  .door .state { margin-left:auto; width:6px; height:6px; border-radius:50%; transition:all .5s; }
+  .door.live .state { background:rgba(33,30,23,.72); }
+  .door.rest .state { background:transparent; box-shadow:inset 0 0 0 1px rgba(33,30,23,.35); }
+  .door.open .name { color:rgba(33,30,23,.9); font-weight:500; }
+  .door.open .state { background:#5F8A52; }
+  .screen.night .door { border-bottom-color:rgba(246,243,236,.05); }
+  .screen.night .door .name { color:rgba(246,243,236,.36); }
+  .screen.night .door .t { color:rgba(246,243,236,.26); }
+  .screen.night .door.rest .name { color:rgba(246,243,236,.24); }
+  .screen.night .door.live .state { background:rgba(246,243,236,.3); }
+  .screen.night .door.rest .state { box-shadow:inset 0 0 0 1px rgba(246,243,236,.18); }
+
+  /* ---------- command bar ---------- */
+  .cmdbar { position:absolute; left:28px; right:28px; bottom:44px; height:52px; display:flex; align-items:center;
+    padding:0 20px; border-radius:26px; background:transparent; border:1px solid rgba(33,30,23,.14); z-index:5;
+    transition:border-color .8s ease; }
+  .cmdbar input { flex:1; border:none; outline:none; background:transparent; font-size:15px; letter-spacing:-.005em;
+    font-family:inherit; color:#211E17; }
+  .cmdbar input::placeholder { color:rgba(33,30,23,.4); }
+  .cmdbar .micb { margin-left:12px; width:18px; height:18px; color:rgba(33,30,23,.55); background:none; border:none;
+    cursor:pointer; padding:0; }
+  .screen.night .cmdbar { border-color:rgba(246,243,236,.12); }
+  .screen.night .cmdbar input { color:rgba(246,243,236,.85); }
+  .screen.night .cmdbar input::placeholder { color:rgba(246,243,236,.32); }
+  .screen.night .cmdbar .micb { color:rgba(246,243,236,.42); }
+  .dots { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); display:flex; gap:7px; z-index:5; }
+  .dot { width:5px; height:5px; border-radius:50%; background:rgba(33,30,23,.16); border:none; padding:0; cursor:pointer; transition:background .4s; }
+  .dot.active { background:rgba(33,30,23,.6); }
+  .screen.night .dot { background:rgba(246,243,236,.14); }
+  .screen.night .dot.active { background:rgba(246,243,236,.5); }
+
+  /* ---------- mirror ---------- */
+  .m-hero { margin-top:96px; display:flex; justify-content:center; }
+  .m-hero .enso-wrap { width:190px; height:190px; }
+  .m-hero .enso-wrap svg.ring { color:#211E17; }
+  .m-hero .hero-num { font-size:72px; }
+  .m-hero .hero-label { margin-top:6px; font-size:12px; }
+  .eq { margin-top:22px; text-align:center; font-size:14.5px; letter-spacing:.005em; color:rgba(33,30,23,.58); }
+  .chart { margin:44px 46px 0; }
+  .chart-title { font-size:12px; letter-spacing:.04em; color:rgba(33,30,23,.48); margin-bottom:16px; }
+  .bars { display:flex; align-items:flex-end; height:64px; border-bottom:1px solid rgba(33,30,23,.1); }
+  .bars .col, .xlabels .col { flex:1; display:flex; justify-content:center; }
+  .bars .bar { width:3px; border-radius:2px 2px 0 0; background:rgba(33,30,23,.28); }
+  .bars .col.today .bar { width:5px; background:#5F8A52; }
+  .xlabels { display:flex; margin-top:9px; }
+  .xlabels .col { font-size:10px; letter-spacing:.02em; color:rgba(33,30,23,.42); }
+  .xlabels .col.today { color:rgba(33,30,23,.72); font-weight:500; }
+  .card { margin:34px 40px 0; background:#EFE9DB; border-radius:20px; padding:20px 22px 18px; }
+  .card .obs { font-size:13.5px; line-height:1.5; color:rgba(33,30,23,.7); }
+  .card .ask { margin-top:8px; font-size:17px; line-height:1.35; color:rgba(33,30,23,.92); }
+  .card .actions { margin-top:16px; display:flex; align-items:center; gap:10px; }
+  .btn-accept { padding:9px 22px; border-radius:999px; background:#211E17; color:#F6F3EC; font-size:13.5px;
+    font-weight:500; border:none; cursor:pointer; font-family:inherit; }
+  .btn-later { padding:9px 14px; font-size:13.5px; color:rgba(33,30,23,.5); background:none; border:none; cursor:pointer; font-family:inherit; }
+  .m-footer { position:absolute; left:0; right:0; bottom:110px; text-align:center; font-size:12.5px;
+    letter-spacing:.02em; color:rgba(33,30,23,.45); }
+
+  /* ---------- toast ---------- */
+  .toast { position:absolute; top:58px; left:50%; transform:translate(-50%,-14px); background:#211E17; color:#F6F3EC;
+    font-size:13px; font-weight:500; padding:10px 18px; border-radius:20px; opacity:0; transition:all .4s cubic-bezier(.22,1,.28,1);
+    z-index:30; white-space:nowrap; display:flex; align-items:center; }
+  .toast.show { opacity:1; transform:translate(-50%,0); }
+  .toast .undo { margin-left:12px; background:none; border:none; color:#9FC08F; font-weight:600; font-size:13px;
+    cursor:pointer; font-family:inherit; }
+  .screen.night .toast { background:#EFE9DB; color:#211E17; }
+  .screen.night .toast .undo { color:#4A5A50; }
+
+  /* ---------- sheet (voice confirm only) ---------- */
+  .scrim { position:absolute; inset:0; background:rgba(33,30,23,0); pointer-events:none; transition:background .35s; z-index:20; }
+  .scrim.on { background:rgba(33,30,23,.14); pointer-events:auto; }
+  .sheet { position:absolute; left:14px; right:14px; bottom:-40%; background:#FBF9F3; border:1px solid rgba(33,30,23,.08);
+    border-radius:28px; padding:26px 28px 22px; box-shadow:0 -12px 44px rgba(33,30,23,.12);
+    transition:bottom .5s cubic-bezier(.22,1,.28,1); z-index:25; }
+  .sheet.open { bottom:14px; }
+  .sheet .echo { font-size:12px; color:rgba(33,30,23,.4); font-style:italic; margin-bottom:10px; }
+  .sheet .parse { font-size:19px; line-height:1.4; letter-spacing:-.01em; color:rgba(33,30,23,.92); margin-bottom:18px; }
+  .sheet .rowb { display:flex; gap:10px; }
+  .sheet .yes { flex:1; padding:12px 0; border-radius:16px; background:#211E17; color:#F6F3EC; font-size:14px;
+    font-weight:500; border:none; cursor:pointer; font-family:inherit; }
+  .sheet .no { flex:1; padding:12px 0; border-radius:16px; background:none; border:1px solid rgba(33,30,23,.14);
+    color:rgba(33,30,23,.6); font-size:14px; cursor:pointer; font-family:inherit; }
+  .screen.night .sheet { background:#1D1912; border-color:rgba(246,243,236,.08); }
+  .screen.night .sheet .parse { color:rgba(246,243,236,.9); }
+  .screen.night .sheet .yes { background:#EFE9DB; color:#211E17; }
+  .screen.night .sheet .no { border-color:rgba(246,243,236,.14); color:rgba(246,243,236,.5); }
+
+  /* ---------- shield preview ---------- */
+  .shield { position:absolute; inset:0; z-index:40; background:rgba(246,243,236,.92); backdrop-filter:blur(20px);
+    -webkit-backdrop-filter:blur(20px); display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:6px; opacity:0; pointer-events:none; transition:opacity .35s ease; }
+  .shield.on { opacity:1; pointer-events:auto; }
+  .screen.night .shield { background:rgba(22,19,14,.93); }
+  .shield .smark { width:15px; height:15px; color:rgba(33,30,23,.6); margin-bottom:16px; }
+  .screen.night .shield .smark { color:rgba(246,243,236,.4); }
+  .shield .suntil { font-size:40px; letter-spacing:-.02em; color:#211E17; }
+  .screen.night .shield .suntil { color:rgba(246,243,236,.9); }
+  .shield .sapp { font-size:13.5px; color:rgba(33,30,23,.5); }
+  .screen.night .shield .sapp { color:rgba(246,243,236,.4); }
+  .shield .sok { margin-top:30px; padding:11px 44px; border-radius:16px; background:none;
+    border:1px solid rgba(33,30,23,.16); font-size:14px; font-weight:500; color:#211E17; cursor:pointer; font-family:inherit; }
+  .screen.night .shield .sok { border-color:rgba(246,243,236,.16); color:rgba(246,243,236,.8); }
+
+  /* ---------- demo rail ---------- */
+  .rail { width:270px; display:flex; flex-direction:column; gap:18px; }
+  .rail h3 { font-size:11px; font-weight:600; letter-spacing:.3em; text-transform:uppercase; color:#9A927F; }
+  .rail .modes { display:flex; border:1px solid #D5CEBB; border-radius:14px; overflow:hidden; }
+  .rail .modes button { flex:1; padding:10px 0; background:none; border:none; font-size:13px; font-weight:500;
+    color:#6E6754; cursor:pointer; font-family:inherit; }
+  .rail .modes button.active { background:#211E17; color:#F6F3EC; }
+  .rail p { font-size:13px; color:#6E6754; line-height:1.65; }
+  .rail code { font-family:inherit; background:#EFE9DB; padding:1px 7px; border-radius:8px; color:#43402F; cursor:pointer; }
+  .rail .note { font-size:12px; color:#9A927F; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="enso-s" viewBox="0 0 200 200">
+      <g fill="none" stroke="currentColor" stroke-linecap="round">
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="14" pathLength="100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="17" pathLength="100" stroke-dasharray="55 100"/>
+        <path d="M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36" stroke-width="21" pathLength="100" stroke-dasharray="22 100"/>
+      </g>
+    </symbol>
+    <symbol id="mic" viewBox="0 0 24 24">
+      <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="3" width="6" height="11" rx="3"/>
+        <path d="M 5.5 11.5 a 6.5 6.5 0 0 0 13 0"/>
+        <path d="M 12 18 L 12 21"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="phone">
+  <div class="screen" id="screen">
+    <div class="dapple"></div>
+    <div class="moonwash"></div>
+    <div class="island"></div>
+    <div class="toast" id="toast"></div>
+    <div class="shield" id="shield">
+      <svg class="smark" viewBox="0 0 200 200"><use href="#enso-s"/></svg>
+      <div class="suntil ny" id="shielduntil">Until 5:00</div>
+      <div class="sapp" id="shieldapp">Instagram</div>
+      <button class="sok" onclick="document.getElementById('shield').classList.remove('on')">OK</button>
+    </div>
+    <div class="scrim" id="scrim"></div>
+    <div class="sheet" id="sheet">
+      <div class="echo" id="sheetecho"></div>
+      <div class="parse ny" id="sheetparse"></div>
+      <div class="rowb">
+        <button class="yes" id="sheetyes">Yes</button>
+        <button class="no" id="sheetno">Cancel</button>
+      </div>
+    </div>
+
+    <div class="track" id="track">
+      <!-- NOW -->
+      <div class="page">
+        <div class="wordmark">
+          <svg class="mark" viewBox="0 0 200 200"><use href="#enso-s"/></svg><span class="wm">SILK</span>
+        </div>
+        <div class="greet ny" id="greet">Good afternoon.</div>
+        <div class="hero">
+          <div class="enso-wrap">
+            <svg class="ring" viewBox="0 0 200 200" id="nowRing"></svg>
+            <div class="hero-inner">
+              <div class="hero-num ny" id="heronum">40</div>
+              <div class="hero-label" id="herolabel">min left today</div>
+            </div>
+          </div>
+        </div>
+        <div class="aperture"><span class="ap-t ny">☾&nbsp; 10:00 PM – 7:00 AM</span></div>
+        <div class="doors" id="doors">
+          <div class="door live" data-door="instagram" data-until="5:00">
+            <span class="name">Instagram</span><span class="t ny" >&nbsp;· 5:00</span><span class="state"></span></div>
+          <div class="door live" data-door="tiktok" data-until="5:00">
+            <span class="name">TikTok</span><span class="t ny">&nbsp;· 5:00</span><span class="state"></span></div>
+          <div class="door rest" data-door="clash">
+            <span class="name">Clash</span><span class="t ny"></span><span class="state"></span></div>
+          <div class="door rest" data-door="youtube">
+            <span class="name">YouTube</span><span class="t ny"></span><span class="state"></span></div>
+        </div>
+      </div>
+      <!-- MIRROR -->
+      <div class="page">
+        <div class="m-hero">
+          <div class="enso-wrap">
+            <svg class="ring" viewBox="0 0 200 200" id="mirrorRing"></svg>
+            <div class="hero-inner">
+              <div class="hero-num ny">82</div>
+              <div class="hero-label">Sunday</div>
+            </div>
+          </div>
+        </div>
+        <div class="eq ny">82 = 100 − 12 attempts − 6 late</div>
+        <div class="chart">
+          <div class="chart-title">Attempts</div>
+          <div class="bars">
+            <div class="col"><div class="bar" style="height:53px"></div></div>
+            <div class="col"><div class="bar" style="height:32px"></div></div>
+            <div class="col"><div class="bar" style="height:43px"></div></div>
+            <div class="col"><div class="bar" style="height:21px"></div></div>
+            <div class="col"><div class="bar" style="height:64px"></div></div>
+            <div class="col"><div class="bar" style="height:21px"></div></div>
+            <div class="col today"><div class="bar" style="height:11px"></div></div>
+          </div>
+          <div class="xlabels">
+            <div class="col">Tu</div><div class="col">We</div><div class="col">Th</div><div class="col">Fr</div>
+            <div class="col">Sa</div><div class="col">Su</div><div class="col today">Today</div>
+          </div>
+        </div>
+        <div class="card" id="proposal">
+          <div class="obs">Most of your Instagram time follows the 9&nbsp;PM pickup.</div>
+          <div class="ask ny">Start down hours at 9:30&nbsp;PM?</div>
+          <div class="actions">
+            <button class="btn-accept" id="acceptbtn">Accept</button>
+            <button class="btn-later" id="laterbtn">Not now</button>
+          </div>
+        </div>
+        <div class="m-footer ny">⚿ 1 · Jul 12</div>
+      </div>
+    </div>
+
+    <div class="cmdbar">
+      <input id="cmd" type="text" placeholder="Tell Silk…" autocomplete="off">
+      <button class="micb" id="micbtn" title="Speak"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#mic"/></svg></button>
+    </div>
+    <div class="dots">
+      <button class="dot active" id="dot0" aria-label="Now"></button>
+      <button class="dot" id="dot1" aria-label="Mirror"></button>
+    </div>
+    <div class="home"></div>
+  </div>
+</div>
+
+<div class="rail">
+  <h3>Silk · interactive</h3>
+  <div class="modes">
+    <button id="modeDay" class="active">Day</button>
+    <button id="modeNight">☾ Down hours</button>
+  </div>
+  <p>Try:
+    <code>give me 20 min of clash</code>
+    <code>give me instagram</code>
+    <code>block social till 9</code>
+    <code>give me clash until i leave the gym</code>
+    <code>status</code>
+  </p>
+  <p class="note">The circle is the budget — watch it recede as you spend. Typed commands run instantly; the mic simulates voice, and only voice tightens ask "yes?". Tap a door for its shield. At down hours, asking gets the edge.</p>
+</div>
+
+<script>
+/* ================= living circle ================= */
+const ENSO='M 86 24 C 55 28, 26 62, 23 100 C 20 140, 54 178, 98 182 C 144 186, 178 148, 180 104 C 182 72, 168 50, 146 36';
+const LAYERS=[[2.2,1],[2.6,.8],[3.0,.58],[3.8,.34],[4.6,.16]];
+function buildRing(svg){
+  let h='<g fill="none" stroke="currentColor" stroke-linecap="round">';
+  LAYERS.forEach(l=>{ h+='<path d="'+ENSO+'" stroke-width="'+l[0]+'" pathLength="100" stroke-dasharray="100 100"/>'; });
+  h+='<path d="'+ENSO+'" stroke-width="0.7" opacity="0.45" pathLength="100" stroke-dasharray="14 100" stroke-dashoffset="-31" transform="translate(4 4) scale(0.96)"/>';
+  h+='<path d="" stroke-width="1.1" opacity="0.85" class="flick"/>';
+  h+='</g>'; svg.innerHTML=h;
+  svg._paths=[...svg.querySelectorAll('path')];
+}
+function setEnso(svg, frac){
+  frac=Math.max(0,Math.min(1,frac));
+  const ps=svg._paths;
+  LAYERS.forEach((l,i)=>{ ps[i].setAttribute('stroke-dasharray',(100*l[1]*frac).toFixed(1)+' 100'); });
+  const hair=ps[LAYERS.length];
+  const hd=(8+6*frac).toFixed(1);
+  hair.setAttribute('stroke-dasharray',hd+' 100');
+  hair.setAttribute('stroke-dashoffset',(-(Math.max(0,100*frac-hd)/2)).toFixed(1));
+  const flick=ps[LAYERS.length+1];
+  const base=ps[0], L=base.getTotalLength();
+  if(frac>0.03){
+    const p=base.getPointAtLength(L*frac), q=base.getPointAtLength(Math.max(0,L*frac-2));
+    const dx=p.x-q.x, dy=p.y-q.y, n=Math.hypot(dx,dy)||1;
+    flick.setAttribute('d','M '+p.x.toFixed(1)+' '+p.y.toFixed(1)+' L '+(p.x+dx/n*10).toFixed(1)+' '+(p.y+dy/n*10).toFixed(1));
+  } else flick.setAttribute('d','');
+}
+const nowRing=document.getElementById('nowRing'), mirrorRing=document.getElementById('mirrorRing');
+buildRing(nowRing); buildRing(mirrorRing);
+requestAnimationFrame(()=>{ setEnso(nowRing,1); setEnso(mirrorRing,.82); });
+
+/* ================= state ================= */
+let budget=40; const MAX=40; let night=false;
+const TAGS={social:['instagram','tiktok'], games:['clash'], everything:['instagram','tiktok','clash','youtube']};
+const heronum=document.getElementById('heronum');
+function renderBudget(){ heronum.textContent=budget; setEnso(nowRing, budget/MAX); }
+function doorEl(n){ return document.querySelector('.door[data-door="'+n+'"]'); }
+function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+/* ================= toast / sheet ================= */
+const toast=document.getElementById('toast'); let toastTimer=null;
+function showToast(msg, undoFn){
+  clearTimeout(toastTimer); toast.innerHTML='';
+  toast.appendChild(document.createTextNode(msg));
+  if(undoFn){ const u=document.createElement('button'); u.className='undo'; u.textContent='Undo';
+    u.onclick=()=>{ undoFn(); toast.classList.remove('show'); }; toast.appendChild(u); }
+  toast.classList.add('show');
+  toastTimer=setTimeout(()=>toast.classList.remove('show'), undoFn?4500:2200);
+}
+const sheet=document.getElementById('sheet'), scrim=document.getElementById('scrim');
+let pending=null;
+function openSheet(echo,parse){
+  document.getElementById('sheetecho').textContent='“'+echo+'”';
+  document.getElementById('sheetparse').textContent=parse;
+  sheet.classList.add('open'); scrim.classList.add('on');
+}
+function closeSheet(){ sheet.classList.remove('open'); scrim.classList.remove('on'); pending=null; }
+scrim.addEventListener('click',closeSheet);
+document.getElementById('sheetno').addEventListener('click',closeSheet);
+document.getElementById('sheetyes').addEventListener('click',()=>{ if(pending)pending(); closeSheet(); });
+
+/* ================= actions ================= */
+/* You speak in durations; Silk answers in deadlines. Demo clock: 4:32 PM. */
+function endTime(n){ let m=4*60+32+n; const h=Math.floor(m/60)%12||12; return h+':'+String(m%60).padStart(2,'0'); }
+function grantDoor(name,n,label){
+  const d=doorEl(name); if(!d){ showToast('Add it to a group first.'); return; }
+  if(night){ showToast('☾ 7:00 AM'); return; }
+  if(d.dataset.until){ showToast('Till '+d.dataset.until+' · ⚿ or tomorrow'); return; }
+  if(n>budget){ showToast(budget+' left today'); return; }
+  budget-=n; renderBudget();
+  d.classList.remove('rest'); d.classList.add('open');
+  d.querySelector('.t').innerHTML='&nbsp;· till '+(label||endTime(n));
+  showToast(n+' min — '+cap(name)+' · opening '+cap(name)); go(0);
+}
+function tightenDoors(names,till){
+  const snap=names.map(n=>{ const d=doorEl(n); return d?{d,rest:d.classList.contains('rest'),open:d.classList.contains('open'),
+    t:d.querySelector('.t').innerHTML,until:d.dataset.until||''}:null; }).filter(Boolean);
+  snap.forEach(s=>{ s.d.classList.remove('rest','open'); s.d.classList.add('live');
+    s.d.dataset.until=till; s.d.querySelector('.t').innerHTML='&nbsp;· '+till; });
+  go(0);
+  return ()=>{ snap.forEach(s=>{ s.d.classList.remove('live','open'); if(s.rest)s.d.classList.add('rest'); if(s.open)s.d.classList.add('open');
+    s.d.querySelector('.t').innerHTML=s.t; if(s.until)s.d.dataset.until=s.until; else delete s.d.dataset.until; }); };
+}
+
+/* ================= parser ================= */
+function handle(text,isVoice){
+  const t=text.trim().toLowerCase(); if(!t)return; let m;
+  if(t.match(/^status$|what.?s left|how much/)){ showToast(budget+' left · social till 5:00'); }
+  else if(m=t.match(/give me (\w+)(?: for .*?)? until i leave (?:the )?(\w+)/)){
+    const name=m[1]==='games'?'clash':m[1], place=m[2], d=doorEl(name);
+    if(night){ showToast('☾ 7:00 AM'); }
+    else if(d&&d.dataset.until){ showToast('Till '+d.dataset.until+' · ⚿ or tomorrow'); }
+    else if(isVoice){ openSheet(text, cap(name)+' till '+place+' exit — yes?');
+      pending=()=>grantDoor(name,15,place+' exit'); }
+    else grantDoor(name,15,place+' exit');
+  }
+  else if(m=t.match(/give me (\d+)\s*min(?:ute)?s? of (\w+)/)){
+    grantDoor(m[2]==='games'?'clash':m[2], +m[1]);
+  }
+  else if(m=t.match(/give me (instagram|tiktok|clash|youtube|social|games)/)){
+    const name=m[1]==='social'?'instagram':(m[1]==='games'?'clash':m[1]), d=doorEl(name);
+    if(night){ showToast('☾ 7:00 AM'); }
+    else if(d&&d.dataset.until){ showToast('Till '+d.dataset.until+' · ⚿ or tomorrow'); }
+    else showToast('How long?');
+  }
+  else if(m=t.match(/block (\w+)(?:.*(?:till|until) (\d{1,2}))?/)){
+    const word=m[1], till=m[2]?(m[2]+':00'):'12:00';
+    const names=TAGS[word]||(doorEl(word)?[word]:null);
+    if(!names){ showToast('Didn’t get that.'); return; }
+    const label=(word==='everything'?'Everything':cap(word))+' · until '+till;
+    if(isVoice){ openSheet(text, label+' — yes?');
+      pending=()=>{ const undo=tightenDoors(names,till); showToast(label,undo); }; }
+    else { const undo=tightenDoors(names,till); showToast(label,undo); }
+  }
+  else showToast('Didn’t get that.');
+}
+const cmd=document.getElementById('cmd');
+cmd.addEventListener('keydown',e=>{ if(e.key==='Enter'){ handle(cmd.value,false); cmd.value=''; } });
+document.getElementById('micbtn').addEventListener('click',()=>{
+  const sample='block games till 9'; cmd.value=sample; handle(sample,true); cmd.value='';
+});
+document.querySelectorAll('.rail code').forEach(c=>{ c.addEventListener('click',()=>{ cmd.value=c.textContent; cmd.focus(); }); });
+
+/* ================= pager / shield / proposal / night ================= */
+const track=document.getElementById('track');
+const dots=[document.getElementById('dot0'),document.getElementById('dot1')];
+function go(i){ track.style.transform='translateX('+(i*-50)+'%)'; dots.forEach((d,k)=>d.classList.toggle('active',k===i)); }
+dots.forEach((d,i)=>d.addEventListener('click',()=>go(i)));
+
+document.querySelectorAll('.door').forEach(d=>{
+  d.addEventListener('click',()=>{
+    if(d.classList.contains('open'))return;
+    const name=cap(d.dataset.door);
+    if(night){ document.getElementById('shielduntil').textContent='☾ 7:00 AM'; document.getElementById('shieldapp').textContent=name; }
+    else if(d.dataset.until){ document.getElementById('shielduntil').textContent='Until '+d.dataset.until; document.getElementById('shieldapp').textContent=name; }
+    else { document.getElementById('shielduntil').textContent=name; document.getElementById('shieldapp').textContent=''; }
+    document.getElementById('shield').classList.add('on');
+  });
+});
+
+document.getElementById('acceptbtn').addEventListener('click',()=>{
+  showToast('Applies tomorrow.');
+  document.getElementById('proposal').innerHTML='<div class="obs">☾ 9:30 PM — from tomorrow.</div>';
+});
+document.getElementById('laterbtn').addEventListener('click',()=>{ document.getElementById('proposal').style.opacity=.45; });
+
+const screen=document.getElementById('screen'), greet=document.getElementById('greet');
+const heroInner=document.querySelector('#nowRing').parentElement.querySelector('.hero-inner');
+function setNight(on){
+  night=on; screen.classList.toggle('night',on);
+  document.getElementById('modeDay').classList.toggle('active',!on);
+  document.getElementById('modeNight').classList.toggle('active',on);
+  greet.textContent=on?'Good evening.':'Good afternoon.';
+  if(on){ heronum.style.fontSize='80px'; heronum.textContent='☾'; document.getElementById('herolabel').textContent='7:00 AM';
+    setEnso(nowRing,1); }
+  else { heronum.style.fontSize=''; renderBudget(); document.getElementById('herolabel').textContent='min left today'; }
+}
+document.getElementById('modeDay').addEventListener('click',()=>setNight(false));
+document.getElementById('modeNight').addEventListener('click',()=>setNight(true));
+</script>
+</body>
+</html>

@@ -3,3 +3,38 @@
 # ds-bundle/ is intentionally NOT ignored. There is no converter script that
 # regenerates it — the extracted CSS and the per-component docs are authored
 # content, so losing them would mean redoing real work.
+
+# Xcode
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Build output. Both spellings matter and only one of them is obvious: SwiftPM
+# writes .build/, but xcodebuild writes build/ whenever it is handed a SYMROOT
+# or a -derivedDataPath inside the repo, and that is how 658 object files and
+# precompiled modules — 73 MB, some of them recording the absolute path of
+# whichever worktree produced them — were once committed here. Nothing in the
+# tree depends on either directory; both regenerate from a clean checkout.
+.build/
+build/
+
+# Signing material and anything carrying a secret. None of it has been
+# committed; these rules exist so it cannot start.
+*.p12
+*.cer
+*.certSigningRequest
+*.mobileprovision
+*.provisionprofile
+.env
+.env.*
+
+# Distribution artefacts, for the same reason as build output.
+*.ipa
+*.xcarchive
+*.dSYM
+*.dSYM.zip
+
+# SwiftPM local state. Package.resolved is deliberately absent from this list —
+# there are no external dependencies to pin, and if that ever changes the
+# resolved versions should be tracked, not ignored.
+.swiftpm/
