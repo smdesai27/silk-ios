@@ -19,14 +19,28 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     // Silk's grounds, as UIKit colors (tokens/color.css).
     private let paper = UIColor(red: 0.965, green: 0.953, blue: 0.925, alpha: 1)      // #F6F3EC
     private let ink = UIColor(red: 0.129, green: 0.118, blue: 0.090, alpha: 1)        // #211E17
-    private let inkSoft = UIColor(red: 0.129, green: 0.118, blue: 0.090, alpha: 0.55)
     private let lacquer = UIColor(red: 0.086, green: 0.075, blue: 0.055, alpha: 1)    // #16130E
-    private let paperSoft = UIColor(red: 0.965, green: 0.953, blue: 0.925, alpha: 0.6)
+    private let linen = UIColor(red: 0.937, green: 0.914, blue: 0.859, alpha: 1)      // #EFE9DB
+
+    /// The day ground is pre-compensation, not a colour choice, and it only
+    /// happens to equal the day button's fill. If a device ever forces the
+    /// ground to be re-measured, give this property its own value rather than
+    /// editing `linen`: the day capsule separates from its wall by the layer
+    /// order and nothing else, so dragging both to one new colour would leave
+    /// the button visible only as prominent glass's blue rim.
+    private var dayGround: UIColor { linen }
+
+    // The ink and paper ramps, by the names tokens/color.css gives them.
+    private var inkMark: UIColor { ink.withAlphaComponent(0.60) }        // --silk-ink-60,   "shield mark"
+    private var inkCaption: UIColor { ink.withAlphaComponent(0.50) }     // --silk-ink-50
+    private var paperMark: UIColor { paper.withAlphaComponent(0.40) }    // --silk-paper-40, "night mark"
+    private var paperTitle: UIColor { paper.withAlphaComponent(0.90) }   // no token; _ds_bundle.css:465 spends it raw
+    private var paperButton: UIColor { paper.withAlphaComponent(0.80) }  // --silk-paper-80, "night shield button"
 
     // The ensō mark, pre-rendered once per face. Identity, not information —
     // it is always whole, like EnsoMark in the app.
-    private lazy var dayEnso: UIImage = Self.ensoIcon(color: ink)
-    private lazy var nightEnso: UIImage = Self.ensoIcon(color: paperSoft)
+    private lazy var dayEnso: UIImage = Self.ensoIcon(color: inkMark)
+    private lazy var nightEnso: UIImage = Self.ensoIcon(color: paperMark)
 
     override func configuration(shielding application: Application) -> ShieldConfiguration {
         SharedStore.recordAttempt()
@@ -72,29 +86,70 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     }
 
     // MARK: - The two faces
+    //
+    // Every colour below is pre-compensated for ScreenTimeUI, and both
+    // compensations run opposite to the obvious. The ground composites *under*
+    // the material, which lifts and neutralises it, so what is handed over is
+    // the colour that renders as Silk's rather than the one that is Silk's —
+    // these constants will look wrong against tokens/color.css, and correcting
+    // them to match it is the mistake. The primary button is prominent glass,
+    // which the system accent tints, so any translucency at all floods the
+    // capsule blue and its fill must be an opaque blend, never an alpha. The
+    // measurements behind both, the alpha floor a night fill must clear to stay
+    // visible against its own wall, and the by-eye check that stands in for the
+    // test nobody can write here are in docs/design/screentime-ui.md.
 
     private func day(subtitle: String) -> ShieldConfiguration {
         ShieldConfiguration(
             backgroundBlurStyle: .systemThickMaterialLight,
-            backgroundColor: paper,
+            backgroundColor: dayGround,
             icon: dayEnso,
             title: .init(text: SilkStrings.brand, color: ink),
-            subtitle: .init(text: subtitle, color: inkSoft),
+            subtitle: .init(text: subtitle, color: inkCaption),
             primaryButtonLabel: .init(text: SilkStrings.ok, color: ink),
-            primaryButtonBackgroundColor: paper
+            // --silk-linen doing its own job, "raised surfaces on paper". The
+            // fill sits over the material rather than under it, so it escapes
+            // the compression and renders at #EFE9DB — a step of 1.14:1 from
+            // the day wall, the size of step 0.16 buys on night and in the
+            // direction a raised surface takes on a light ground. Escaping the
+            // compression is the only reason it separates from a ground handed
+            // over as the same colour; docs/design/screentime-ui.md says what
+            // to do if a device ever shows otherwise.
+            primaryButtonBackgroundColor: linen
         )
     }
 
     private func night(subtitle: String) -> ShieldConfiguration {
         ShieldConfiguration(
-            backgroundBlurStyle: .systemThickMaterialDark,
+            backgroundBlurStyle: .systemChromeMaterialDark,
             backgroundColor: lacquer,
             icon: nightEnso,
-            title: .init(text: SilkStrings.brand, color: paperSoft),
-            subtitle: .init(text: subtitle, color: paperSoft.withAlphaComponent(0.36)),
-            primaryButtonLabel: .init(text: SilkStrings.ok, color: paperSoft),
-            primaryButtonBackgroundColor: lacquer
+            title: .init(text: SilkStrings.brand, color: paperTitle),
+            subtitle: .init(text: subtitle, color: paperMark),
+            primaryButtonLabel: .init(text: SilkStrings.ok, color: paperButton),
+            // --silk-paper-16 — the token the mockup spends on this button's
+            // border — laid down against the ground because the fill cannot
+            // carry an alpha. Below α ≈ 0.122 the blend comes out darker than
+            // the wall it sits on, and the capsule reads as a hole punched in
+            // the wall rather than as a button.
+            primaryButtonBackgroundColor: Self.flatten(paper, over: lacquer, alpha: 0.16)
         )
+    }
+
+    /// Silk's night ramp is written as alphas on paper, but the wall's button
+    /// cannot carry one: prominent glass floods blue at any translucency at
+    /// all. This lays the alpha down against the ground once, here, so the
+    /// value that crosses into ShieldConfiguration is opaque and the ramp still
+    /// reads as the ramp.
+    private static func flatten(_ top: UIColor, over bottom: UIColor, alpha: CGFloat) -> UIColor {
+        var tr: CGFloat = 0, tg: CGFloat = 0, tb: CGFloat = 0, ta: CGFloat = 0
+        var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+        top.getRed(&tr, green: &tg, blue: &tb, alpha: &ta)
+        bottom.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+        return UIColor(red: br + (tr - br) * alpha,
+                       green: bg + (tg - bg) * alpha,
+                       blue: bb + (tb - bb) * alpha,
+                       alpha: 1)
     }
 
     // MARK: - The ensō
