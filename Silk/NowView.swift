@@ -153,16 +153,20 @@ struct NowView: View {
     /// numeral — and "Apply now." is a sentence Silk speaks, so it is serif.
     @ViewBuilder
     private var pendingRow: some View {
-        if let pending = model.pendingLoosening {
+        // A nil summary means the merge would deliver nothing — every field the
+        // sentence proposed has been overtaken by a tighten since. The row goes
+        // with it, and so does the key button: an offer that cannot be honoured
+        // is worse than no offer, and tapping it would spend the key on a no-op.
+        if let pending = model.pendingLoosening, let summary = model.pendingSummary(pending) {
             HStack(spacing: 4) {
                 Text(SilkStrings.tomorrow)
                     .font(Silk.sans(15))
                     .tracking(Silk.track(-0.005, 15))
                     .foregroundStyle(night ? Silk.paperAlpha(0.36) : Silk.inkAlpha(0.70))
                 // Name what actually moved. A loosening can be a shorter night
-                // or an added door, neither of which touches the budget — and
-                // printing the budget then advertised the one thing unchanged.
-                Text(model.pendingSummary(pending))
+                // as readily as a bigger budget, and printing the budget then
+                // advertised the one thing unchanged.
+                Text(summary)
                     .font(Silk.serif(14))
                     .foregroundStyle(night ? Silk.paperAlpha(0.26) : Silk.inkAlpha(0.50))
                 Spacer()

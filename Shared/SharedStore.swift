@@ -21,6 +21,7 @@ public enum SharedStore {
         static let attempts = "silk.attempts"                  // [Date] shield renders
         static let pendingLoosening = "silk.pending"           // PolicyState applying tomorrow
         static let pendingProposedAt = "silk.pending.at"       // when it was asked for
+        static let pendingBaseline = "silk.pending.base"       // the policy it was measured against
         static let firstRunAt = "silk.firstrun"                // days before it have no score
         static let keyJournal = "silk.key.journal"             // [Date] — every exception spent
         static let undoSeconds = "silk.undo.seconds"           // the take-it-back window
@@ -32,7 +33,7 @@ public enum SharedStore {
         // from the retired key step and proposal card; wiped so upgraded QA
         // installs carry nothing forward.
         for key in ["silk.policy", "silk.ledger", "silk.wall.selection", "silk.door.selections",
-                    "silk.attempts", "silk.pending", "silk.pending.at",
+                    "silk.attempts", "silk.pending", "silk.pending.at", "silk.pending.base",
                     "silk.proposal", "silk.firstrun",
                     "silk.key.code", "silk.key.placement", "silk.key.journal",
                     "silk.undo.seconds"] {
@@ -107,13 +108,36 @@ public enum SharedStore {
         defaults.object(forKey: Key.pendingProposedAt) as? Date
     }
 
-    public static func save(pendingLoosening: PolicyState?, proposedAt: Date = .now) {
+    /// The policy the pending was measured against. A pending is a whole-policy
+    /// snapshot but a sentence moves one field, and without the baseline there
+    /// is no way to tell which — so maturity would have to assign the snapshot
+    /// wholesale and revert whatever was tightened while it waited.
+    public static func loadPendingBaseline() -> PolicyState? {
+        decode(PolicyState.self, key: Key.pendingBaseline)
+    }
+
+    /// `baseline` has no default on purpose. A pending stored without one
+    /// matures to nothing and is dropped at its boundary, so a call that
+    /// forgets it silently throws the user's loosening away — and the shape
+    /// that forgets, `save(pendingLoosening: x)`, is the one that reads most
+    /// naturally. Requiring it makes the omission a compile error instead.
+    public static func save(pendingLoosening: PolicyState?,
+                            baseline: PolicyState?,
+                            proposedAt: Date = .now) {
         if let p = pendingLoosening {
             encode(p, key: Key.pendingLoosening)
             defaults.set(proposedAt, forKey: Key.pendingProposedAt)
+            if let baseline {
+                encode(baseline, key: Key.pendingBaseline)
+            } else {
+                // Drop any stale baseline rather than leave it to be read
+                // against a pending it never measured.
+                defaults.removeObject(forKey: Key.pendingBaseline)
+            }
         } else {
             defaults.removeObject(forKey: Key.pendingLoosening)
             defaults.removeObject(forKey: Key.pendingProposedAt)
+            defaults.removeObject(forKey: Key.pendingBaseline)
         }
     }
 

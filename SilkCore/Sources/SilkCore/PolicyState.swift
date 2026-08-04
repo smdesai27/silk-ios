@@ -99,6 +99,58 @@ public struct PolicyState: Hashable, Codable, Sendable {
         return doors.first { $0.spokenForms.contains(t) }
     }
 
+    /// What a parked loosening becomes when its day finally turns.
+    ///
+    /// A pending is a whole-policy snapshot taken when the sentence was said,
+    /// and the policy keeps moving under it: tightening is instant, and
+    /// Settings edits doors now. Assigning that snapshot wholesale at maturity
+    /// reverts whatever was tightened since it was parked — the loosening wins
+    /// by outliving the tightening, which is rule 3 exactly backwards. So the
+    /// snapshot is merged, field by field, and never assigned.
+    ///
+    /// A field matures on two conditions, and needs both. The pending must
+    /// actually have *proposed* it — a snapshot carries all four fields, but a
+    /// sentence moves one — and the live value must still be sitting where the
+    /// pending left it. `baseline` is the policy the pending was measured
+    /// against; if the live value has since left the baseline then a later hand
+    /// moved it, and the later hand wins. That is the whole rule, and it is
+    /// symmetric: it declines to revert a tightening and equally declines to
+    /// re-apply a loosening the user has already been granted by other means.
+    ///
+    /// Doors are never merged. They are taken live, always, because no
+    /// loosening can change the door list — an add asked for at the bar is
+    /// refused, and a removal never waits — so the live list is the only truth
+    /// there is. Restoring a snapshot's doors would drop a door bound in
+    /// Settings since, taking its app off the wall with it, or bring a dropped
+    /// door back with no selection left to except it.
+    ///
+    /// A `nil` baseline matures nothing. It means a pending was persisted by a
+    /// build that stored no baseline, and there is no way to tell what it
+    /// proposed — every field of the snapshot is equally suspect. Backfilling
+    /// the live policy as the baseline is the tempting repair and the wrong
+    /// one: it makes `live == baseline` true for every field by construction,
+    /// which collapses the rule to "assign whatever the pending differs from
+    /// live on" — the wholesale revert this exists to prevent, arriving one
+    /// boundary later. Returning `self` errs the only safe way, and the caller
+    /// drops the pending rather than honouring it blind.
+    public func maturing(_ pending: PolicyState, parkedAgainst baseline: PolicyState?) -> PolicyState {
+        guard let baseline else { return self }
+        var next = self  // live, so the door list comes forward untouched
+        if pending.budgetMinutes != baseline.budgetMinutes,
+           budgetMinutes == baseline.budgetMinutes {
+            next.budgetMinutes = pending.budgetMinutes
+        }
+        if pending.downHours != baseline.downHours,
+           downHours == baseline.downHours {
+            next.downHours = pending.downHours
+        }
+        if pending.wallEnabled != baseline.wallEnabled,
+           wallEnabled == baseline.wallEnabled {
+            next.wallEnabled = pending.wallEnabled
+        }
+        return next
+    }
+
     /// The entries of a door-keyed store this policy still owns. Anything keyed
     /// by door id outlives the door, and the wall unions every stored app
     /// selection with no policy filter — so one left behind shields its app

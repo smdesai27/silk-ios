@@ -551,12 +551,16 @@ final class AppModel {
             // Applies at the next day start — or now, with the key. Undo here
             // withdraws the ask and puts back whatever was already waiting.
             let previous = pendingLoosening
+            // The baseline travels with the pending: at maturity it is the only
+            // way to tell which of the four fields the sentence actually moved.
+            // Undo puts back the withdrawn pending's own baseline, not this one.
+            let previousBaseline = SharedStore.loadPendingBaseline()
             pendingLoosening = proposed
-            SharedStore.save(pendingLoosening: proposed)
+            SharedStore.save(pendingLoosening: proposed, baseline: policy)
             return (SilkStrings.appliesTomorrow, { [weak self] in
                 guard let self else { return }
                 self.pendingLoosening = previous
-                SharedStore.save(pendingLoosening: previous)
+                SharedStore.save(pendingLoosening: previous, baseline: previousBaseline)
             })
         }
     }
@@ -1050,31 +1054,58 @@ final class AppModel {
 
     func keyTapped() {
         guard let pending = pendingLoosening else { return }
-        policy = matured(pending)
+        // The key buys the wait, not the merge: a tighten made since the
+        // sentence was said still stands, exactly as it would at the boundary.
+        let next = matured(pending)
+        // An exception spent is an exception journalled, but only an exception
+        // actually spent. The merge can legitimately deliver nothing — every
+        // field the sentence proposed may have been overtaken by a tighten
+        // since — and the key is scarce, hand-tapped, and counted in Mirror's
+        // footnote. Burning it on a no-op is the one outcome the user can
+        // neither see nor undo, so the pending stays parked and the journal
+        // stays untouched. `pendingChange` hides the button before it comes to
+        // this; the guard is here because the key will also arrive over NFC,
+        // where nothing consults the screen.
+        guard next != policy else { return }
+        policy = next
         pendingLoosening = nil
-        SharedStore.save(pendingLoosening: nil)
-        // An exception spent is an exception journalled: this is what the
-        // Mirror footnote counts. The NFC key will record through the same
-        // call when the hardware flow lands.
+        SharedStore.save(pendingLoosening: nil, baseline: nil)
+        // The NFC key will record through the same call when the hardware flow
+        // lands.
         SharedStore.recordKeyUse()
         keyLogCache = nil
         commit()
     }
 
-    /// What a pending loosening will change, in one value. Diffed rather than
-    /// assumed: the budget is only one of three things a loosening can move.
-    func pendingSummary(_ pending: PolicyState) -> String {
-        if pending.budgetMinutes != policy.budgetMinutes { return "\(pending.budgetMinutes)" }
-        if pending.downHours != policy.downHours {
-            return "\(pending.downHours.start.display)–\(pending.downHours.end.display)"
+    /// What a parked loosening would actually deliver, merged against what the
+    /// policy has become since. Everything on screen reads this rather than the
+    /// snapshot: the pending is what was *asked for*, and after a tighten the
+    /// two are no longer the same thing.
+    private func matured(_ pending: PolicyState) -> PolicyState {
+        policy.maturing(pending, parkedAgainst: SharedStore.loadPendingBaseline())
+    }
+
+    /// What a pending loosening will change, in one value — or nil when it will
+    /// change nothing and there is no row to draw.
+    ///
+    /// Diffed against the *matured* policy, not the snapshot. Diffing the
+    /// snapshot against live advertises what was asked for, which after a
+    /// tighten is a number guaranteed not to arrive: the card would promise 90
+    /// all evening and the boundary would silently deliver 30. The doors branch
+    /// is gone with it — a loosening cannot change the door list, so it was
+    /// unreachable and would have lied if it were not.
+    func pendingSummary(_ pending: PolicyState) -> String? {
+        let next = matured(pending)
+        if next.budgetMinutes != policy.budgetMinutes { return "\(next.budgetMinutes)" }
+        if next.downHours != policy.downHours {
+            return "\(next.downHours.start.display)–\(next.downHours.end.display)"
         }
-        if pending.doors.count != policy.doors.count { return "\(pending.doors.count)" }
-        return ""
+        return nil
     }
 
     func cancelPending() {
         pendingLoosening = nil
-        SharedStore.save(pendingLoosening: nil)
+        SharedStore.save(pendingLoosening: nil, baseline: nil)
     }
 
     /// A loosening matures once a day boundary has passed since it was asked
@@ -1088,37 +1119,30 @@ final class AppModel {
         guard let proposedAt = SharedStore.loadPendingProposedAt() else {
             // Persisted by a build that stored no timestamp. Stamp it now and
             // make it wait a boundary: erring toward the edge holding is the
-            // whole point of the rule.
-            SharedStore.save(pendingLoosening: pending)
+            // whole point of the rule. The baseline is carried through
+            // untouched — inventing one from the live policy here would make
+            // `live == baseline` true for every field and hand the snapshot a
+            // wholesale revert at the next boundary.
+            SharedStore.save(pendingLoosening: pending,
+                             baseline: SharedStore.loadPendingBaseline())
             return
         }
         let dayStart = DayBoundary.dayStart(now: .now, downHours: policy.downHours)
         guard proposedAt < dayStart else { return }
+        // A pending with no stored baseline matures to nothing (see
+        // `maturing`), and it is cleared rather than re-parked: it has had its
+        // boundary, it cannot say what it proposed, and keeping it would leave
+        // a card on Now offering a change that will never come. A loosening
+        // lost is the safe direction; the sentence can be said again.
         policy = matured(pending)
         pendingLoosening = nil
-        SharedStore.save(pendingLoosening: nil)
+        SharedStore.save(pendingLoosening: nil, baseline: nil)
         // `commit`, not `persist`: the window this just moved decides which
         // doors count as open, so the wall has to be re-applied, and the orphan
         // sweep has to run on this write like every other one that goes through
         // it. At `init` the reconcile on the next line is then redundant rather
         // than harmful — `now` already holds its declaration default there.
         commit()
-    }
-
-    /// What a matured pending actually becomes. The pending is a whole-policy
-    /// snapshot taken when the sentence was said, and the door list moves under
-    /// it — Settings edits doors instantly, and a door dropped at the bar is a
-    /// tighten that lands now — so by the day boundary the snapshot's doors can
-    /// be hours stale. Restoring them wholesale would drop a door bound in
-    /// Settings since, taking its app off the wall with it, or bring a dropped
-    /// door back with no selection left to except it: the name-only door setup
-    /// refuses to carry forward. No loosening can change the door list — an add
-    /// asked for at the bar is refused, and a removal never waits — so the live
-    /// list is the truth and only what the sentence moved matures.
-    private func matured(_ pending: PolicyState) -> PolicyState {
-        var next = pending
-        next.doors = policy.doors
-        return next
     }
 
     private func persist() {
