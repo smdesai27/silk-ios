@@ -1,0 +1,101 @@
+# Re-runs both suites on every pull request and every push to main, so the
+# 139 spine tests and the 11 simulator walks stop depending on someone
+# remembering to run them.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to the same branch retires the first run. This repo is private,
+# where macOS runners bill at ten times the Linux rate, and a superseded commit
+# has nothing left to tell us.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Pinned rather than left to the image's default, which moves without notice.
+  # 26.6 is what the tree is developed against; the macos-26 image also carries
+  # 26.0.1 through 26.5, so this path is a promise the image keeps.
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+
+jobs:
+  # The spine needs no simulator and no signing — it is a plain SwiftPM package
+  # that builds for macOS, so it answers in a couple of minutes and answers
+  # first.
+  spine:
+    name: SilkCore
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # Package.swift declares .macOS("26.0"); the macos-26 image is 26.5, so
+      # the test binary both builds and launches here. A macos-15 runner would
+      # compile it and then refuse to run it.
+      - name: swift test
+        working-directory: SilkCore
+        run: swift test
+
+  # Silk.xcodeproj is committed (project.pbxproj, the workspace, and the shared
+  # Silk scheme are all tracked), so there is no xcodegen step — CI builds the
+  # same project file a fresh clone opens. If project.yml is edited without
+  # regenerating, that drift ships in the commit; CI reflects the tree, it does
+  # not repair it.
+  simulator:
+    name: SilkUITests
+    runs-on: macos-26
+    # The same short-circuit scripts/ci.sh makes locally, and for the same
+    # reason plus a bill: a red spine already refuses the PR, and thirteen
+    # minutes of simulator at the 10x macOS rate cannot change that answer.
+    needs: spine
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Toolchain and simulators
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available
+
+      # Two things in this command are load-bearing:
+      #
+      # OS=latest — the image ships iOS 26.2, 26.4 and 26.5 runtimes and builds
+      # an iPhone 17 Pro against more than one of them. The deployment target is
+      # 26.5, so a bare `name=iPhone 17 Pro` can resolve to the 26.4 device and
+      # fail at install with a deployment-target error rather than a test
+      # failure. `latest` always clears the floor.
+      #
+      # CODE_SIGNING_ALLOWED=NO — project.yml sets DEVELOPMENT_TEAM for device
+      # builds, and no runner holds that team's credentials. The simulator
+      # installs unsigned bundles happily; this is the same flag the README's
+      # simulator build already uses.
+      - name: xcodebuild test
+        run: |
+          xcodebuild test \
+            -project Silk.xcodeproj \
+            -scheme Silk \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -only-testing:SilkUITests \
+            -resultBundlePath SilkUITests.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+
+      # A failed UI walk is close to unreadable from the log alone. The result
+      # bundle carries the screenshots and the failing step.
+      - name: Result bundle
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: SilkUITests-xcresult
+          path: SilkUITests.xcresult
+          retention-days: 7

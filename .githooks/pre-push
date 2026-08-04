@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# The fast half of the gate. GitHub Actions runs both suites on every pull
+# request and every push to main, and that is the authority — this hook exists
+# to catch the cheap failures before they cost a round trip, not to duplicate
+# CI.
+#
+# So it runs the spine and stops. 139 tests in a tenth of a second catches most
+# of what breaks; the eleven simulator walks take five minutes locally and
+# thirteen on a runner, and paying that on every push to learn what the PR is
+# about to tell you anyway is how a hook gets deleted.
+#
+# Tracked (unlike .git/hooks/) and reached through core.hooksPath, so the gate
+# is version-controlled and a fresh clone turns it on with one command:
+#
+#   git config core.hooksPath .githooks
+#
+#   SILK_RUN_UI=1 git push   both suites, ~6 min — before a PR you want green
+#   git push --no-verify     skip the hook entirely
+
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# stdin carries one "<local ref> <local sha> <remote ref> <remote sha>" line per
+# ref being pushed. A branch *deletion* has an all-zero local sha and ships no
+# commits, so there is nothing to test.
+pushing=0
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+  case "$local_sha" in
+    "" | 0000000000000000000000000000000000000000) ;;
+    *) pushing=1 ;;
+  esac
+done
+
+if [ "$pushing" -eq 0 ]; then
+  echo "pre-push: deletions only, nothing to test"
+  exit 0
+fi
+
+# The hook's stdin is consumed; ci.sh must not inherit it.
+if [ "${SILK_RUN_UI:-}" = "1" ]; then
+  echo "pre-push: SILK_RUN_UI=1 — both suites, ~6 min."
+  exec scripts/ci.sh all </dev/null
+fi
+
+echo "pre-push: the spine. SILK_RUN_UI=1 adds the simulator, --no-verify skips."
+exec scripts/ci.sh spine </dev/null
