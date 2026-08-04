@@ -41,6 +41,10 @@ public enum DeterministicParser {
             let edgeIsStart = isStart(text)
             if let t = NumberParser.timeOfDay(in: strip(text, of: "down hours"),
                                               assumeEvening: edgeIsStart) {
+                // An end stated as a bare hour may be ambiguous in a way that
+                // costs the user hours of lockdown, but that is the Validator's
+                // to refuse: it is the one point every parser passes, and the
+                // grammar's job is to read the sentence, not to price it.
                 return .command(edgeIsStart ? .setDownHoursStart(t) : .setDownHoursEnd(t))
             }
         }

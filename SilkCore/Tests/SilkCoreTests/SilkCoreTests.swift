@@ -71,6 +71,23 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         #expect(NumberParser.timeOfDay(in: "end at 7 am", assumeEvening: false)
                 == TimeOfDay(hour: 7))
     }
+
+    /// The unspaced spelling, which is how people actually type it — and how
+    /// Silk itself writes the question when an hour is ambiguous ("11am or
+    /// 11pm?"). An answer typed the way the question was written has to parse,
+    /// or the question is worse than the guess it replaced.
+    @Test func gluedMeridiem() {
+        #expect(NumberParser.timeOfDay(in: "bedtime till 11pm", assumeEvening: false)
+                == TimeOfDay(hour: 23))
+        #expect(NumberParser.timeOfDay(in: "bedtime till 11am", assumeEvening: true)
+                == TimeOfDay(hour: 11))
+        #expect(NumberParser.timeOfDay(in: "start at 10:30pm", assumeEvening: false)
+                == TimeOfDay(hour: 22, minute: 30))
+        // The suffix only peels off a clock body, so ordinary words survive it.
+        // "spam" ends in the same two letters and is not 11 o'clock.
+        #expect(NumberParser.timeOfDay(in: "spam", assumeEvening: false) == nil)
+        #expect(NumberParser.timeOfDay(in: "no more instagram", assumeEvening: false) == nil)
+    }
 }
 
 // MARK: - The grammar

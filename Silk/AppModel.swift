@@ -404,6 +404,11 @@ final class AppModel {
         case .refuseSayHowManyMinutes:
             return (refuse(SilkStrings.howLong), nil)
 
+        case .refuseSayAmOrPm(let at):
+            // Nothing moved, so there is nothing to take back — the whole
+            // reply is the question, and the next sentence answers it.
+            return (refuse(SilkStrings.amOrPm(at)), nil)
+
         case .refuseDoorNeedsApp:
             // A door is a name and an app; the bar can only carry the name.
             return (refuse(SilkStrings.addInSettings), nil)

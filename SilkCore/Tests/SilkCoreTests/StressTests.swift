@@ -752,23 +752,117 @@ private func expectClose(_ text: String, door: String, until: TimeOfDay? = nil,
                 == .command(.setDownHoursStart(TimeOfDay(hour: 22))))
     }
 
-    @Test func tillWithAnEveningHourInheritsUntilsReading() {
-        // Levelling "till"/"til" with "until" hands them whatever is arguable
-        // about "until", and here the reading is wrong AND unsafe: "let me
-        // stay up till 11" plainly moves the start, but both spellings compile
-        // to an 11 AM end — a thirteen-hour night that lands now, where the
-        // old "till" answer was a start, a loosen, and waited for tomorrow.
-        // Pinned as known rather than as correct: one reading, so one fix when
-        // it comes, and neither spelling drifts away from the other in between.
-        #expect(DeterministicParser.parse("bedtime till 11", state: makeState())
+    @Test func anEveningHourAfterTillIsAskedAboutRatherThanGuessed() {
+        // Was pinned as known-wrong: both spellings compiled to an 11 AM end —
+        // a thirteen-hour night, landing instantly because longer is tighter —
+        // where "let me stay up till 11" plainly means 11 PM and the opposite
+        // direction. Silk now declines to pick.
+        for text in ["bedtime till 11", "bedtime until 11", "down hours til 11"] {
+            #expect(verdict(text) == .refuseSayAmOrPm(at: TimeOfDay(hour: 11)), "\(text)")
+        }
+        #expect(SilkStrings.amOrPm(TimeOfDay(hour: 11)) == "11am or 11pm?")
+    }
+
+    /// Noon and midnight are the same number, which is what makes twelve the
+    /// most ambiguous hour on the clock and the likeliest one to be said. An
+    /// earlier cut of this rule inferred "bare" by reading the text twice with
+    /// opposite assumptions — and the two readings agree at 12, because the
+    /// evening assumption only bumps hours under 12. So "till 12" was called
+    /// explicit and a fourteen-hour night landed instantly, from the sentence
+    /// the whole rule exists to catch.
+    @Test func twelveIsTheHourTheQuestionExistsFor() {
+        for text in ["down hours till 12", "down hours till twelve",
+                     "bedtime till 12", "down hours until 12"] {
+            #expect(verdict(text) == .refuseSayAmOrPm(at: TimeOfDay(hour: 12)), "\(text)")
+        }
+        #expect(verdict("down hours till 12:30")
+                == .refuseSayAmOrPm(at: TimeOfDay(hour: 12, minute: 30)))
+    }
+
+    /// The question quotes the time back whole. Offering "7am or 7pm?" to
+    /// someone who said 7:30 names two times and neither is the one asked for.
+    @Test func theQuestionKeepsTheMinutes() {
+        #expect(verdict("down hours till 7:30")
+                == .refuseSayAmOrPm(at: TimeOfDay(hour: 7, minute: 30)))
+        #expect(SilkStrings.amOrPm(TimeOfDay(hour: 7, minute: 30)) == "7:30am or 7:30pm?")
+    }
+
+    @Test func anExplicitMeridiemIsNeverAskedAbout() {
+        // The question exists because the hour was bare. Say which half of the
+        // clock you meant and Silk acts, in either direction. "23" says it
+        // without the word.
+        #expect(DeterministicParser.parse("bedtime till 11am", state: makeState())
                 == .command(.setDownHoursEnd(TimeOfDay(hour: 11))))
-        #expect(DeterministicParser.parse("bedtime until 11", state: makeState())
-                == .command(.setDownHoursEnd(TimeOfDay(hour: 11))))
-        guard case .ruleChange(let proposed, let polarity) = verdict("down hours till 11") else {
-            Issue.record("expected a rule change")
+        #expect(DeterministicParser.parse("bedtime till 11pm", state: makeState())
+                == .command(.setDownHoursEnd(TimeOfDay(hour: 23))))
+        guard case .ruleChange = verdict("bedtime till 11am") else {
+            Issue.record("an explicit morning end is a rule change, not a question")
             return
         }
-        #expect(proposed.downHours.end == TimeOfDay(hour: 11))
-        #expect(polarity == .tighten)
+        guard case .ruleChange = verdict("down hours till 23") else {
+            Issue.record("an hour above twelve names its own half of the day")
+            return
+        }
+    }
+
+    /// An "am" that belongs to some other word in the sentence must not be read
+    /// as this hour's. A scan of the whole string would call the 11 explicit
+    /// and wave the guess straight through.
+    @Test func aStrayAmBelongingToAnotherWordDoesNotCount() {
+        #expect(verdict("down hours till 11 i am tired")
+                == .refuseSayAmOrPm(at: TimeOfDay(hour: 11)))
+    }
+
+    @Test func aMorningHourThatDoesNotLengthenTheNightIsStillFree() {
+        // The rule is the direction, not the hour. Against 10 PM–7 AM these
+        // shorten it or leave it alone, so the morning reading costs nothing
+        // and the question would be noise. "down hours till 7" in particular is
+        // the sentence the marker fix landed for; it must not regress into a
+        // prompt.
+        #expect(DeterministicParser.parse("down hours till 7", state: makeState())
+                == .command(.setDownHoursEnd(TimeOfDay(hour: 7))))
+        #expect(DeterministicParser.parse("down hours til 6:30", state: makeState())
+                == .command(.setDownHoursEnd(TimeOfDay(hour: 6, minute: 30))))
+        #expect(DeterministicParser.parse("down hours until seven", state: makeState())
+                == .command(.setDownHoursEnd(TimeOfDay(hour: 7))))
+        for text in ["down hours till 7", "down hours til 6:30", "down hours until seven"] {
+            guard case .ruleChange = verdict(text) else {
+                Issue.record("\(text) must not become a question")
+                return
+            }
+        }
+    }
+
+    @Test func theQuestionFollowsTheWindowNotTheClock() {
+        // Against a night that already ends at noon, an 11 AM end is a
+        // *shortening* — so the same "till 11" that is refused above is acted
+        // on here. The hour never decides; the direction does.
+        let lateRiser = PolicyState(
+            budgetMinutes: 40,
+            downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 12)),
+            doors: [instagram]
+        )
+        guard case .ruleChange = verdict("down hours till 11", state: lateRiser) else {
+            Issue.record("a shortening needs no question")
+            return
+        }
+    }
+
+    /// The refusal is reachable at the hour it is most likely to be said. The
+    /// down-hours short-circuit answers anything that is not a tighten with the
+    /// hour the wall opens, which would swallow this question at 11 PM.
+    @Test func theQuestionSurvivesDownHours() {
+        #expect(Verdict.refuseSayAmOrPm(at: TimeOfDay(hour: 11)).deferredByDownHours == false)
+    }
+
+    /// The guard lives in the Validator, not the grammar, so the model's
+    /// widened paraphrases meet the same answer — a command built by any parser
+    /// is priced the same way.
+    @Test func theQuestionIsTheValidatorsNotTheGrammars() {
+        let fromAnyParser = ParseOutcome.command(.setDownHoursEnd(TimeOfDay(hour: 11)))
+        #expect(Validator.validate(fromAnyParser, utterance: "stay up till 11",
+                                   state: makeState(), ledger: GrantLedger(),
+                                   now: afternoon(), calendar: cal)
+                == .refuseSayAmOrPm(at: TimeOfDay(hour: 11)))
     }
 }

@@ -25,6 +25,10 @@ public enum Verdict: Equatable, Sendable {
     case refuseNothingLeft                      // "0 left today."
     case refuseDownHours(until: TimeOfDay)      // "Down hours. Opens 7:00 AM."
     case refuseSayHowManyMinutes                // "How long?"
+    /// The time as the sentence gave it, so the question can quote it back
+    /// whole: "7:30am or 7:30pm?" Carrying only the hour would offer two times
+    /// and neither of them the one asked for.
+    case refuseSayAmOrPm(at: TimeOfDay)         // "11am or 11pm?"
     /// A door asked for in a sentence. A door is a name and an app, and only
     /// Apple's picker can say which app — a sentence carries the name and
     /// nothing else, and a door made from a name alone parses, launches,
@@ -56,7 +60,11 @@ public extension Verdict {
     /// the hour there sends her back in the morning for nothing.
     var deferredByDownHours: Bool {
         switch self {
-        case .refuseDoorNeedsApp:
+        case .refuseDoorNeedsApp, .refuseSayAmOrPm:
+            // The am/pm question joins it for the same reason, and needs the
+            // exemption more: "let me stay up till 11" is a sentence said at
+            // eleven at night. Deferring it answers a question about tonight
+            // with the hour the wall opens, and the ask is lost.
             return false
         default:
             return !isTighten
@@ -159,13 +167,42 @@ public enum Validator {
             // only place a door is made.
             return .refuseDoorNeedsApp
 
-        case .setBudget, .setDownHoursStart, .setDownHoursEnd, .removeDoor:
-            guard let proposed = PolarityEngine.proposedState(applying: command, to: state) else {
-                return .silence
+        case .setDownHoursEnd(let end):
+            // An hour with no am/pm on it, landing on the edge that reads bare
+            // hours as mornings. "till 7" is the night's own end and costs
+            // nothing; "till 11" reads as 11 AM, four more hours of lockdown,
+            // and lands instantly because a longer night is a tightening — when
+            // "let me stay up till 11" plainly means 11 PM and the opposite
+            // direction. Silk does not pick between them.
+            //
+            // The test is the direction, not the hour: only a reading that
+            // LENGTHENS the night is refused, because that is the one a wrong
+            // guess cannot be waited out or taken back. Where it shortens the
+            // night or leaves it alone the guess is free, so "till 7" and
+            // "til 6:30" are never questioned.
+            //
+            // Here rather than in the grammar for the reason `addDoor` gives
+            // above: this is the one point every parser passes, so the model's
+            // widened paraphrases meet the same answer the deterministic
+            // reading does. A guess this expensive must not have a way around.
+            if let stated = NumberParser.statedTime(in: utterance, assumeEvening: false),
+               !stated.meridiemWasStated,
+               DownHours(start: state.downHours.start, end: end).length > state.downHours.length {
+                return .refuseSayAmOrPm(at: end)
             }
-            let polarity = PolarityEngine.classify(current: state, proposed: proposed)
-            return .ruleChange(proposed: proposed, polarity: polarity)
+            return ruleChange(command, state)
+
+        case .setBudget, .setDownHoursStart, .removeDoor:
+            return ruleChange(command, state)
         }
+    }
+
+    private static func ruleChange(_ command: Command, _ state: PolicyState) -> Verdict {
+        guard let proposed = PolarityEngine.proposedState(applying: command, to: state) else {
+            return .silence
+        }
+        return .ruleChange(proposed: proposed,
+                           polarity: PolarityEngine.classify(current: state, proposed: proposed))
     }
 
     // MARK: - Clock helpers

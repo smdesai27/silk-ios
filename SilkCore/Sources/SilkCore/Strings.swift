@@ -33,6 +33,21 @@ public enum SilkStrings {
     public static let minutes = "min"
     public static let howLong = "How long?"
     public static let didntGetThat = "Didn’t get that."
+
+    /// "11am or 11pm?", "7:30am or 7:30pm?" — the whole question, and the whole
+    /// reply. A bare hour whose two readings move the night in opposite
+    /// directions is not a sentence Silk can act on, and the shortest way to
+    /// say so is to hand both readings back. Composed from the user's own
+    /// number, so it is a rendering rather than a new string: no "which did you
+    /// mean", no apology, no explanation of the rule it declined to guess at.
+    ///
+    /// The minutes come too. Offering "7am or 7pm?" to someone who said 7:30
+    /// names two times and neither of them the one asked for.
+    public static func amOrPm(_ time: TimeOfDay) -> String {
+        let h = time.hour % 12 == 0 ? 12 : time.hour % 12
+        let clock = time.minute == 0 ? "\(h)" : "\(h):\(String(format: "%02d", time.minute))"
+        return "\(clock)am or \(clock)pm?"
+    }
     public static let downHoursRun = "Down hours run" // "…run 10:00 PM to 7:00 AM."
     public static let to = "to"
     public static let downHoursOpens = "Down hours. Opens"

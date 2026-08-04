@@ -75,5 +75,5 @@ the **FamilyControls (Distribution)** entitlement for all four (see
 4. **The wall fails closed.** The ledger is the truth; a dead extension closes doors late, never
    leaves them open. The model proposes; the validator disposes.
 5. **No notification permission, ever.** Every word the app says comes from
-   `SilkCore/Sources/SilkCore/Strings.swift` — 55 of them today, 52 constants and 3 that compose. The
+   `SilkCore/Sources/SilkCore/Strings.swift` — 57 of them today, 53 constants and 4 that compose. The
    file is the vocabulary, and nothing outside it may speak.

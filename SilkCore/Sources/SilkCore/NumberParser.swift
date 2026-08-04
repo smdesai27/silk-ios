@@ -78,41 +78,91 @@ public enum NumberParser {
         return all.count == 1 ? all.first : nil
     }
 
-    /// Parse a clock time: "10", "10:30", "ten", "5 pm", "10 p.m.".
+    /// A stated clock time, and whether the sentence said which half of the day
+    /// it meant.
+    ///
+    /// The flag has to be carried rather than recovered. Reading the same text
+    /// twice with opposite assumptions looks like it would reveal it — a bare
+    /// hour would answer differently, an explicit one the same — but the two
+    /// readings also coincide at 12, at 0, and above 12, because the evening
+    /// assumption only bumps an hour when it is under 12. "till 12" is the most
+    /// ambiguous sentence there is and that test calls it explicit.
+    public struct StatedTime: Equatable, Sendable {
+        public let time: TimeOfDay
+        public let meridiemWasStated: Bool
+    }
+
+    /// Parse a clock time: "10", "10:30", "ten", "5 pm", "10 p.m.", "11pm".
     /// Bare hours ≤ 12 are ambiguous; the caller resolves am/pm from context
     /// (a down-hours *start* is an evening, an *end* is a morning).
     public static func timeOfDay(in utterance: String, assumeEvening: Bool) -> TimeOfDay? {
+        statedTime(in: utterance, assumeEvening: assumeEvening)?.time
+    }
+
+    /// The same reading, with the provenance of the am/pm attached. The flag
+    /// belongs to the hour that was matched, not to the sentence: "i am up till
+    /// 11" carries an "am" token that has nothing to do with the 11, and a
+    /// scan of the whole string would call that hour explicit and wave the
+    /// guess through.
+    public static func statedTime(in utterance: String, assumeEvening: Bool) -> StatedTime? {
         let text = utterance.lowercased()
             .replacingOccurrences(of: "p.m.", with: "pm")
             .replacingOccurrences(of: "a.m.", with: "am")
         let tokens = tokenize(text)
 
         for (i, tok) in tokens.enumerated() {
+            // "11pm" arrives as one token — the tokenizer splits on characters
+            // that are neither alphanumeric nor ":", and there is nothing
+            // between the digits and the suffix to split on. Peel it off so the
+            // spaced and unspaced spellings read alike. This is not a nicety:
+            // Silk asks "11am or 11pm?" when an hour is ambiguous, and an
+            // answer typed the way the question was written has to parse.
+            let (body, glued) = splitMeridiem(tok)
             var hour: Int?
             var minute = 0
-            if tok.contains(":") {
-                let parts = tok.split(separator: ":")
+            if body.contains(":") {
+                let parts = body.split(separator: ":")
                 if parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]), h <= 24, m < 60 {
                     hour = h
                     minute = m
                 }
-            } else if let h = Int(tok), (0...24).contains(h) {
+            } else if let h = Int(body), (0...24).contains(h) {
                 hour = h
-            } else if let h = teens[tok] ?? units[tok], h <= 12 {
+            } else if let h = teens[body] ?? units[body], h <= 12 {
                 hour = h
             }
             guard var h = hour else { continue }
 
-            let next = i + 1 < tokens.count ? tokens[i + 1] : ""
+            let next = glued ?? (i + 1 < tokens.count ? tokens[i + 1] : "")
+            var stated = true
             if next == "pm" { h = h % 12 + 12 } else if next == "am" {
                 h = h % 12
-            } else if h <= 12, assumeEvening {
-                // "down hours start at ten" — an evening reading.
-                if h < 12 { h += 12 }
+            } else {
+                // Nothing said which half of the day. Hours above 12 say it
+                // themselves — "23" cannot be a morning — and so does a 0.
+                stated = h > 12 || h == 0
+                if h <= 12, assumeEvening, h < 12 {
+                    // "down hours start at ten" — an evening reading.
+                    h += 12
+                }
             }
-            return TimeOfDay(hour: h % 24, minute: minute)
+            return StatedTime(time: TimeOfDay(hour: h % 24, minute: minute),
+                              meridiemWasStated: stated)
         }
         return nil
+    }
+
+    /// A token's clock body and its glued-on meridiem, if it carries one:
+    /// "11pm" → ("11", "pm"), "11" → ("11", nil), "spam" → ("spam", nil).
+    /// Only splits when what precedes the suffix is itself a clock body, so
+    /// ordinary words ending in those two letters are left whole.
+    private static func splitMeridiem(_ token: String) -> (String, String?) {
+        guard token.count > 2 else { return (token, nil) }
+        let suffix = String(token.suffix(2))
+        guard suffix == "am" || suffix == "pm" else { return (token, nil) }
+        let body = String(token.dropLast(2))
+        guard body.allSatisfy({ $0.isNumber || $0 == ":" }) else { return (token, nil) }
+        return (body, suffix)
     }
 
     static func tokenize(_ text: String) -> [String] {
