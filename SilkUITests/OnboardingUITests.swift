@@ -41,7 +41,16 @@ final class OnboardingUITests: XCTestCase {
     /// The first thing a freshly launched process draws. A cold launch on a
     /// loaded runner is the slowest operation in the suite by a wide margin,
     /// and it is the one place a long wait costs nothing when things are well.
-    private static let launch: TimeInterval = 30
+    ///
+    /// 30 was measured on this hardware and was still too tight on GitHub's:
+    /// the first launch of a run there, against a simulator booted seconds
+    /// earlier on a shared host, missed it and took the suite red on `main`
+    /// with the fix for the swallowed tap already in. Ninety is not a guess at
+    /// how slow a runner can be so much as an admission that we do not know —
+    /// and it is free, because `waitForExistence` returns the instant the
+    /// element appears. A generous ceiling here lengthens only genuine
+    /// failures, which are the runs nobody is waiting on anyway.
+    private static let launch: TimeInterval = 90
 
     /// A reply in the thread. The bar answers behind a deliberate ~480ms beat
     /// and the parse that precedes it, so this is the beat plus room.

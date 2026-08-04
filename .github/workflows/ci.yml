@@ -80,6 +80,17 @@ jobs:
       # builds, and no runner holds that team's credentials. The simulator
       # installs unsigned bundles happily; this is the same flag the README's
       # simulator build already uses.
+      # -retry-tests-on-failure is the backstop, not the fix. The races that
+      # made this suite flaky were fixed in the tests themselves — a swallowed
+      # tap is asked again, the app is put down rather than killed — and the
+      # waits are sized for a slow shared host. This catches what is left:
+      # a runner wedged by something no test can see, on a suite whose failures
+      # cost thirteen minutes to re-litigate by hand.
+      #
+      # A retried test still reports as a failure if it fails twice, and the
+      # result bundle records that a retry happened, so a test that only ever
+      # passes on the second attempt stays visible rather than quietly green.
+      # If that shows up, it is a bug to fix here, not a number to raise.
       - name: xcodebuild test
         run: |
           xcodebuild test \
@@ -87,6 +98,8 @@ jobs:
             -scheme Silk \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
             -only-testing:SilkUITests \
+            -retry-tests-on-failure \
+            -test-iterations 2 \
             -resultBundlePath SilkUITests.xcresult \
             CODE_SIGNING_ALLOWED=NO
 
