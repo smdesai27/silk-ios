@@ -86,12 +86,52 @@ public struct PolicyState: Hashable, Codable, Sendable {
     public var downHours: DownHours        // one night window
     public var doors: [Door]               // 3–6 named doors
     public var wallEnabled: Bool           // the categories behind the wall (tokens live outside Core)
+    /// doorID → the most minutes of the shared budget that door may draw in a
+    /// Silk day. A ceiling on the one pool, not an allowance out of it: the sum
+    /// is unconstrained, and an absent entry is no ceiling at all rather than a
+    /// ceiling of zero. Keyed by id and not by name because a name can be
+    /// re-added and a cap must not re-attach to a door the user never capped.
+    ///
+    /// Here rather than on `Door` because `maturing` takes the door list live
+    /// and never merges it: a cap stored on a `Door` could never mature a parked
+    /// loosening, and would be dropped on the floor by the one code path that
+    /// exists to deliver it. Inside `PolicyState` it also rides inside
+    /// `silk.policy`, so `wipeAll` needs no new entry and no extension can strip
+    /// it. Splitting it into a sibling App Group key would reintroduce both.
+    public var doorCaps: [UUID: Int]
 
-    public init(budgetMinutes: Int, downHours: DownHours, doors: [Door], wallEnabled: Bool = true) {
+    /// `doorCaps` goes last and carries a default, so every call site that
+    /// predates caps keeps compiling — a door with no entry is simply uncapped,
+    /// which is what those call sites already mean.
+    public init(budgetMinutes: Int, downHours: DownHours, doors: [Door],
+                wallEnabled: Bool = true, doorCaps: [UUID: Int] = [:]) {
         self.budgetMinutes = budgetMinutes
         self.downHours = downHours
         self.doors = doors
         self.wallEnabled = wallEnabled
+        self.doorCaps = doorCaps
+    }
+
+    /// `doorCaps` postdates the first persisted policies, so it decodes as
+    /// optional; synthesized `encode(to:)` still writes all five keys, so the
+    /// blob self-heals on the first save.
+    ///
+    /// Mandatory, and not a nicety: a synthesized decode throws
+    /// `keyNotFound("doorCaps")` on a payload written before the field even
+    /// though the property has a default value. `SharedStore.decode` swallows
+    /// that throw, `loadPolicy` returns nil, and the user re-onboards with her
+    /// budget, doors, night window and wall gone. The same throw reaches the
+    /// pending and the baseline, and this one init covers all three keys.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        budgetMinutes = try c.decode(Int.self, forKey: .budgetMinutes)
+        downHours     = try c.decode(DownHours.self, forKey: .downHours)
+        doors         = try c.decode([Door].self, forKey: .doors)
+        wallEnabled   = try c.decode(Bool.self, forKey: .wallEnabled)
+        // `decodeIfPresent` maps an absent key and a JSON null to no caps, and
+        // still throws on a present-but-malformed value — so this is a
+        // migration and not a blanket catch.
+        doorCaps      = try c.decodeIfPresent([UUID: Int].self, forKey: .doorCaps) ?? [:]
     }
 
     public func door(named utteranceToken: String) -> Door? {
@@ -109,13 +149,18 @@ public struct PolicyState: Hashable, Codable, Sendable {
     /// snapshot is merged, field by field, and never assigned.
     ///
     /// A field matures on two conditions, and needs both. The pending must
-    /// actually have *proposed* it — a snapshot carries all four fields, but a
+    /// actually have *proposed* it — a snapshot carries every field, but a
     /// sentence moves one — and the live value must still be sitting where the
     /// pending left it. `baseline` is the policy the pending was measured
     /// against; if the live value has since left the baseline then a later hand
     /// moved it, and the later hand wins. That is the whole rule, and it is
     /// symmetric: it declines to revert a tightening and equally declines to
     /// re-apply a loosening the user has already been granted by other means.
+    ///
+    /// "One field" is where `doorCaps` parts company with the three scalars. A
+    /// dictionary is not a fourth scalar, it is a family of fields keyed by
+    /// door, so the merge unit there is the key and the rule above is applied
+    /// once per key rather than once to the whole map — see the loop.
     ///
     /// Doors are never merged. They are taken live, always, because no
     /// loosening can change the door list — an add asked for at the bar is
@@ -147,6 +192,34 @@ public struct PolicyState: Hashable, Codable, Sendable {
         if pending.wallEnabled != baseline.wallEnabled,
            wallEnabled == baseline.wallEnabled {
             next.wallEnabled = pending.wallEnabled
+        }
+        // A dictionary field is not a fourth scalar — it is N independent
+        // fields keyed by door, and the merge unit is therefore the key, not
+        // the field. Merging wholesale lets a cap set on an unrelated door
+        // between the parking and the boundary cancel the whole thing, and the
+        // loss is invisible before it happens and unrecoverable after.
+        //
+        // The union of the pending's and the baseline's keys, and only those: a
+        // key present in neither was proposed by nobody, and a matured "No cap"
+        // is a key in the baseline that is absent from the pending, which the
+        // union is the only way to reach. Assigning the nil-bearing subscript
+        // removes the key, which is exactly the matured clearing.
+        //
+        // The live-door guard is a filter, never a prune. `maturing` must stay a
+        // pure merge: `keyTapped` guards on `next != policy` to keep the scarce,
+        // journalled key from being burned on a no-op, and a merge that also
+        // tidied orphans would make `next` differ from live when nothing
+        // matured, spending the key — and destroying the pending — to delete a
+        // dictionary entry nobody can see. Pruning belongs where a door
+        // actually leaves — `proposedState(.removeDoor)` is one such place — so
+        // the live policy is canonical here and this loop only has to decline
+        // to resurrect an entry, never to delete one.
+        let liveDoorIDs = Set(doors.map(\.id))
+        for id in Set(pending.doorCaps.keys).union(baseline.doorCaps.keys)
+        where liveDoorIDs.contains(id)
+              && pending.doorCaps[id] != baseline.doorCaps[id]
+              && doorCaps[id] == baseline.doorCaps[id] {
+            next.doorCaps[id] = pending.doorCaps[id]
         }
         return next
     }

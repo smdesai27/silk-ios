@@ -105,7 +105,27 @@ struct SpendIntent: AppIntent {
             return .result(dialog: "\(SilkStrings.till) \(until.display).")
         case .refuseNothingLeft:
             return .result(dialog: "0 \(SilkStrings.leftToday)")
-        default:
+        case .refuseDoorClosed(let door, let until):
+            // The reason this switch stopped ending in `default:`. A capped-out
+            // or hand-closed door answered from a Shortcuts automation with an
+            // empty dialog is indistinguishable from success, in the one context
+            // with no screen and no thread to correct it. Exhaustive from here
+            // on, so the next Verdict is a compile error on this path too.
+            let time = Validator.timeOfDay(until, calendar: .current).display
+            return .result(dialog: "\(door.name) \(SilkStrings.closedUntil) \(time).")
+        case .restated(let door, let until):
+            // Unreachable today: the idempotency guard above already restates
+            // any active grant on this door before the Validator is called, so
+            // this arm never runs. Written out rather than swept into the
+            // catch-all below because if that guard is ever narrowed, the answer
+            // here must still be the deadline and not an empty dialog.
+            let time = Validator.timeOfDay(until, calendar: .current).display
+            return .result(dialog: "\(door.name) · \(SilkStrings.till.lowercased()) \(time)")
+        case .silence, .refuseSayHowManyMinutes, .refuseSayAmOrPm, .refuseDoorNeedsApp,
+             .ruleChange, .close, .closeAll, .status, .downHours:
+            // Nothing this intent can produce: it validates one `.spend` and
+            // nothing else. Silence rather than a guessed sentence, exactly as
+            // an unknown door gets.
             return .result(dialog: "")
         }
     }

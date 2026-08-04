@@ -81,6 +81,13 @@ public enum SharedStore {
         decode(PolicyState.self, key: Key.policy)
     }
 
+    /// The same read, with the corrupt case kept apart from the absent one.
+    /// Only `Wall.reconcile` needs the distinction, and it needs it badly — see
+    /// `Decoded`.
+    static func loadPolicyDecoded() -> Decoded<PolicyState> {
+        decoded(PolicyState.self, key: Key.policy)
+    }
+
     public static func save(policy: PolicyState) {
         encode(policy, key: Key.policy)
     }
@@ -213,9 +220,29 @@ public enum SharedStore {
 
     // MARK: - Codable plumbing
 
+    /// Why `decode` has three outcomes and not two. `try?` collapses "never
+    /// configured" and "configured, and the blob would not decode" into the same
+    /// nil, and `Wall.reconcile` reads that nil as "nothing to enforce" and
+    /// returns. Shield settings persist across processes, so returning does not
+    /// RAISE the wall — it FREEZES it, with whatever grant exception was live
+    /// still standing. That is fail-OPEN on the one code path README rule 4
+    /// names, and it is why the corrupt case has to be tellable from the absent
+    /// one at the call site.
+    enum Decoded<T> {
+        case absent          // no data at the key: never configured
+        case value(T)
+        case corrupt         // data present, decode threw
+    }
+
+    static func decoded<T: Decodable>(_ type: T.Type, key: String) -> Decoded<T> {
+        guard let data = defaults.data(forKey: key) else { return .absent }
+        guard let value = try? JSONDecoder().decode(type, from: data) else { return .corrupt }
+        return .value(value)
+    }
+
     private static func decode<T: Decodable>(_ type: T.Type, key: String) -> T? {
-        guard let data = defaults.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(type, from: data)
+        guard case .value(let v) = decoded(type, key: key) else { return nil }
+        return v
     }
 
     private static func encode<T: Encodable>(_ value: T, key: String) {
@@ -239,18 +266,53 @@ public enum Wall {
     /// shield extensions on every render/tap. Fail-closed: if state can't be
     /// read, the wall goes up whole.
     public static func reconcile(now: Date = Date()) {
-        guard let policy = SharedStore.loadPolicy(), policy.wallEnabled else {
-            // No configuration yet: nothing to enforce.
-            return
-        }
         // The wall is apps only: every door's tokens plus the extras (the
         // wall selection — apps blocked without a name or launch entry).
         // A nil selection is an empty one, not an unconfigured wall; the
         // doors alone can carry the whole policy.
         let extras = SharedStore.loadWallSelection() ?? FamilyActivitySelection()
         let blocked = SharedStore.doorApplicationTokens().union(extras.applicationTokens)
-        let exceptions = SharedStore.openDoorTokens(at: now)
         let store = Self.store
+
+        let exceptions: Set<ApplicationToken>
+        switch SharedStore.loadPolicyDecoded() {
+        case .absent:
+            // No configuration yet: nothing to enforce.
+            return
+        case .corrupt:
+            // A policy that will not decode is a policy this process cannot
+            // reason about, and returning here would leave the shield frozen
+            // exactly as the last reconcile left it — every live grant exception
+            // still standing, for as long as the blob stays unreadable. Nor can
+            // the grants be honoured: which of them are still running is
+            // readable without the policy (`Grant.isActive` takes no `dayStart`
+            // at all), but whether a hand-close has already RETRACTED one is
+            // decided by `isClosed`, against a `dayStart` derived from
+            // `policy.downHours` — the value that would not decode. Honouring
+            // the grants without the closes would honour precisely the
+            // exceptions the user revoked. So shield the full union with NO
+            // exceptions and let the next good read hand the minutes back.
+            //
+            // `wallEnabled` is inside the blob too, so it cannot be consulted
+            // either. Shielding a user who had turned the wall off is a visible,
+            // recoverable wrong; leaving a door open is the one this rule
+            // forbids.
+            //
+            // Which is also why an empty union is a refusal to write rather than
+            // a wall of nothing. `blocked` comes from selections that swallow
+            // their own decode failures (`loadDoorSelections` ends in `?? [:]`),
+            // and FamilyControls tokens are opaque versioned blobs — the
+            // realistic failure is BOTH keys unreadable at once, after an OS
+            // upgrade. Assigning the empty union there would tear down the whole
+            // standing shield: fail-open, on the path this branch exists to keep
+            // closed. An empty union under an unreadable policy is not "nothing
+            // to block", it is a second input this process cannot read.
+            guard !blocked.isEmpty else { return }
+            exceptions = []
+        case .value(let policy):
+            guard policy.wallEnabled else { return }
+            exceptions = SharedStore.openDoorTokens(at: now)
+        }
 
         store.shield.applications = blocked.subtracting(exceptions)
         // Categories are gone from the model. Nil-ing them here clears stale

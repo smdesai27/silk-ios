@@ -40,6 +40,40 @@ public enum PolarityEngine {
         if current.wallEnabled && !proposed.wallEnabled { loosens = true }
         if !current.wallEnabled && proposed.wallEnabled { tightens = true }
 
+        // Per-door ceilings. Absent is not zero, it is infinity — a door with no
+        // cap has no ceiling — so both sides read through `?? Int.max`.
+        //
+        // Doors present in BOTH states, and never the union of the dictionary's
+        // keys. `proposedState(.removeDoor)` drops the leaving door's cap, so a
+        // key-set comparison would read the removal of a capped door as "a
+        // ceiling went to infinity" = loosens, the conservative merge below
+        // would return .loosen for the whole proposal, and "drop tiktok" — the
+        // most tightening thing a user can say — would answer "Applies
+        // tomorrow." while TikTok stayed a door all day. It would also flip
+        // `isTighten` false, so at night the removal would be answered with the
+        // opening hour and lost entirely. The doors.count rule already speaks
+        // for every add and every removal; caps must not speak for them twice.
+        //
+        // RAW caps, never an effective min(cap, budgetMinutes). The effective
+        // form looks more truthful and fails silently: with a budget of 30 and
+        // TikTok capped at 40, raising the cap 40 → 60 leaves min(cap, budget)
+        // at 30 both sides, classify returns .unchanged, `settle`'s
+        // `proposed != policy` guard does NOT catch it because doorCaps really
+        // did change, and `enact`'s .unchanged branch returns a receipt without
+        // ever assigning `policy`. The wheel closes, a toast reads the balance,
+        // and the edit is thrown away — to be discovered months later when the
+        // budget rises and the door is still capped at 40. The budget dimension
+        // already accounts for every effective-ceiling movement the budget
+        // causes; comparing effective ceilings double-counts it and lets a
+        // budget cut and a cap raise cancel inside one proposal.
+        let shared = Set(current.doors.map(\.id)).intersection(proposed.doors.map(\.id))
+        for id in shared {
+            let before = current.doorCaps[id] ?? Int.max
+            let after  = proposed.doorCaps[id] ?? Int.max
+            if after < before { tightens = true }
+            if after > before { loosens = true }
+        }
+
         if loosens { return .loosen }        // conservative: mixed → loosen path
         if tightens { return .tighten }
         return .unchanged
@@ -60,6 +94,13 @@ public enum PolarityEngine {
             s.doors.append(Door(name: name))
         case .removeDoor(let door):
             s.doors.removeAll { $0.id == door.id }
+            // The cap goes with the door. Anything keyed by door id outlives the
+            // door otherwise, can never be revived (a re-added door gets a fresh
+            // UUID) and can never be removed. This is what makes classify's
+            // "present in both" restriction mandatory rather than merely wise.
+            s.doorCaps.removeValue(forKey: door.id)
+        case .setDoorCap(let door, let minutes):
+            s.doorCaps[door.id] = minutes   // nil removes the key: the cap is cleared
         case .spend, .placeBoundAsk, .closeDoorToday, .closeAllToday, .status, .downHoursQuery:
             return nil  // not rule changes
         }

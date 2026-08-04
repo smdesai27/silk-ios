@@ -52,10 +52,28 @@ extension GrantLedger {
     /// `dayStart` is the CURRENT day's boundary from `DayBoundary.dayStart`; a
     /// rule runs to the NEXT one. Rules carry no deadline of their own, so
     /// there is nothing to read off the `Door`.
+    ///
+    /// `cap` is the door's own ceiling, or nil when it has none. No default
+    /// value: a caller that forgot it would draw a cap-exhausted door in the
+    /// in-play costume, which is the one mistake this enum's header exists to
+    /// prevent. Every call site states the cap, and the compiler makes sure.
     public func state(of door: Door, at now: Date, dayStart: Date,
-                      calendar: Calendar = .current) -> DoorState {
+                      cap: Int?, calendar: Calendar = .current) -> DoorState {
         if let grant = activeGrant(for: door, at: now) {
             return .open(until: grant.expiresAt)
+        }
+        // A door that has drawn its whole ceiling is out of play for the day,
+        // and it says so in the resting costume rather than in a number on the
+        // row: the row's serif slot is a deadline slot, and a remaining cap is a
+        // countdown the user drives herself.
+        //
+        // Before the `isClosed` branch, so a door that is both closed until an
+        // hour AND capped out reports no lift: there is no hour today that
+        // changes it, and stating the close's own would promise a door that
+        // will refuse anyway. `nil` is what the case documents — the close that
+        // simply runs to the day boundary.
+        if let cap, remainingMinutes(cap: cap, doorID: door.id, dayStart: dayStart) <= 0 {
+            return .rest(until: nil)
         }
         // `closedToday` is never pruned on read; a record from an earlier day is
         // spent, and a stated-hour close that has lifted is over — both exactly
@@ -66,8 +84,9 @@ extension GrantLedger {
             return .rest(until: closedUntil[door.id])
         }
         // Behind the wall but askable. Silk has one shared budget rather than a
-        // per-door allowance, so there is no window to name here — the design's
-        // `· 5:00` belongs to a per-door rule Silk does not have.
+        // per-door allowance, and a cap is a ceiling on that one pool rather
+        // than a window — so there is still nothing to name here. The design's
+        // `· 5:00` is a deadline, and an unspent cap has none.
         return .live
     }
 }

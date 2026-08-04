@@ -95,6 +95,28 @@ public struct GrantLedger: Codable, Sendable, Equatable {
         max(0, budget - spentMinutes(dayStart: dayStart))
     }
 
+    /// What one door has drawn from the pool today. Derived from `grants`, like
+    /// the shared spend, so restoring a ledger value restores every door's
+    /// remaining for free — which is why the grant and close undo paths need no
+    /// cap clause at all.
+    public func spentMinutes(doorID: UUID, dayStart: Date) -> Int {
+        grants.filter { $0.doorID == doorID && $0.issuedAt >= dayStart }.reduce(0) { $0 + $1.minutes }
+    }
+
+    /// What is left under one door's own ceiling. `cap` is non-optional on
+    /// purpose: an uncapped door has no ceiling to have a remainder under, and
+    /// the caller says so by not calling. The uncapped form is
+    /// `policy.doorCaps[door.id].map { ledger.remainingMinutes(cap: $0, …) }`,
+    /// which yields `Int?` where nil means "no ceiling" and never 0.
+    ///
+    /// Floors at zero exactly as the shared form does, so a cap lowered below
+    /// what the door has already spent reads 0 at once and does not cut short a
+    /// running grant — the same precedent a budget cut already sets, and the
+    /// same reason closing an app early refunds nothing.
+    public func remainingMinutes(cap: Int, doorID: UUID, dayStart: Date) -> Int {
+        max(0, cap - spentMinutes(doorID: doorID, dayStart: dayStart))
+    }
+
     /// Whether a close currently binds this door: recorded this Silk day, and
     /// its stated hour (if any) not yet reached. The one predicate the wall,
     /// the row, and the Validator all read, so a close means the same thing

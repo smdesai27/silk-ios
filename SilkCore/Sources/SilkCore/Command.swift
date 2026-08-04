@@ -1,6 +1,6 @@
 import Foundation
 
-/// Silk's complete instruction set. Eleven intents, at most two parameters each.
+/// Silk's complete instruction set. Twelve intents, at most two parameters each.
 /// If a sentence doesn't compile to one of these, Silk does nothing.
 public enum Command: Equatable, Sendable {
     /// Grant minutes on a door, now. The only hot-path intent.
@@ -24,6 +24,11 @@ public enum Command: Equatable, Sendable {
     case setDownHoursEnd(TimeOfDay)
     case addDoor(name: String)
     case removeDoor(door: Door)
+    /// A ceiling on one door's draw from the shared pool. `nil` clears it.
+    /// The only producer is the deterministic grammar — `SilkModelParser`'s
+    /// `ModelAction` is deliberately not extended — so a `nil` here is always a
+    /// sentence and never a hallucination.
+    case setDoorCap(door: Door, minutes: Int?)
     case status
     /// A question about the night window, not a change to it: "down hours"
     /// with no time attached. Answered with the window as it stands.

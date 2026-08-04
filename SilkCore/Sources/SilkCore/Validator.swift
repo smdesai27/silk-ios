@@ -7,6 +7,16 @@ import Foundation
 public enum Verdict: Equatable, Sendable {
     /// A grant, fully specified: door, minutes actually granted, re-lock time.
     case grant(door: Door, minutes: Int, relockAt: Date)
+    /// The ask is already covered by a grant still running. Nothing is debited
+    /// and the existing deadline is restated. Without it, a second ask on a
+    /// door near its ceiling clamps to a handful of minutes that buy no extra
+    /// open time at all — the door is already open past them — while debiting
+    /// both currencies and pushing the cap to exhausted. `SpendIntent` has had
+    /// this guard since it shipped ("a double debit would be catastrophic for
+    /// the single-currency promise", SpendIntent.swift:22-25); the bar never
+    /// needed it because the shared pool is large, and a cap makes the door's
+    /// own remaining systematically smaller than the time left on its own grant.
+    case restated(door: Door, until: Date)
     /// A rule change, with its polarity already computed by state diff.
     case ruleChange(proposed: PolicyState, polarity: Polarity)
     /// A close, with the instant it lifts already resolved — a stated hour's
@@ -34,6 +44,17 @@ public enum Verdict: Equatable, Sendable {
     /// nothing else, and a door made from a name alone parses, launches,
     /// spends the budget, and can never be excepted from the wall.
     case refuseDoorNeedsApp                     // "Add it in Settings."
+    /// A door that cannot open right now, named — because a bare "0 left today."
+    /// is a lie whenever the pool still has minutes in it, which is the ordinary
+    /// case once a door can run out on its own. `until` is the instant it lifts:
+    /// a stated hour, or the day boundary. The sentence states it, exactly as
+    /// `.close` does: "TikTok closed until 7:00."
+    ///
+    /// This case takes over the `isClosed` refusal too. A door closed by hand
+    /// with 40 shared minutes left had been answering "0 left today." since
+    /// before caps existed, and shipping a second, honest refusal beside it
+    /// would document the bug rather than fix it.
+    case refuseDoorClosed(door: Door, until: Date)
     /// Zero parses, two parses, failed provenance: Silk says nothing new.
     case silence
 }
@@ -132,9 +153,11 @@ public enum Validator {
             guard minutes > 0, state.doors.contains(where: { $0.id == door.id }) else {
                 return .silence
             }
-            // A closed door stays closed — for the day, or until its stated hour.
-            if ledger.isClosed(door.id, at: now, dayStart: dayStart) {
-                return .refuseNothingLeft
+            // The door's own ceiling, and then the clamp — both computed before
+            // any of the three branches below, because two of them need the
+            // number she can actually be GIVEN rather than the one she said.
+            let doorRemaining = state.doorCaps[door.id].map {
+                ledger.remainingMinutes(cap: $0, doorID: door.id, dayStart: dayStart)
             }
             // P4 — the budget binds, and the bind is a clamp. This point used
             // to refuse an over-ask with the balance ("stating the number is
@@ -143,10 +166,68 @@ public enum Validator {
             // (docs/design/handoff/README.md:248-249, and the prototype's
             // Math.min at Silk Mockup.dc.html:323). The readback then states
             // the clamped number, so she still hears what she actually got.
-            let asked = min(minutes, remaining)
+            //
+            // Three terms now: the pool binds, and so does the door's own
+            // ceiling.
+            let asked = min(minutes, remaining, doorRemaining ?? Int.max)
+
+            // Already open, and the ask cannot reach past it. The comparison is
+            // against `asked` and NOT against the ask as spoken, because
+            // shrinking is exactly what makes a second ask fail to buy time:
+            // forty minutes asked with five left under the ceiling clamps to
+            // five, and five minutes from now expires BEFORE the grant already
+            // running. Granting that debits both currencies, buys not one extra
+            // second of open door, and finishes the ceiling for the day — the
+            // harm `.restated` was added to prevent. Comparing the unshrunk
+            // number is the one comparison that cannot catch it.
+            //
+            // Ahead of both refusals, and that ordering is the point. A door
+            // whose ceiling is spent clamps to zero, so a live grant restates
+            // here instead of being told it is closed — which it is not: the
+            // wall is down, `openDoors` holds it, and `state(of:)` draws the row
+            // `· till 10:30` in the same second. A running grant outranks every
+            // rule, cap included, on the row and at the bar alike.
+            //
+            // It cannot jump the close below either: `closeDoor` truncates every
+            // live grant on the door it shuts, so a closed door has no active
+            // grant to restate and reaches the `isClosed` branch as it always
+            // did. That is the same fact the old ordering leaned on when it put
+            // the close first, which is why moving it is safe.
+            if let live = ledger.activeGrant(for: door, at: now) {
+                let alreadyOpen = max(0, Int(live.expiresAt.timeIntervalSince(now) / 60))
+                if asked <= alreadyOpen { return .restated(door: door, until: live.expiresAt) }
+            }
+            // The door's own ceiling, spent. Named, because "0 left today."
+            // beside a hero reading 30 is the lie this verdict exists to kill.
+            //
+            // Before the `isClosed` branch, for the reason `state(of:)` puts it
+            // there: a door that is both closed until 9:00 and capped out has no
+            // hour today that helps, and answering 9:00 sends her back at nine
+            // for a second refusal. The row promises no lift for exactly this
+            // state, and the bar must not promise one either.
+            if let r = doorRemaining, r <= 0 {
+                return .refuseDoorClosed(door: door,
+                                         until: DayBoundary.nextDayStart(after: dayStart,
+                                                                         calendar: calendar))
+            }
+            // A closed door stays closed — for the day, or until its stated
+            // hour — and the refusal names the door and the hour. It used to
+            // say "0 left today." with the pool untouched beside it, which is
+            // false whenever the pool has minutes in it.
+            if ledger.isClosed(door.id, at: now, dayStart: dayStart) {
+                return .refuseDoorClosed(
+                    door: door,
+                    until: ledger.closedUntil[door.id]
+                        ?? DayBoundary.nextDayStart(after: dayStart, calendar: calendar))
+            }
+            // Past the ceiling branch `doorRemaining` is at least 1 and the pool
+            // is at least 1, so `asked` is at least 1 and the clamp above can
+            // never have minted a zero grant.
 
             // A grant cannot cross into down hours: re-lock is
             // min(now + minutes, downStart), and we debit what was granted.
+            // After the cap clamp, and only ever reducing — so the debit still
+            // equals what was granted and the edge can never overdraw a ceiling.
             let requestedEnd = now.addingTimeInterval(TimeInterval(asked * 60))
             let edge = nextDownHoursStart(after: now, downHours: state.downHours, calendar: calendar)
             let relock = min(requestedEnd, edge ?? requestedEnd)
@@ -190,6 +271,35 @@ public enum Validator {
                DownHours(start: state.downHours.start, end: end).length > state.downHours.length {
                 return .refuseSayAmOrPm(at: end)
             }
+            return ruleChange(command, state)
+
+        case .setDoorCap(let door, let minutes):
+            // The door must be one of ours, from any parser — the same sanity
+            // the spend arm applies to its pair.
+            guard state.doors.contains(where: { $0.id == door.id }) else { return .silence }
+            if let m = minutes {
+                // Zero is not a ceiling, it is a permanent close by rule: no day
+                // boundary refills it, `isClosed` knows nothing about it, and it
+                // would draw as an ordinary rest that visibly fails to lift in
+                // the morning. Silk already has `closeDoorToday` for closing a
+                // door, and it has a costume and a lift. Refused here, at the
+                // one point every parser and every surface passes, so no later
+                // wheel or sentence can reach it.
+                guard m > 0 else { return .silence }
+                // P3 — provenance, exactly as the spend arm applies it. It is
+                // dead code on the grammar path (the number can only have come
+                // from `NumberParser.singleNumber`), and it is not dead on the
+                // premise this file is built on: "every command from any
+                // parser". setDoorCap is the first door-scoped rule change, so a
+                // hallucinated (door, minutes) pair writes into a keyed map with
+                // no hero number anywhere on screen to contradict it, and under
+                // the clamp above a fabricated LOW cap silently shortens every
+                // future grant on that door with no sentence to point at.
+                guard NumberParser.allNumbers(in: utterance).contains(m) else { return .silence }
+            }
+            // `minutes: nil` needs no provenance — there is no number to trace —
+            // and no refusal: the grammar is its only producer, and the outcome
+            // is a loosening that parks, shows on Now, and can be undone.
             return ruleChange(command, state)
 
         case .setBudget, .setDownHoursStart, .removeDoor:

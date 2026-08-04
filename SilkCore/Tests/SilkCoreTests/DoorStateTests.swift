@@ -37,7 +37,7 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
         ledger.record(grant(instagram, from: now, to: expiry))
 
         #expect(ledger.activeGrant(for: instagram, at: now)?.expiresAt == expiry)
-        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), calendar: cal)
+        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), cap: nil, calendar: cal)
                 == .open(until: expiry))
     }
 
@@ -50,10 +50,10 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
         ledger.record(grant(instagram, from: issued, to: expiry))
 
         let justBefore = expiry.addingTimeInterval(-1)
-        #expect(ledger.state(of: instagram, at: justBefore, dayStart: dayStart(justBefore), calendar: cal)
+        #expect(ledger.state(of: instagram, at: justBefore, dayStart: dayStart(justBefore), cap: nil, calendar: cal)
                 == .open(until: expiry))
         #expect(ledger.activeGrant(for: instagram, at: expiry) == nil)
-        #expect(ledger.state(of: instagram, at: expiry, dayStart: dayStart(expiry), calendar: cal) == .live)
+        #expect(ledger.state(of: instagram, at: expiry, dayStart: dayStart(expiry), cap: nil, calendar: cal) == .live)
     }
 
     @Test func overlappingGrantsReportTheLastExpiry() {
@@ -70,7 +70,7 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
         var ledger = GrantLedger()
         ledger.record(grant(instagram, from: now, to: at(7, 29, 15, 20)))
         #expect(ledger.activeGrant(for: youtube, at: now) == nil)
-        #expect(ledger.state(of: youtube, at: now, dayStart: dayStart(now), calendar: cal) == .live)
+        #expect(ledger.state(of: youtube, at: now, dayStart: dayStart(now), cap: nil, calendar: cal) == .live)
     }
 }
 
@@ -84,9 +84,9 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
         let now = at(7, 29, 15)
         var ledger = GrantLedger()
         ledger.closeDoor(instagram, at: closedAt)
-        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), calendar: cal)
+        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), cap: nil, calendar: cal)
                 == .rest(until: nil))
-        #expect(ledger.state(of: instagram, at: at(7, 30, 8), dayStart: dayStart(at(7, 30, 8)), calendar: cal)
+        #expect(ledger.state(of: instagram, at: at(7, 30, 8), dayStart: dayStart(at(7, 30, 8)), cap: nil, calendar: cal)
                 == .live)
     }
 
@@ -97,13 +97,13 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
         let lateNight = at(7, 29, 23, 30)
         var ledger = GrantLedger()
         ledger.closeDoor(instagram, at: closedAt)
-        #expect(ledger.state(of: instagram, at: lateNight, dayStart: dayStart(lateNight), calendar: cal)
+        #expect(ledger.state(of: instagram, at: lateNight, dayStart: dayStart(lateNight), cap: nil, calendar: cal)
                 == .rest(until: nil))
 
         // 03:00 is still that same Silk day: same close, same rest.
         let afterMidnight = at(7, 30, 3)
         #expect(dayStart(afterMidnight) == at(7, 29, 7))
-        #expect(ledger.state(of: instagram, at: afterMidnight, dayStart: dayStart(afterMidnight), calendar: cal)
+        #expect(ledger.state(of: instagram, at: afterMidnight, dayStart: dayStart(afterMidnight), cap: nil, calendar: cal)
                 == .rest(until: nil))
     }
 
@@ -115,10 +115,10 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
         let lift = at(7, 29, 21)
         var ledger = GrantLedger()
         ledger.closeDoor(instagram, at: closedAt, until: lift)
-        #expect(ledger.state(of: instagram, at: at(7, 29, 16), dayStart: dayStart(at(7, 29, 16)), calendar: cal)
+        #expect(ledger.state(of: instagram, at: at(7, 29, 16), dayStart: dayStart(at(7, 29, 16)), cap: nil, calendar: cal)
                 == .rest(until: lift))
         #expect(DoorState.rest(until: lift).displayTime(now: at(7, 29, 16), calendar: cal) == "· till 9:00")
-        #expect(ledger.state(of: instagram, at: at(7, 29, 21, 5), dayStart: dayStart(at(7, 29, 21, 5)), calendar: cal)
+        #expect(ledger.state(of: instagram, at: at(7, 29, 21, 5), dayStart: dayStart(at(7, 29, 21, 5)), cap: nil, calendar: cal)
                 == .live)
     }
 
@@ -127,7 +127,7 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
         let now = at(7, 29, 15)
         var ledger = GrantLedger()
         ledger.closeDoor(instagram, at: closedAt)
-        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), calendar: cal) == .live)
+        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), cap: nil, calendar: cal) == .live)
     }
 
     @Test func theNextDayStartIsACalendarDayNotEightySixFourHundredSeconds() {
@@ -148,7 +148,7 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
         // A door behind the wall but askable has no time to state. Silk has one
         // shared budget, so there is no per-door window to name.
         let now = at(7, 29, 15)
-        #expect(GrantLedger().state(of: instagram, at: now, dayStart: dayStart(now), calendar: cal) == .live)
+        #expect(GrantLedger().state(of: instagram, at: now, dayStart: dayStart(now), cap: nil, calendar: cal) == .live)
         #expect(DoorState.live.displayTime(now: now, calendar: cal) == nil)
     }
 
@@ -198,5 +198,99 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
 
     @Test func apertureWindow() {
         #expect(night.apertureText == "☾\u{00A0} 10:00\u{00A0}PM \u{2013} 7:00\u{00A0}AM")
+    }
+}
+
+// MARK: - the cap only decides WHICH state, and never adds a fourth
+
+/// Proposal (F) — `.live(remaining:)` and a "· 20 min" on the row — is rejected
+/// outright, and these are what hold it out. The row's serif slot is a deadline
+/// slot ("Silk answers in deadlines, not countdowns"), a remaining cap is a
+/// countdown driven by the user's own hand, and `.live` is the boldest costume
+/// on Now — the last thing a door that refuses every ask should be wearing.
+/// So the cap picks the state and changes nothing else.
+@Suite struct DoorCapStateTests {
+    /// A grant already over by the time under test: it moves the door's spend
+    /// without being the live grant the first branch would answer.
+    private func spent(_ door: Door, _ minutes: Int, before now: Date) -> Grant {
+        let end = now.addingTimeInterval(-600)
+        return Grant(door: door, minutes: minutes,
+                     issuedAt: end.addingTimeInterval(Double(-minutes) * 60), expiresAt: end)
+    }
+
+    @Test func aCapExhaustedDoorRests() {
+        let now = at(7, 29, 15)
+        var ledger = GrantLedger()
+        ledger.record(spent(instagram, 20, before: now))
+        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), cap: 20, calendar: cal)
+                == .rest(until: nil))
+    }
+
+    /// A running grant outranks every rule, cap included: the wall really is
+    /// open, and the row must not claim otherwise.
+    @Test func aCapExhaustedDoorWithALiveGrantIsStillOpen() {
+        let now = at(7, 29, 15)
+        let expiry = at(7, 29, 15, 10)
+        var ledger = GrantLedger()
+        ledger.record(spent(instagram, 20, before: now))
+        ledger.record(grant(instagram, from: now.addingTimeInterval(-300), to: expiry))
+        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), cap: 20, calendar: cal)
+                == .open(until: expiry))
+    }
+
+    /// The reason the cap branch sits BEFORE `isClosed`. A door closed until
+    /// 3:00 and also capped out has no lift today, and promising 3:00 would be
+    /// a three-hour lie.
+    @Test func aCapExhaustedAndClosedDoorStatesNoLift() {
+        let now = at(7, 29, 12)
+        let lift = at(7, 29, 15)
+        var ledger = GrantLedger()
+        ledger.record(spent(instagram, 20, before: now))
+        ledger.closeDoor(instagram, at: at(7, 29, 11), until: lift)
+        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), cap: 20, calendar: cal)
+                == .rest(until: nil))
+        // Uncapped, the same ledger states the hour it lifts — so it really is
+        // the cap speaking, and not the close losing its hour.
+        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), cap: nil, calendar: cal)
+                == .rest(until: lift))
+    }
+
+    /// `cap: nil` reproduces every state the enum had before caps existed.
+    @Test func anUncappedDoorIsUnaffected() {
+        let now = at(7, 29, 15)
+        let expiry = at(7, 29, 15, 20)
+        var ledger = GrantLedger()
+        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), cap: nil, calendar: cal) == .live)
+        ledger.record(spent(instagram, 200, before: now))
+        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), cap: nil, calendar: cal) == .live,
+                "no ceiling is no ceiling, however much the door has drawn")
+        ledger.record(grant(instagram, from: now.addingTimeInterval(-60), to: expiry))
+        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), cap: nil, calendar: cal)
+                == .open(until: expiry))
+        var closed = GrantLedger()
+        closed.closeDoor(instagram, at: at(7, 29, 14))
+        #expect(closed.state(of: instagram, at: now, dayStart: dayStart(now), cap: nil, calendar: cal)
+                == .rest(until: nil))
+    }
+
+    @Test func aCapNotYetSpentLeavesTheDoorInPlay() {
+        let now = at(7, 29, 15)
+        var ledger = GrantLedger()
+        ledger.record(spent(instagram, 5, before: now))
+        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), cap: 20, calendar: cal) == .live)
+    }
+
+    /// Nothing new reaches the serif slot. `.live` still renders nil, and a
+    /// cap-exhausted door renders the plain rest — the costume is the message.
+    @Test func displayTimeIsUnchangedForEveryState() {
+        let now = at(7, 29, 15)
+        #expect(DoorState.live.displayTime(now: now, calendar: cal) == nil)
+        #expect(DoorState.rest(until: nil).displayTime(now: now, calendar: cal) == nil)
+        #expect(DoorState.rest(until: at(7, 29, 21)).displayTime(now: now, calendar: cal) == "· till 9:00")
+        #expect(DoorState.open(until: at(7, 29, 15, 20)).displayTime(now: now, calendar: cal) == "· till 3:20")
+        var ledger = GrantLedger()
+        ledger.record(spent(instagram, 20, before: now))
+        #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), cap: 20, calendar: cal)
+                .displayTime(now: now, calendar: cal) == nil)
     }
 }

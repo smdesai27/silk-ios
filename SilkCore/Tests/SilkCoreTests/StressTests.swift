@@ -237,7 +237,10 @@ private func expectClose(_ text: String, door: String, until: TimeOfDay? = nil,
         let now = afternoon()
         let lift = now.addingTimeInterval(2 * 3600)
         ledger.closeDoor(instagram, at: now.addingTimeInterval(-600), until: lift)
-        #expect(verdict("instagram ten", ledger: ledger, at: now) == .refuseNothingLeft)
+        // Named, and with the hour the close actually lifts. "0 left today."
+        // was false here: the other door below grants out of the same pool.
+        #expect(verdict("instagram ten", ledger: ledger, at: now)
+                == .refuseDoorClosed(door: instagram, until: lift))
         // Other doors are untouched.
         guard case .grant(let d, _, _) = verdict("tiktok ten", ledger: ledger, at: now) else {
             Issue.record("expected the other door to still grant")

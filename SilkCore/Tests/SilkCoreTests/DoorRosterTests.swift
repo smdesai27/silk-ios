@@ -1,15 +1,17 @@
 import Testing
 @testable import SilkCore
 
-// MARK: - DoorRoster: the cap and the dedupe behind Settings' door editing
+// MARK: - DoorRoster: the door count and the dedupe behind Settings' door editing
 
 /// The rules the door editor leans on: at most six doors, names deduped
 /// case-insensitively against every spoken form a door answers to, and an
 /// add list that only offers what is genuinely free. The overlay itself
 /// needs a simulator; the arithmetic does not.
 @Suite struct DoorRosterTests {
-    @Test func capIsSix() {
-        #expect(DoorRoster.cap == 6)
+    /// Named for the ceiling it actually is. A door carries a daily cap of its
+    /// own now, and `cap` in this file used to mean the other thing.
+    @Test func maxDoorsIsSix() {
+        #expect(DoorRoster.maxDoors == 6)
         #expect(DoorRoster.canAdd("Reddit", taken: [], count: 5))
         #expect(!DoorRoster.canAdd("Reddit", taken: [], count: 6))
     }
@@ -71,6 +73,22 @@ import Testing
                                 doors: [reddit])
         let store = [reddit.id: "reddit's app", tiktok.id: "a door that left"]
         #expect(state.owned(store) == [reddit.id: "reddit's app"])
+    }
+
+    /// The same rule over the cap map. `owned(_:)` is generic precisely so the
+    /// two door-keyed stores answer to one predicate: a cap whose door has left
+    /// is an entry no row can show, no wheel can reach and no gesture can
+    /// remove, and a re-added door gets a fresh UUID so it can never come back
+    /// to claim it either.
+    @Test func aPolicyOwnsOnlyItsOwnCapEntries() {
+        let reddit = Door(name: "Reddit")
+        let tiktok = Door(name: "TikTok")
+        let state = PolicyState(budgetMinutes: 40,
+                                downHours: DownHours(start: TimeOfDay(hour: 22),
+                                                     end: TimeOfDay(hour: 7)),
+                                doors: [reddit],
+                                doorCaps: [reddit.id: 20, tiktok.id: 15])
+        #expect(state.owned(state.doorCaps) == [reddit.id: 20])
     }
 
     /// A policy with no doors left owns nothing at all — the last removal has

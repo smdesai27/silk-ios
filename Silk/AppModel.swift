@@ -125,7 +125,7 @@ final class AppModel {
     }
 
     func state(of door: Door) -> DoorState {
-        ledger.state(of: door, at: now, dayStart: dayStart)
+        ledger.state(of: door, at: now, dayStart: dayStart, cap: policy.doorCaps[door.id])
     }
 
     /// Five branches, not three. Down hours say nothing at all — ☾ is the whole
@@ -412,6 +412,31 @@ final class AppModel {
         case .refuseDoorNeedsApp:
             // A door is a name and an app; the bar can only carry the name.
             return (refuse(SilkStrings.addInSettings), nil)
+
+        case .refuseDoorClosed(let door, let until):
+            // Byte-identical to the sentence the `.close` branch below speaks,
+            // because it is the same fact: this door, until this hour. The bare
+            // "0 left today." it replaces was a lie whenever the pool still had
+            // minutes in it — which, once a door can run out on its own, is the
+            // ordinary case.
+            let t = Validator.timeOfDay(until, calendar: .current).display
+            return (refuse("\(door.name) \(SilkStrings.closedUntil) \(t)."), nil)
+
+        case .restated(let door, let until):
+            // The ask was already covered, so nothing was debited and nothing
+            // moved — no haptic, and no way back to offer. The row's own form,
+            // said out loud: "TikTok till 4:52."
+            //
+            // But the app still opens. She asked for the door, the wall is
+            // genuinely down behind it, and rule 1 ends "the app opened" — this
+            // is the ordinary "I'm back, let me in" sentence, said a second time
+            // inside a grant she already paid for. Before this case existed it
+            // reached the `.grant` arm and launched; answering it with a
+            // deadline and leaving her in Silk to find the app by hand would be
+            // a regression for every user, capped or not.
+            let t = Validator.timeOfDay(until, calendar: .current).display
+            LaunchCatalog.open(doorName: door.name)
+            return ("\(door.name) \(SilkStrings.till.lowercased()) \(t).", nil)
 
         case .close(let door, let until):
             // The Validator already resolved the lift — a stated hour's next
@@ -771,10 +796,10 @@ final class AppModel {
                              taken: policy.doors.flatMap(\.spokenForms))
     }
 
-    /// Whether Settings shows the add row at all: room under the cap of six,
-    /// and something left in the catalogue to add.
+    /// Whether Settings shows the add row at all: room under the maximum of
+    /// six, and something left in the catalogue to add.
     var canAddDoor: Bool {
-        policy.doors.count < DoorRoster.cap && !addableDoorNames.isEmpty
+        policy.doors.count < DoorRoster.maxDoors && !addableDoorNames.isEmpty
     }
 
     /// A door row was tapped. Rows carry names (that is all Settings renders),

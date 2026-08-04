@@ -246,7 +246,7 @@ struct OnboardingView: View {
                 doorNames.removeAll { $0 == key }
                 doorSelections[key] = nil
             }
-        } else if doorNames.count < DoorRoster.cap {
+        } else if doorNames.count < DoorRoster.maxDoors {
             doorNames.append(key)
             openBinding(for: key, provisional: true)
         }

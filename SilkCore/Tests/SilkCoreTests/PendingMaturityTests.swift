@@ -7,8 +7,20 @@ private let night = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7
 private func policy(budget: Int = 60,
                     hours: DownHours = night,
                     doors: [Door] = [Door(name: "Instagram")],
-                    wall: Bool = true) -> PolicyState {
-    PolicyState(budgetMinutes: budget, downHours: hours, doors: doors, wallEnabled: wall)
+                    wall: Bool = true,
+                    caps: [UUID: Int] = [:]) -> PolicyState {
+    PolicyState(budgetMinutes: budget, downHours: hours, doors: doors,
+                wallEnabled: wall, doorCaps: caps)
+}
+
+/// Stable ids, because a cap is keyed by one. The default `doors:` above mints
+/// a fresh `Door` on every call, which is fine for the scalar fields and is
+/// exactly wrong for a dictionary keyed by door.
+private let tiktok = Door(name: "TikTok")
+private let instagram = Door(name: "Instagram")
+
+private func capPolicy(_ caps: [UUID: Int]) -> PolicyState {
+    policy(doors: [tiktok, instagram], caps: caps)
 }
 
 /// A parked loosening matures by merge, not by assignment.
@@ -181,6 +193,116 @@ private func policy(budget: Int = 60,
         let live = policy(budget: 45)
         let baseline = policy(budget: 60)
         #expect(live.maturing(baseline, parkedAgainst: baseline) == live)
+    }
+
+    // MARK: - Caps merge per KEY, and never prune
+
+    @Test func anUntouchedCapMatures() {
+        let baseline = capPolicy([tiktok.id: 10])
+        let pending = capPolicy([tiktok.id: 20])     // "let tiktok have 20 a day"
+        let live = baseline                          // nobody has touched it since
+
+        #expect(live.maturing(pending, parkedAgainst: baseline).doorCaps[tiktok.id] == 20)
+    }
+
+    @Test func aCapTightenedAfterParkingSurvivesMaturity() {
+        let baseline = capPolicy([tiktok.id: 10])
+        let pending = capPolicy([tiktok.id: 20])     // the raise, parked at 9am
+        let live = capPolicy([tiktok.id: 5])         // then, tonight, a tighten
+
+        #expect(live.maturing(pending, parkedAgainst: baseline).doorCaps[tiktok.id] == 5,
+                "the later tighten wins; 20 was asked for first")
+    }
+
+    /// The counterexample that forces the merge unit to be the key. Under a
+    /// whole-dictionary clause the second condition fails on INSTAGRAM's key, so
+    /// the entire cap merge declines and TikTok's 20 is gone permanently —
+    /// invisible before it happens, because `pendingSummary` returns nil and the
+    /// "Apply now." button lives inside the row that summary draws, and
+    /// unrecoverable after. This is `oneTouchedFieldDoesNotBlockAnother`
+    /// reintroduced inside a dictionary.
+    @Test func oneDoorsCapDoesNotBlockAnothers() {
+        let baseline = capPolicy([tiktok.id: 10])
+        let pending = capPolicy([tiktok.id: 20])
+        let live = capPolicy([tiktok.id: 10, instagram.id: 15])
+
+        let matured = live.maturing(pending, parkedAgainst: baseline)
+        #expect(matured.doorCaps == [tiktok.id: 20, instagram.id: 15])
+    }
+
+    /// A matured "No cap" is a key in the baseline absent from the pending,
+    /// which only the union of both key sets can reach — and the nil-bearing
+    /// subscript removes it rather than storing a sentinel.
+    @Test func aMaturedClearingRemovesTheKey() {
+        let baseline = capPolicy([tiktok.id: 20])
+        let pending = capPolicy([:])
+        let live = baseline
+
+        let matured = live.maturing(pending, parkedAgainst: baseline)
+        #expect(matured.doorCaps[tiktok.id] == nil)
+        #expect(matured.doorCaps.isEmpty)
+    }
+
+    /// The live-door filter, and the fixture has to be the one the filter
+    /// actually decides. The door is gone but its cap entry is still sitting at
+    /// the baseline value — which is what the policy looks like between a
+    /// removal and whatever prunes it, and what it looks like forever if
+    /// nothing does. All three arithmetic conditions hold here, so the filter is
+    /// the only thing standing between the merge and a cap raised to 20 on a
+    /// door no surface can show and no gesture can remove. A live policy that
+    /// had also dropped the key would decline on the arithmetic alone and pin
+    /// nothing.
+    @Test func aCapOnADoorRemovedSinceParkingIsNotResurrected() {
+        let baseline = capPolicy([tiktok.id: 10])
+        let pending = capPolicy([tiktok.id: 20])
+        let live = policy(doors: [instagram], caps: [tiktok.id: 10])   // TikTok is gone
+
+        let matured = live.maturing(pending, parkedAgainst: baseline)
+        #expect(matured.doorCaps[tiktok.id] == 10, "not raised to the parked 20")
+        #expect(matured == live)
+    }
+
+    @Test func capMergeIsIdempotent() {
+        let baseline = capPolicy([tiktok.id: 10])
+        let pending = capPolicy([tiktok.id: 20])
+        let once = baseline.maturing(pending, parkedAgainst: baseline)
+        let twice = once.maturing(pending, parkedAgainst: baseline)
+
+        // Once matured, live has left the baseline on that key, so the second
+        // condition fails and a second pass is inert.
+        #expect(twice == once)
+        #expect(twice.doorCaps[tiktok.id] == 20)
+    }
+
+    @Test func aMissingBaselineMaturesNoCapEither() {
+        let live = capPolicy([tiktok.id: 10])
+        let pending = capPolicy([tiktok.id: 20])
+        #expect(live.maturing(pending, parkedAgainst: nil) == live)
+    }
+
+    /// The key guard again, in cap form: everything the pending proposed has
+    /// been overtaken, so the merge returns live exactly and `keyTapped`'s
+    /// `next != policy` refuses to spend the key.
+    @Test func aFullyOvertakenCapPendingLeavesMaturedEqualToLive() {
+        let baseline = capPolicy([tiktok.id: 10])
+        let pending = capPolicy([tiktok.id: 20])
+        let live = capPolicy([tiktok.id: 5])
+
+        #expect(live.maturing(pending, parkedAgainst: baseline) == live)
+    }
+
+    /// The key-burn regression. A `maturing` that also tidied orphan caps would
+    /// make `next` differ from live when nothing matured — spending the scarce,
+    /// journalled, hand-tapped key, and destroying the pending with it, to
+    /// delete a dictionary entry nobody can see. The filter declines to
+    /// resurrect; it prunes nothing.
+    @Test func maturingNeverPrunesAnOrphanCap() {
+        let baseline = policy(doors: [instagram], caps: [:])
+        let pending = baseline                                  // proposes nothing
+        let live = policy(doors: [instagram], caps: [tiktok.id: 20])   // an orphan
+
+        #expect(live.maturing(pending, parkedAgainst: baseline) == live)
+        #expect(live.maturing(pending, parkedAgainst: baseline).doorCaps[tiktok.id] == 20)
     }
 
     /// The exhaustive statement of the rule, over every combination of

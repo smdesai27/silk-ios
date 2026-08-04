@@ -92,6 +92,15 @@ public enum SilkStrings {
     /// A closed app's state word, where no reopen time applies: "closed".
     public static let closed = "closed"
     public static let perDay = "day"
+    /// The cap wheel's first seat, the Settings row's value for a door with no
+    /// ceiling, and — lowercased, as `till` is — the pending row's rendering of
+    /// a matured clearing. Minutes cannot express absence, and a blank wheel
+    /// seat would be invisible and silent both.
+    public static let noCap = "No cap"
+    /// The door editor's middle row. Deliberately not `budget`: under a door's
+    /// name that word reads as a per-door allowance, which is the one thing a
+    /// cap is not, on a page whose global row already says "Budget".
+    public static let dailyCap = "Daily cap"
 
     // Setup — three steps, three prompts.
     public static let setupPermission = "Silk uses Screen Time to block the apps you choose."
