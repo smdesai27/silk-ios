@@ -14,15 +14,24 @@ public enum DeterministicParser {
         guard !tokens.isEmpty else { return .silence }
 
         let door = firstDoor(in: tokens, state: state)
-        let number = NumberParser.singleNumber(in: text)
+        // Read once, asked two ways. `number` is the SINGLE number — nil for
+        // zero and nil for several, because two numbers is ambiguity and
+        // compilers don't guess. The list itself survives because "no number"
+        // and "no single number" are different absences: rules 6 and 8 answer
+        // a doorful sentence missing its duration, and a sentence carrying
+        // "ten or twenty" is not missing one — it stated two, and the answer
+        // to that is the widener's, not "How long?".
+        let numbers = NumberParser.allNumbers(in: text)
+        let number = numbers.count == 1 ? numbers.first : nil
 
         // The clause partition, built at most once and only when a rule asks
         // for it. `ClauseIndex(text)` walks the string once, so it is cheap —
         // but `hugeInputStaysCheapAndSilent` bounds a ten-thousand-word input,
         // and the honest way to keep that bound honest is that a sentence which
         // never asks a clause question never pays for the answer. The cap rules,
-        // rule 3's door guard and rule 5's two removal guards are the only
-        // callers, and every one of them needs a named door first.
+        // rule 3's door guard, rule 5's two removal guards and rule 7's
+        // ambiguity guard are the only callers, and every one of them needs a
+        // named door first.
         //
         // Built from `text` — the same string `tokens` came from — so
         // `clauses().tokens == tokens` by construction. That equality is the
@@ -74,7 +83,13 @@ public enum DeterministicParser {
             }
         }
         if text.contains("down hour") { return .command(.downHoursQuery) }
-        if tokens.contains("night") { return .silence }
+        // Bare "night" terminates — see the mention rule above — but not over a
+        // sentence that names a door and closes it: "block insta at night" is
+        // the tightest thing in the product with a window word riding along,
+        // and the hoisted CLOSE below is never wrong in direction. The window
+        // word still poisons SPEND through `windowMention`, so nothing on the
+        // grant side opens by walking past this line.
+        if tokens.contains("night"), door == nil || !hasClosingVerb(text) { return .silence }
         if text.contains("bedtime") || text.contains("quiet"), door == nil {
             return .command(.downHoursQuery)
         }
@@ -256,9 +271,10 @@ public enum DeterministicParser {
             return .command(.removeDoor(door: d))
         }
 
-        // 6. PLACE-BOUND SPEND — a door plus a place-phrase and no usable number.
-        //    "give me instagram until i leave the gym" / "while im at the gym…"
-        if let d = door, hasPlaceBinding(text), number == nil {
+        // 6. PLACE-BOUND SPEND — a door plus a place-phrase and no number at
+        //    all. "give me instagram until i leave the gym" / "while im at the
+        //    gym…"
+        if let d = door, hasPlaceBinding(text), numbers.isEmpty {
             return .command(.placeBoundAsk(door: d))
         }
 
@@ -267,7 +283,28 @@ public enum DeterministicParser {
         //    make the number's meaning ambiguous — "keep instagram quiet until
         //    9" must not become a nine-minute grant — so those sentences defer
         //    to the model instead.
+        //
+        //    AND THE NUMBER'S CLAUSE MUST FUND THE DOOR BEING GRANTED. Three
+        //    readings of one invariant, every one asked of door ids with the
+        //    same test the cap rules use, so "give me 20 of the gram,
+        //    instagram i mean" is still one door named twice and still spends.
+        //    SEVERAL doors in the clause — "instagram tiktok ten" — is two
+        //    names competing for one quantity, and granting whichever was
+        //    spelled first is the guess `singleNumber` has refused for numbers
+        //    since the parser shipped.
+        //    ONE door in the clause must BE the door in hand. "tiktok is my
+        //    weakness, give me 15 of reddit" funds reddit while `firstDoor`
+        //    holds tiktok; a guard that only counted answered yes and the
+        //    grant left on a door no clause paid for.
+        //    NO door in the clause hands the question to the whole sentence,
+        //    which must then name exactly one: "im at my limit on tiktok, give
+        //    me 20 minutes" says tiktok and spends, and "20 minutes, tiktok or
+        //    instagram" says two, where first-spelled-wins is the same refused
+        //    guess wearing a comma.
+        //    Every refusal terminates: silence reaches the widener, and a
+        //    grant on the wrong door cannot be taken back.
         if let d = door, let n = number, !windowMention {
+            guard spendClauseFunds(d, clauses(), state: state) else { return .silence }
             return .command(.spend(door: d, minutes: n))
         }
 
@@ -275,7 +312,11 @@ public enum DeterministicParser {
         //    "give me instagram" is a real request missing one word, and the
         //    answer is that word: "How long?" Silence here read as not listening.
         //    (docs/design/handoff/Silk Mockup.dc.html:322)
-        if let d = door, number == nil, hasOpeningVerb(text) {
+        //    NO duration means NONE: "give me ten or twenty of tiktok" has no
+        //    single number, but asking "How long?" of a sentence that stated
+        //    two durations is not listening either — that ambiguity is the
+        //    widener's, exactly as rule 7 refuses it.
+        if let d = door, numbers.isEmpty, hasOpeningVerb(text) {
             return .command(.placeBoundAsk(door: d))
         }
 
@@ -483,8 +524,16 @@ public enum DeterministicParser {
                                                     "second", "seconds", "sec", "secs",
                                                     "daily", "day", "days", "week", "weekly"]
     private static let phrasePrepositions: Set<String> = ["of", "on", "for", "in", "from"]
+    /// The slang emphatics ride with the grammar's own particles: "no cap on
+    /// tiktok fr fr" trails its plea with emphasis, not with a predicate. A
+    /// word here can only ADMIT a tail — it never widens what counts as a
+    /// remover or a ceiling — so the cost of a wrong entry is a clearing this
+    /// file would otherwise have declined, and every entry is a word with no
+    /// other reading in this lexicon.
     private static let trailingParticles: Set<String> = ["anymore", "please", "today",
-                                                          "tonight", "thanks"]
+                                                          "tonight", "thanks",
+                                                          "fr", "frfr", "ngl", "rn",
+                                                          "tho", "lol", "lmao", "tbh"]
 
     /// The auxiliaries and copulas, contractions included. A finite verb is what
     /// turns a request into a REPORT — "no limit on tiktok" asks for one to go,
@@ -606,6 +655,12 @@ public enum DeterministicParser {
         if door(w, in: state) != nil { return true }
         if i + 1 < t.count, door(w + " " + t[i + 1], in: state) != nil { return true }
         if i > 0, door(t[i - 1] + " " + w, in: state) != nil { return true }
+        // The possessive's orphan. "tiktok's limit" reaches here as [tiktok,
+        // s, limit] — the tokenizer splits on the apostrophe — and that "s" is
+        // the door's own name continuing, not a word of the phrase's own.
+        // Admitted only beside its door, the same skip `doorIsATopic` and
+        // `doorHeadsTheSubject` already make.
+        if w == "s", i > 0, door(t[i - 1], in: state) != nil { return true }
         return false
     }
 
@@ -1396,6 +1451,28 @@ public enum DeterministicParser {
                 shaped = true
             }
         }
+        // A CAP NOUN COMMANDING A DOOR WITH NO NUMBER OF ITS OWN IS A CEILING
+        // THIS GRAMMAR CANNOT RESOLVE, and the answer is the terminating
+        // silence, not a decline. "put a limit on insta, 25 max" and "cap
+        // tiktok. at 20" split the proposal across a boundary, so the clause
+        // that names the ceiling and the door fails the number test above —
+        // and a decline walks the ladder into SPEND, which answers a request
+        // to RESTRICT the app by debiting the pool and taking the wall down
+        // with the OTHER breath's number. The refusal is scoped to the mood
+        // the setter itself requires: a report ("im at my limit on tiktok,
+        // give me 20 minutes") and a volition ("i want a limit on tiktok")
+        // are commentary and rule 8's own sentence, and both keep walking.
+        // A NEGATOR AHEAD OF THE NOUN hands the clause to the clearing family
+        // instead — "remove instagram, no cap on tiktok" already had its
+        // clearing suppressed by the earlier removal, and this arm may not
+        // overrule the same first breath from one rule over.
+        if let lexeme, capNouns.contains(t[lexeme]), lexeme < doorAt, numbers.isEmpty,
+           !(clause.lowerBound..<lexeme).contains(where: { negators.contains(t[$0]) }),
+           !statesAVolition(t, clause: clause),
+           !reportsRatherThanAsks(t, clause: clause, phraseStart: lexeme, state: state) {
+            return .silence
+        }
+
         // Shape two: the habitual sentence, which names a period and a door and
         // needs no ceiling word — "tiktok 20 a day". Naming the POOL takes it
         // back, however close the door stands: "budget of 40 for instagram" is
@@ -1600,6 +1677,40 @@ public enum DeterministicParser {
             }
         }
         return false
+    }
+
+    /// Whether the clause a spend would read — the clause holding the
+    /// sentence's first number, or, when the quantity is an idiom's and
+    /// occupies no token, the clause holding the first door — funds the door
+    /// being granted. Rule 7's ambiguity guard, and an IDENTITY test, not a
+    /// head-count: `.several` is two doors competing for one grant, one door
+    /// with another id is a clause paying for somebody else, and a doorless
+    /// clause defers to the whole sentence, which must then be about exactly
+    /// one door. None of those is a sentence this grammar may answer with a
+    /// grant on `d`.
+    private static func spendClauseFunds(_ d: Door, _ index: NumberParser.ClauseIndex,
+                                         state: PolicyState) -> Bool {
+        let t = index.tokens
+        let anchor = t.indices.first { !NumberParser.allNumbers(in: t[$0]).isEmpty }
+            ?? t.indices.first { i in
+                door(t[i], in: state) != nil
+                    || (i + 1 < t.count && door(t[i] + " " + t[i + 1], in: state) != nil)
+            }
+        let clause = anchor.flatMap { index.clauseRange(containing: $0) }
+        switch clause.map({ doors(in: $0, of: index, state: state) }) ?? .none {
+        case .several:
+            return false
+        case .one(let named):
+            return named.id == d.id
+        case .none:
+            // A quantity in a doorless breath belongs to the sentence's one
+            // door or to no door at all: two distinct ids and the grant would
+            // leave on whichever name was spelled first.
+            if case .one = doors(in: t.startIndex..<t.endIndex, of: index, state: state) {
+                return true
+            }
+            return false
+        }
     }
 
     /// Whether the clause carrying the sentence's first number also names a

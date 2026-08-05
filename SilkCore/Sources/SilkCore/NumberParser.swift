@@ -139,9 +139,11 @@ public enum NumberParser {
                 h = h % 12
             } else {
                 // Nothing said which half of the day. Hours above 12 say it
-                // themselves — "23" cannot be a morning — and so does a 0.
+                // themselves — "23" cannot be a morning — and so does a 0: an
+                // hour that states its own half is never the evening guess's
+                // to move, or "until 0" lands at noon instead of midnight.
                 stated = h > 12 || h == 0
-                if h <= 12, assumeEvening, h < 12 {
+                if !stated, assumeEvening, h < 12 {
                     // "down hours start at ten" — an evening reading.
                     h += 12
                 }

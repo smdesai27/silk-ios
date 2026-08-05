@@ -32,6 +32,17 @@ struct SpendIntent: AppIntent {
         var ledger = SharedStore.loadLedger()
         let now = Date()
 
+        // The day-turn sweep lives in the app's clock, and a background-only
+        // user never runs it: this intent can be the only Silk code that
+        // executes for days, so it sweeps on its way through. Written back
+        // only when something was dropped — a quiet pass re-encodes nothing.
+        var compacted = ledger
+        compacted.compact(dayStart: DayBoundary.dayStart(now: now, downHours: policy.downHours))
+        if compacted != ledger {
+            ledger = compacted
+            SharedStore.save(ledger: ledger)
+        }
+
         // Idempotent: an active grant on this door is simply restated.
         if let active = ledger.grants.first(where: { $0.doorID == door.id && $0.isActive(at: now) }) {
             let time = Validator.timeOfDay(active.expiresAt, calendar: .current).display
@@ -55,16 +66,17 @@ struct SpendIntent: AppIntent {
             // behind it keeps Instagram open past 22:00 until Silk is opened
             // by hand. That is the fail-OPEN invariant 4 forbids.
             //
-            // Write the ledger first and put it back on failure, rather than
-            // arming first, because this ordering has no stale read in it.
-            // The only thing that can wake the monitor is the `startMonitoring`
-            // inside `arm`, so `intervalDidStart`'s reconcile is causally after
-            // the save below and necessarily sees this grant. Arming first
-            // would let that reconcile read the ledger a beat before the grant
-            // reached it and re-shield a door the dialog has just called open,
-            // on the one path with nothing left to correct it.
-            let previous = ledger
-            ledger.record(Grant(door: door, minutes: granted, issuedAt: now, expiresAt: relockAt))
+            // Write the ledger first and take the grant back out on failure,
+            // rather than arming first, because this ordering has no stale
+            // read in it. The only thing that can wake the monitor is the
+            // `startMonitoring` inside `arm`, so `intervalDidStart`'s
+            // reconcile is causally after the save below and necessarily sees
+            // this grant. Arming first would let that reconcile read the
+            // ledger a beat before the grant reached it and re-shield a door
+            // the dialog has just called open, on the one path with nothing
+            // left to correct it.
+            let grant = Grant(door: door, minutes: granted, issuedAt: now, expiresAt: relockAt)
+            ledger.record(grant)
             SharedStore.save(ledger: ledger)
 
             let (armed, wallIsDown) = await MainActor.run { () -> (Bool, Bool) in
@@ -78,12 +90,19 @@ struct SpendIntent: AppIntent {
             }
 
             guard armed else {
-                // `arm` has already disarmed both names, so putting the ledger
-                // back leaves nothing scheduled and nothing granted: no minutes
-                // are debited, and the reconcile shields the door again. That
-                // reconcile is also this background launch's one free chance to
-                // close a door some earlier expiry left standing open.
-                ledger = previous
+                // `arm` has already disarmed both names, so removing the grant
+                // leaves nothing scheduled and nothing granted: no minutes are
+                // debited, and the reconcile shields the door again. The
+                // rollback is surgical, never a put-back of the pre-grant
+                // snapshot: the `await` above is a suspension point, and a
+                // ledger write that landed during it — the user closing a door
+                // at the bar — must survive this failure path. So reload what
+                // stands NOW, take out exactly the grant this intent recorded,
+                // and save (stamped, as every ledger write is). That reconcile
+                // is also this background launch's one free chance to close a
+                // door some earlier expiry left standing open.
+                ledger = SharedStore.loadLedger()
+                ledger.removeGrant(id: grant.id)
                 SharedStore.save(ledger: ledger)
                 Wall.reconcile(now: now)
                 // "Blocking is off." is said only when it is. Revocation is the

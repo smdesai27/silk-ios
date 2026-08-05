@@ -73,6 +73,21 @@ public struct GrantLedger: Codable, Sendable, Equatable {
         grants.append(grant)
     }
 
+    /// Surgical rollback: remove exactly one grant, by its identity, and touch
+    /// nothing else. The caller is a writer whose grant failed downstream of
+    /// its own save — SpendIntent, when the re-lock schedule will not arm —
+    /// and whose failure path sits across a suspension point. Doctrine: it
+    /// must NOT put back its pre-save snapshot wholesale, because a ledger
+    /// write that landed during the await (the user's bar-side close, another
+    /// process's grant) would be erased with it — a tighten silently lost.
+    /// Instead it reloads the ledger that stands NOW, removes the one row it
+    /// added, and saves. An id absent from the ledger removes nothing, so the
+    /// rollback is idempotent; a close that meanwhile truncated the grant kept
+    /// its id, so the refund still finds it.
+    public mutating func removeGrant(id: UUID) {
+        grants.removeAll { $0.id == id }
+    }
+
     public mutating func closeDoor(_ door: Door, at now: Date, until: Date? = nil) {
         closedToday[door.id] = now
         // A stated hour shortens the close; nil is the full day, and clears

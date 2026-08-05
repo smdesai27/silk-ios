@@ -16,6 +16,9 @@ public enum SharedStore {
     private enum Key {
         static let policy = "silk.policy"
         static let ledger = "silk.ledger"
+        static let ledgerStamp = "silk.ledger.stamp"           // moves on every ledger write, any process
+        static let attemptsLast = "silk.attempts.last"         // newest attempt; dedupe without the decode
+        static let attemptsRevision = "silk.attempts.rev"      // bumped per appended attempt
         static let wallSelection = "silk.wall.selection"       // FamilyActivitySelection (the extras)
         static let doorSelections = "silk.door.selections"     // [UUID: FamilyActivitySelection]
         static let attempts = "silk.attempts"                  // [Date] shield renders
@@ -32,8 +35,10 @@ public enum SharedStore {
         // silk.key.code / silk.key.placement / silk.proposal are dead keys
         // from the retired key step and proposal card; wiped so upgraded QA
         // installs carry nothing forward.
-        for key in ["silk.policy", "silk.ledger", "silk.wall.selection", "silk.door.selections",
-                    "silk.attempts", "silk.pending", "silk.pending.at", "silk.pending.base",
+        for key in ["silk.policy", "silk.ledger", "silk.ledger.stamp",
+                    "silk.wall.selection", "silk.door.selections",
+                    "silk.attempts", "silk.attempts.last", "silk.attempts.rev",
+                    "silk.pending", "silk.pending.at", "silk.pending.base",
                     "silk.proposal", "silk.firstrun",
                     "silk.key.code", "silk.key.placement", "silk.key.journal",
                     "silk.undo.seconds"] {
@@ -51,6 +56,10 @@ public enum SharedStore {
     public static func recordKeyUse(at now: Date = Date()) {
         var uses = decode([Date].self, key: Key.keyJournal) ?? []
         uses.append(now)
+        // Capped like its sibling, the attempts array: past the cap the
+        // footnote's count clamps, which is a smaller lie than a blob that
+        // grows for the life of the install.
+        if uses.count > 2000 { uses.removeFirst(uses.count - 2000) }
         encode(uses, key: Key.keyJournal)
     }
 
@@ -98,8 +107,26 @@ public enum SharedStore {
         decode(GrantLedger.self, key: Key.ledger) ?? GrantLedger()
     }
 
-    public static func save(ledger: GrantLedger) {
+    /// The stamp under the current ledger blob. Every writer in every process
+    /// comes through `save(ledger:)`, so two equal stamps mean the blob has
+    /// not moved between them — the app compares before trusting, or writing,
+    /// its in-memory copy, because a stale copy persisted wholesale deletes a
+    /// grant another process recorded: the door re-shields mid-grant and the
+    /// debited minutes reappear. (UserDefaults has no compare-and-swap; the
+    /// stamp is the proof-of-read the writers agree on instead.)
+    public static func ledgerStamp() -> String? {
+        defaults.string(forKey: Key.ledgerStamp)
+    }
+
+    /// Returns the stamp it wrote, so the writer can remember its own write
+    /// as "read": the next equal comparison then means nobody else has been
+    /// here since.
+    @discardableResult
+    public static func save(ledger: GrantLedger) -> String {
         encode(ledger, key: Key.ledger)
+        let stamp = UUID().uuidString
+        defaults.set(stamp, forKey: Key.ledgerStamp)
+        return stamp
     }
 
     // MARK: - Pending loosening (applies at next day start, or on key tap)
@@ -185,13 +212,19 @@ public enum SharedStore {
         }
     }
 
-    /// All application tokens belonging to doors that should be open now.
-    public static func openDoorTokens(at now: Date = Date()) -> Set<ApplicationToken> {
-        guard let policy = loadPolicy() else { return [] }
+    /// All application tokens belonging to doors that should be open now,
+    /// with the decodes already paid: `Wall.reconcile` — the one caller —
+    /// holds both values by the time it needs the exceptions, and this runs
+    /// on every shield render inside the extension's 6 MB budget — no room
+    /// to decode either of them twice. (A public zero-argument overload that
+    /// re-read both blobs lost its last caller when `reconcile` switched to
+    /// this threaded form, and was deleted rather than left as a second,
+    /// slower way to ask the same question.)
+    static func openDoorTokens(at now: Date, policy: PolicyState,
+                               selections: [UUID: FamilyActivitySelection]) -> Set<ApplicationToken> {
         let ledger = loadLedger()
         let dayStart = DayBoundary.dayStart(now: now, downHours: policy.downHours)
         let openIDs = ledger.openDoors(at: now, dayStart: dayStart)
-        let selections = loadDoorSelections()
         var tokens = Set<ApplicationToken>()
         for id in openIDs {
             if let sel = selections[id] {
@@ -207,11 +240,29 @@ public enum SharedStore {
     /// the same attempt (docs/market/gaps.md #9) — otherwise the Sunday
     /// equation inflates into a scold.
     public static func recordAttempt(at now: Date = Date()) {
+        // The dedupe answer usually lives in one Date, not in the 2000-entry
+        // blob: renders arrive in bursts, so the refusal is the hot path and
+        // must not pay a whole-array decode to say no.
+        if let last = defaults.object(forKey: Key.attemptsLast) as? Date,
+           now.timeIntervalSince(last) < 60 { return }
         var attempts = decode([Date].self, key: Key.attempts) ?? []
+        // Kept behind the cheap check: an install that predates the
+        // timestamp key still dedupes off the blob itself.
         if let last = attempts.last, now.timeIntervalSince(last) < 60 { return }
         attempts.append(now)
         if attempts.count > 2000 { attempts.removeFirst(attempts.count - 2000) }
         encode(attempts, key: Key.attempts)
+        defaults.set(now, forKey: Key.attemptsLast)
+        defaults.set(attemptsRevision() &+ 1, forKey: Key.attemptsRevision)
+    }
+
+    /// Moves exactly when an attempt is appended, so a reader can hold its
+    /// decoded buckets until this integer says otherwise — the app's minute
+    /// tick asks this instead of re-decoding the blob, and iPad Split View
+    /// (a shield render while Silk stays .active) is why the tick must ask
+    /// something rather than trust the cache blindly.
+    public static func attemptsRevision() -> Int {
+        defaults.integer(forKey: Key.attemptsRevision)
     }
 
     public static func attempts(since: Date) -> [Date] {
@@ -271,7 +322,12 @@ public enum Wall {
         // A nil selection is an empty one, not an unconfigured wall; the
         // doors alone can carry the whole policy.
         let extras = SharedStore.loadWallSelection() ?? FamilyActivitySelection()
-        let blocked = SharedStore.doorApplicationTokens().union(extras.applicationTokens)
+        // Decoded once and threaded through: the exceptions below need the
+        // same dictionary, and this runs on every shield render.
+        let doorSelections = SharedStore.loadDoorSelections()
+        let blocked = doorSelections.values.reduce(into: extras.applicationTokens) {
+            $0.formUnion($1.applicationTokens)
+        }
         let store = Self.store
 
         let exceptions: Set<ApplicationToken>
@@ -311,7 +367,8 @@ public enum Wall {
             exceptions = []
         case .value(let policy):
             guard policy.wallEnabled else { return }
-            exceptions = SharedStore.openDoorTokens(at: now)
+            exceptions = SharedStore.openDoorTokens(at: now, policy: policy,
+                                                    selections: doorSelections)
         }
 
         store.shield.applications = blocked.subtracting(exceptions)

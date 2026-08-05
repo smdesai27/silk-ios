@@ -6,7 +6,7 @@
 # failures before they leave the machine.
 #
 #   scripts/ci.sh              both suites (~6 min)
-#   scripts/ci.sh spine        SilkCore only (a tenth of a second, no simulator)
+#   scripts/ci.sh spine        SilkCore only (about three seconds, no simulator)
 #   scripts/ci.sh ui           SilkUITests only (~5 min)
 #
 # If you change what runs here, change .github/workflows/ci.yml to match.
@@ -79,7 +79,7 @@ case "$what" in
   spine) run_spine ;;
   ui)    run_ui ;;
   all)
-    # The spine answers in a tenth of a second and the simulator takes five
+    # The spine answers in about three seconds and the simulator takes five
     # minutes. If the spine is already red the push is already refused, so
     # don't spend the five minutes to learn it twice.
     run_spine

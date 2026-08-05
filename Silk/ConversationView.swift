@@ -39,7 +39,10 @@ final class ConversationModel {
         /// captures the prior state wholesale — the prototype captures the
         /// previous `doors` array and restores it in one move (README.md:303-304)
         /// — so undo needs no diffing and no knowledge of what the turn did.
-        var undo: (() -> Void)?
+        /// It reports whether the restore landed: an offer can expire under
+        /// the pill (a later ledger mutation retires every earlier offer),
+        /// and a receipt may only be written over a restore that happened.
+        var undo: (() -> Bool)?
         /// Undone turns must not land a late reply over "Put back." — the
         /// 480ms window is small but real.
         var undone = false
@@ -94,7 +97,7 @@ final class ConversationModel {
     /// The reply arrives, addressed by id. A turn that blurred away or was
     /// already undone swallows its late reply silently — there is nothing
     /// left to say it to.
-    func land(_ reply: String, undo: (() -> Void)? = nil, for id: Turn.ID) {
+    func land(_ reply: String, undo: (() -> Bool)? = nil, for id: Turn.ID) {
         guard let i = turns.firstIndex(where: { $0.id == id }), !turns[i].undone else { return }
         turns[i].reply = reply
         turns[i].undo = undo
@@ -109,14 +112,18 @@ final class ConversationModel {
         turns[i].undo = nil
     }
 
-    /// Runs the turn's way back, rewrites its reply to "Put back." and drops
-    /// the pill (Silk Mockup.dc.html:348-352). The change is its own receipt —
-    /// no toast, no second sentence.
+    /// Runs the turn's way back. When it lands, the reply is rewritten to
+    /// "Put back." and the pill drops (Silk Mockup.dc.html:348-352) — the
+    /// change is its own receipt, no toast, no second sentence. When the
+    /// offer expired under the pill (a later mutation beat the tap), only
+    /// the pill goes: the reply keeps stating what actually happened, and
+    /// the turn is not marked undone, because it wasn't. Receipts never lie.
     func undo(_ id: Turn.ID) {
         guard let i = turns.firstIndex(where: { $0.id == id }), let action = turns[i].undo else { return }
-        action()
-        turns[i].reply = SilkStrings.putBack
+        let landed = action()
         turns[i].undo = nil
+        guard landed else { return }
+        turns[i].reply = SilkStrings.putBack
         turns[i].undone = true
     }
 
@@ -448,7 +455,7 @@ private struct ConversationDemo: View {
                 let wasOpen = instagramOpen
                 instagramOpen = true
                 convo.land("Instagram \(SilkStrings.isOpenFor) 15 \(SilkStrings.minutes).",
-                           undo: { instagramOpen = wasOpen },
+                           undo: { instagramOpen = wasOpen; return true },
                            for: id)
             } else {
                 convo.land(SilkStrings.didntGetThat, for: id)

@@ -5,7 +5,7 @@
 # to catch the cheap failures before they cost a round trip, not to duplicate
 # CI.
 #
-# So it runs the spine and stops. 139 tests in a tenth of a second catches most
+# So it runs the spine and stops. 356 tests in about three seconds catches most
 # of what breaks; the eleven simulator walks take five minutes locally and
 # thirteen on a runner, and paying that on every push to learn what the PR is
 # about to tell you anyway is how a hook gets deleted.

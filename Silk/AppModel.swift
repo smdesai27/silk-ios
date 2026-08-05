@@ -8,6 +8,26 @@ import SilkCore
 final class AppModel {
     private(set) var policy: PolicyState
     private(set) var ledger: GrantLedger
+    /// The stamp under the ledger blob the last time this process read or
+    /// wrote it. The app is not the ledger's only writer — SpendIntent lands
+    /// grants straight in the App Group while the app sits suspended — and
+    /// every writer stamps through `SharedStore.save(ledger:)`, so a stamp
+    /// that differs is proof of an external write. The in-memory copy may not
+    /// be trusted, and above all not written, past that proof: persisting it
+    /// wholesale deletes the external grant — the door re-shields mid-grant
+    /// and the debited minutes silently reappear.
+    @ObservationIgnored private var ledgerStamp: String?
+    /// Bumped on every ledger movement this process observes: a reload from
+    /// the store, and every local mutation `persist` lands (a close, a grant,
+    /// the day-turn compaction, a landed restore). Undo closures snapshot the
+    /// ledger wholesale, so an undo may only restore its snapshot while the
+    /// live value still descends from it — each offer is keyed to the
+    /// generation its OWN mutation landed as, and quietly expires the moment
+    /// any later movement leaves that number behind. Two offers can coexist
+    /// for minutes (the window runs to 300 s); without the per-mutation bump
+    /// the older one restores a pre-both ledger and erases the newer turn
+    /// whole. An undo applies whole or not at all.
+    @ObservationIgnored private var ledgerGeneration = 0
     private(set) var pendingLoosening: PolicyState?
     /// The policy the parked loosening was measured against — held here rather
     /// than re-read, and always written by `park` in the same breath as the
@@ -42,7 +62,12 @@ final class AppModel {
     /// Which wheel is up, if any. The three global rows on Settings set this,
     /// and now the door editor's cap row does too; the backdrop tap commits and
     /// clears it. (handoff README.md §4)
-    var picker: PickerKind?
+    var picker: PickerKind? {
+        // A wheel up is a `tighten` coming: the backdrop tap commits in the
+        // same gesture that dismisses, so this is the last moment with
+        // enough lead to warm the Taptic Engine for it.
+        didSet { if picker != nil { Silk.Haptic.prepare() } }
+    }
     /// No raw type: Swift forbids associated values on a raw-value enum, and
     /// `cap` needs to know which door. Nothing ever read the String — there is
     /// no `.rawValue` and no `PickerKind(rawValue:)` anywhere — so dropping it
@@ -73,6 +98,7 @@ final class AppModel {
         self.onboarded = saved != nil
         self.policy = saved ?? AppModel.defaultPolicy
         self.ledger = SharedStore.loadLedger()
+        self.ledgerStamp = SharedStore.ledgerStamp()
         self.pendingLoosening = SharedStore.loadPendingLoosening()
         self.pendingBaseline = SharedStore.loadPendingBaseline()
         self.undoSeconds = SharedStore.loadUndoSeconds()
@@ -196,10 +222,19 @@ final class AppModel {
     var lastClosedDayName: String {
         let cal = Calendar.current
         guard let d = cal.date(byAdding: .day, value: -1, to: dayStart) else { return "" }
+        return Self.weekdayFormatter.string(from: d)
+    }
+
+    /// Mirror asks for the name on every body pass, and a fresh DateFormatter
+    /// resolves an ICU template each time — real work for a word that changes
+    /// once a day. Held for the process: a locale or timezone change could in
+    /// principle stale it, but iOS relaunches the app for those, the same
+    /// bargain `keyLog`'s cached "MMM d" already accepts.
+    private static let weekdayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.setLocalizedDateFormatFromTemplate("EEEE")
-        return f.string(from: d)
-    }
+        return f
+    }()
 
     /// Six closed days, oldest first; today is excluded by construction. A day
     /// that ended before Silk was installed is `nil` — zero recorded attempts is
@@ -286,6 +321,11 @@ final class AppModel {
     private var weekAttemptBuckets: [(attempts: Int, late: Int)] {
         let start = dayStart
         if let cache = weekAttemptsCache, cache.dayStart == start { return cache.buckets }
+        // Read before the blob, not after: an attempt recorded between the
+        // two reads then shows as a mismatch on the next tick and the cache
+        // falls, which errs toward a redundant decode rather than a stale
+        // chart.
+        let revision = SharedStore.attemptsRevision()
         let cal = Calendar.current
         let bounds = (0...7).compactMap { cal.date(byAdding: .day, value: $0 - 6, to: start) }
         guard bounds.count == 8 else { return Array(repeating: (0, 0), count: 7) }
@@ -299,12 +339,14 @@ final class AppModel {
             }
             return (day.count, late)
         }
-        weekAttemptsCache = (start, buckets)
+        weekAttemptsCache = (start, revision, buckets)
         return buckets
     }
 
+    /// The revision is the attempts blob's own counter at the moment it was
+    /// decoded — the tick compares it instead of deleting the cache blind.
     @ObservationIgnored private var weekAttemptsCache:
-        (dayStart: Date, buckets: [(attempts: Int, late: Int)])?
+        (dayStart: Date, revision: Int, buckets: [(attempts: Int, late: Int)])?
 
     // MARK: - The clock
 
@@ -320,12 +362,23 @@ final class AppModel {
                 guard let interval = self?.secondsUntilNextWake() else { return }
                 try? await Task.sleep(for: .seconds(interval))
                 guard !Task.isCancelled, let self else { return }
-                self.weekAttemptsCache = nil
+                // A shield render can record attempts while Silk stays
+                // .active — iPad Split View — so the tick cannot blindly
+                // trust the cache; but a blind delete re-decoded the whole
+                // attempts blob every minute for a page that mostly is not
+                // Mirror. The revision is one integer read, and it moves
+                // only when `recordAttempt` actually appended.
+                if let cache = self.weekAttemptsCache,
+                   cache.revision != SharedStore.attemptsRevision() {
+                    self.weekAttemptsCache = nil
+                }
+                self.syncLedgerIfStale()
                 self.now = .now
                 // A grant that just expired has to close its door, and a day
                 // that turned matures whatever was waiting for it.
                 self.wall.reconcile()
                 self.applyPendingIfDayTurned()
+                self.compactLedgerIfDayTurned()
             }
         }
     }
@@ -349,6 +402,11 @@ final class AppModel {
     /// the reply waits out the balance of the handoff's ~480ms beat
     /// (README.md:226-228); a slow model parse has already spent it.
     func handle(_ utterance: String) async {
+        // Every landing below — grant, tighten, refusal — fires a haptic at
+        // least a beat after the send, and a cold Taptic Engine spins up tens
+        // of milliseconds behind its visual moment. Waking it at the turn's
+        // start puts the click on the beat.
+        Silk.Haptic.prepare()
         let id = conversation.ask(utterance)
         let asked = ContinuousClock.now
 
@@ -356,14 +414,23 @@ final class AppModel {
         if outcome == .silence {
             outcome = await SilkModelParser.parse(utterance, state: policy)
         }
-        let verdict = Validator.validate(outcome, utterance: utterance,
-                                         state: policy, ledger: ledger, now: .now)
 
         let beat: Duration = .milliseconds(480)
         let elapsed = asked.duration(to: .now)
         if elapsed < beat {
             try? await Task.sleep(for: beat - elapsed)
         }
+
+        // Validated on apply's side of the beat, ledger synced in the same
+        // breath. `apply` lands this verdict exactly as computed — nothing
+        // re-validates — and SpendIntent writes the App Group from its own
+        // process moment, so a verdict carried across an await can debit a
+        // pool another writer has already drawn down. From this sync to the
+        // mutation arms there is no suspension point: validation and apply
+        // read the same ledger.
+        syncLedgerIfStale()
+        let verdict = Validator.validate(outcome, utterance: utterance,
+                                         state: policy, ledger: ledger, now: .now)
 
         // Down hours answer everything with the hour they end
         // (Silk Mockup.dc.html:317, the first line of `reply`) — with two
@@ -401,8 +468,11 @@ final class AppModel {
     ///
     /// Everything that changed state hands back the way back beside the words:
     /// the ledger is a value, so undo is the prior value restored wholesale —
-    /// no diffing, no knowledge of what the turn did (README.md:303-304).
-    private func apply(_ verdict: Verdict) -> (reply: String, undo: (() -> Void)?) {
+    /// no diffing, no knowledge of what the turn did (README.md:303-304). The
+    /// closure reports whether the restore landed: an offer can expire under
+    /// the pill (any later ledger mutation retires it), and the thread must
+    /// not write "Put back." over a restore that never happened.
+    private func apply(_ verdict: Verdict) -> (reply: String, undo: (() -> Bool)?) {
         switch verdict {
         case .silence:
             return (refuse(SilkStrings.didntGetThat), nil)
@@ -460,43 +530,86 @@ final class AppModel {
         case .close(let door, let until):
             // The Validator already resolved the lift — a stated hour's next
             // occurrence, or the day boundary — and the sentence states it.
+            syncLedgerIfStale()
             let previous = ledger
-            ledger.closeDoor(door, at: .now, until: until)
-            commit()
+            // The offer is keyed to the generation this close will land as:
+            // `persist` bumps once for a riding mutation, so +1 is this
+            // turn's own landing on the clean path — and any second movement
+            // (a reload folding in an external write, any later mutation)
+            // leaves the offer expired. Every later mutation expires every
+            // earlier offer; an undo applies whole or not at all.
+            let generation = ledgerGeneration + 1
+            // The mutation rides to `persist` as a closure so a stamp
+            // mismatch there re-applies it over the freshly reloaded ledger:
+            // a tighten the user has been answered for is never dropped.
+            let close: (inout GrantLedger) -> Void = { $0.closeDoor(door, at: .now, until: until) }
+            close(&ledger)
+            commit(reapplying: close)
             Silk.Haptic.tighten()
             let t = Validator.timeOfDay(until, calendar: .current).display
             return ("\(door.name) \(SilkStrings.closedUntil) \(t).",
-                    restore(previous))
+                    restore(previous, ifStill: generation))
 
         case .closeAll(let doors, let until):
             // Every door, one lift, one sentence — and one way back.
+            syncLedgerIfStale()
             let previous = ledger
-            for door in doors {
-                ledger.closeDoor(door, at: .now, until: until)
+            // Keyed to this turn's own landing, exactly as `.close` explains.
+            let generation = ledgerGeneration + 1
+            let closeAll: (inout GrantLedger) -> Void = { fresh in
+                for door in doors {
+                    fresh.closeDoor(door, at: .now, until: until)
+                }
             }
-            commit()
+            closeAll(&ledger)
+            commit(reapplying: closeAll)
             Silk.Haptic.tighten()
             let t = Validator.timeOfDay(until, calendar: .current).display
             return ("\(SilkStrings.everything) \(SilkStrings.closedUntil) \(t).",
-                    restore(previous))
+                    restore(previous, ifStill: generation))
 
         case .grant(let door, let minutes, let relockAt):
+            syncLedgerIfStale()
             let previous = ledger
+            // Keyed to this turn's own landing, exactly as `.close` explains.
+            let generation = ledgerGeneration + 1
             let grant = Grant(door: door, minutes: minutes, issuedAt: .now, expiresAt: relockAt)
-            ledger.record(grant)
-            commit()
+            let record: (inout GrantLedger) -> Void = { $0.record(grant) }
+            record(&ledger)
+            commit(reapplying: record)
             wall.open(door: door, until: relockAt)
             Silk.Haptic.grant()
             LaunchCatalog.open(doorName: door.name)
             return ("\(door.name) \(SilkStrings.isOpenFor) \(minutes) \(SilkStrings.minutes).",
                     { [weak self] in
-                        guard let self else { return }
-                        // The re-lock timers were armed for a grant that no
-                        // longer exists; disarming them is part of putting
-                        // the ledger back.
-                        self.wall.stopMonitoring(door: door)
+                        guard let self else { return false }
+                        // The check syncs first: an external write not yet
+                        // observed expires the offer, it does not slip past
+                        // it — and any mutation since this turn's own has
+                        // already moved the generation. An undo applies
+                        // whole or not at all, and says so: false is "the
+                        // offer expired; nothing was put back".
+                        self.syncLedgerIfStale()
+                        guard self.ledgerGeneration == generation else { return false }
                         self.ledger = previous
                         self.commit()
+                        // The restore rides `persist` with no mutation on
+                        // purpose — it must never be re-applied over a
+                        // reloaded ledger — so an unmoved generation is the
+                        // landing receipt: a same-instant external write
+                        // makes `persist` reload instead of write (the
+                        // generation moves again), and the grant that reload
+                        // restores must keep its timers.
+                        guard self.ledgerGeneration == generation else { return false }
+                        // The landed restore is itself a ledger mutation:
+                        // the generation moves so every other offer expires.
+                        self.ledgerGeneration += 1
+                        // The re-lock timers were armed for a grant that no
+                        // longer exists; disarming them is part of putting
+                        // the ledger back — but only for a restore that
+                        // landed.
+                        self.wall.stopMonitoring(door: door)
+                        return true
                     })
 
         case .ruleChange(let proposed, let polarity):
@@ -515,7 +628,7 @@ final class AppModel {
     /// wheel on Settings — so the polarity rule cannot be sidestepped by
     /// choosing the door you knock on: a tighten lands now with the way back
     /// offered; a loosening waits for tomorrow, or the key.
-    private func enact(_ proposed: PolicyState, _ polarity: Polarity) -> (reply: String, undo: (() -> Void)?) {
+    private func enact(_ proposed: PolicyState, _ polarity: Polarity) -> (reply: String, undo: (() -> Bool)?) {
         switch polarity {
         case .unchanged:
             return (receipt(for: policy, movedFrom: policy), nil)
@@ -550,7 +663,7 @@ final class AppModel {
             commit()
             Silk.Haptic.tighten()
             return (receipt(for: proposed, movedFrom: previous), { [weak self] in
-                guard let self else { return }
+                guard let self else { return false }
                 // Undo puts back what this turn changed and nothing else. The
                 // window runs up to five minutes with Settings usable
                 // underneath, so restoring the whole prior state would silently
@@ -600,6 +713,10 @@ final class AppModel {
                 if !returning.isEmpty { SharedStore.save(doorSelections: selections) }
                 self.commit()
                 for door in returning { self.rearmLiveGrant(for: door) }
+                // A policy restore has no generation to expire under: the
+                // per-field surgery above always has something true to put
+                // back, so the receipt it earns is always earned.
+                return true
             })
 
         case .loosen:
@@ -624,18 +741,42 @@ final class AppModel {
             let previousBaseline = pendingBaseline
             park(proposed, baseline: policy)
             return (SilkStrings.appliesTomorrow, { [weak self] in
-                guard let self else { return }
+                guard let self else { return false }
                 self.park(previous, baseline: previousBaseline)
+                return true
             })
         }
     }
 
-    /// The close/grant way back: the prior ledger, restored wholesale.
-    private func restore(_ previous: GrantLedger) -> () -> Void {
+    /// The close way back: the prior ledger, restored wholesale — but only
+    /// while the live value still descends from the snapshot. Any ledger
+    /// movement in between — a reload folding in an external writer's grant,
+    /// or a later turn's own mutation — means the live ledger holds a write
+    /// the snapshot does not, and restoring it then is the same clobber a
+    /// stale persist would be. The offer expires instead — and the check
+    /// syncs first, so an external write not yet observed expires the offer
+    /// too; it does not slip past it.
+    ///
+    /// Returns whether the restore landed, because the receipt must not lie:
+    /// the caller says "Put back." only over a ledger that was actually put
+    /// back — an expired offer reports false and the pill just goes.
+    private func restore(_ previous: GrantLedger, ifStill generation: Int) -> () -> Bool {
         { [weak self] in
-            guard let self else { return }
+            guard let self else { return false }
+            self.syncLedgerIfStale()
+            guard self.ledgerGeneration == generation else { return false }
             self.ledger = previous
             self.commit()
+            // The restore rides `persist` with no mutation on purpose — it
+            // must never be re-applied over a reloaded ledger — so an unmoved
+            // generation is the landing receipt: a same-instant external
+            // write makes `persist` reload instead of write, the generation
+            // moves, and the restore did not land.
+            guard self.ledgerGeneration == generation else { return false }
+            // The landed restore is itself a ledger mutation: the generation
+            // moves so every other outstanding offer expires.
+            self.ledgerGeneration += 1
+            return true
         }
     }
 
@@ -802,7 +943,11 @@ final class AppModel {
         guard proposed != policy else { return }
         let polarity = PolarityEngine.classify(current: policy, proposed: proposed)
         let (reply, undo) = enact(proposed, polarity)
-        toasts.show(reply, undo: undo)
+        // The landing report is the thread's concern — its pill rewrites the
+        // reply to a receipt, and only a landed restore may earn one. A toast
+        // dismisses on tap either way and rewrites nothing, and the policy
+        // undos that ride here always land, so the report is dropped.
+        toasts.show(reply, undo: undo.map { u in { _ = u() } })
     }
 
     /// A tighten states the balance it leaves, read through the ledger — not the
@@ -878,8 +1023,12 @@ final class AppModel {
     /// shields its app with no row, no grant path and no Settings entry, and
     /// only a wipe cleared it. `commitDoorChange` never reaches here, so it
     /// states the same rule itself.
-    private func commit() {
-        persist()
+    ///
+    /// `mutation` is the ledger change riding this commit, when there is one
+    /// — `persist` re-applies it over a reload rather than let a stamp race
+    /// drop it.
+    private func commit(reapplying mutation: ((inout GrantLedger) -> Void)? = nil) {
+        persist(reapplying: mutation)
         retireOrphanedSelections()
         wall.reconcile()
         now = .now
@@ -1126,10 +1275,16 @@ final class AppModel {
     func foregrounded() {
         weekAttemptsCache = nil
         keyLogCache = nil
+        // The suspension is where external writes accumulate — a Shortcuts
+        // grant performed against the store while this copy slept — so the
+        // return is where the copy has to catch up, before anything on
+        // screen reads it or any commit writes it back.
+        syncLedgerIfStale()
         now = .now
         wall.reconcile()
         refreshWallStanding()
         applyPendingIfDayTurned()
+        compactLedgerIfDayTurned()
     }
 
     // MARK: - The wall's standing (docs/market/gaps.md #5)
@@ -1343,8 +1498,85 @@ final class AppModel {
         commit()
     }
 
-    private func persist() {
+    /// One sweep per Silk day. Yesterday's spent grants say nothing about
+    /// today's arithmetic — `spentMinutes` filters on `issuedAt >= dayStart`
+    /// — but every shield render, minute tick and monitor wake decodes the
+    /// whole blob, so a ledger nothing compacts grows for the life of the
+    /// install. Guarded by the day start it last swept, so the minute tick
+    /// pays one Date compare on every day but the one that turned.
+    @ObservationIgnored private var compactedDayStart: Date?
+
+    private func compactLedgerIfDayTurned() {
+        let start = dayStart
+        guard compactedDayStart != start else { return }
+        compactedDayStart = start
+        syncLedgerIfStale()
+        var compacted = ledger
+        compacted.compact(dayStart: start)
+        // Written back only when something was dropped, so a quiet day's
+        // boundary re-encodes nothing.
+        guard compacted != ledger else { return }
+        ledger = compacted
+        // Re-appliable for the same reason a close is — and marking the day
+        // swept before this write stays honest because of it: a stamp race
+        // cannot skip the sweep, only re-run the compaction over the fresh
+        // ledger, which drops nothing an external writer landed (compaction
+        // only sheds entries spent before this day began).
+        persist(reapplying: { $0.compact(dayStart: start) })
+    }
+
+    private func persist(reapplying mutation: ((inout GrantLedger) -> Void)? = nil) {
         SharedStore.save(policy: policy)
-        SharedStore.save(ledger: ledger)
+        // Checked at the last instant: a commit that never touched the ledger
+        // — a wheel commit, a matured pending — must not write the in-memory
+        // copy over a grant an external writer landed meanwhile. Two
+        // invariants hold here, and both halves of the wall's doctrine hang
+        // on them: an externally-written grant is never overwritten by a
+        // wholesale write of a stale copy, and a local mutation the user has
+        // already been answered for is never dropped. A mismatch with no
+        // mutation is a stale copy, re-read and never written; a mismatch
+        // WITH a mutation re-reads first and applies the mutation over the
+        // fresh ledger, so both writes stand in the one blob saved. What is
+        // left is a same-instant cross-process write between this check and
+        // the save, and its loser can never be a close: a close riding here
+        // re-applies on top of whatever that check read, and a commit
+        // carrying nothing yields by reloading instead of writing.
+        if SharedStore.ledgerStamp() == ledgerStamp {
+            ledgerStamp = SharedStore.save(ledger: ledger)
+            // A mutation that landed is a ledger the outstanding undo offers
+            // no longer describe, so the generation moves and expires them —
+            // this branch is the choke point every local mutation rides
+            // through, which is what lets no mutation site forget. A commit
+            // with nothing riding (a wheel commit, a matured pending) rewrites
+            // the same ledger and moves nothing. Restores ride with no
+            // mutation on purpose: an unmoved generation is how they tell
+            // their write landed, and a landed restore bumps at its own site.
+            if mutation != nil { ledgerGeneration += 1 }
+        } else {
+            syncLedgerIfStale()
+            guard let mutation else { return }
+            mutation(&ledger)
+            ledgerStamp = SharedStore.save(ledger: ledger)
+            // The reload above already moved the generation once; the
+            // re-applied mutation is a second movement on top of it, and
+            // counting both is what leaves an offer keyed to "my mutation,
+            // over the ledger I snapshotted" behind — its snapshot predates
+            // the external write this branch just folded in.
+            ledgerGeneration += 1
+        }
+    }
+
+    /// Catch up with the writers this process is not. Cheap when nothing
+    /// happened — one string read against the remembered stamp — and a full
+    /// re-read only when the stamp says someone else wrote. Every ledger
+    /// mutation syncs first, so its snapshot-and-mutate runs on the ledger
+    /// that actually stands; the reload bumps the generation, retiring any
+    /// undo whose snapshot predates it.
+    private func syncLedgerIfStale() {
+        let stamp = SharedStore.ledgerStamp()
+        guard stamp != ledgerStamp else { return }
+        ledger = SharedStore.loadLedger()
+        ledgerStamp = stamp
+        ledgerGeneration += 1
     }
 }

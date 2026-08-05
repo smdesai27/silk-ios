@@ -2829,7 +2829,15 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     @Test func hugeInputStaysCheapAndSilent() {
         let noise = Array(repeating: "lorem ipsum dolor sit amet", count: 2000).joined(separator: " ")
         let clock = ContinuousClock()
-        let elapsed = clock.measure {
+        // The bound is on the BEST of three runs. A wall clock charges the
+        // parser for every neighbour on the machine, so under a full parallel
+        // suite a single-run bound fails on contention alone — and a flake
+        // that cries wolf teaches everyone to ignore the cry. A real
+        // regression slows all three runs; a busy neighbour only some.
+        func bestOfThree(_ parse: () -> Void) -> Duration {
+            (0..<3).map { _ in clock.measure(parse) }.min()!
+        }
+        let elapsed = bestOfThree {
             #expect(DeterministicParser.parse(noise, state: makeState()) == .silence)
         }
         #expect(elapsed < .seconds(1), "parser too slow on 10k words: \(elapsed)")
@@ -2839,7 +2847,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // sentence, so the index is built over all ten thousand words and the
         // whole ladder runs before the answer comes back.
         let capped = noise + " cap tiktok at 20 a day"
-        let cappedElapsed = clock.measure {
+        let cappedElapsed = bestOfThree {
             #expect(DeterministicParser.parse(capped, state: makeState())
                     == .command(.setDoorCap(door: tiktok, minutes: 20)))
         }
