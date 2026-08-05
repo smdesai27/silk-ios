@@ -172,3 +172,439 @@ public enum NumberParser {
             .filter { !$0.isEmpty }
     }
 }
+
+// MARK: - Clause structure
+
+extension NumberParser {
+
+    /// Which clause each token belongs to, for rules that need to know whether
+    /// two words are in the same breath.
+    ///
+    /// `tokenize` erases punctuation — it splits on everything that is not
+    /// alphanumeric or ":", so a comma, a semicolon and a full stop all vanish
+    /// before any rule sees the sentence:
+    ///
+    ///     "drop tiktok, im at my limit"  →  [drop, tiktok, im, at, my, limit]
+    ///
+    /// Every rule downstream therefore reasons about the DISTANCE between
+    /// tokens across a boundary it cannot see, and "four tokens away" means one
+    /// thing inside a clause and nothing at all across a comma. That is not a
+    /// hypothetical: the per-app cap grammar failed three adversarial rounds on
+    /// it, twice shipping a fully green suite over a parser that read a
+    /// tightening sentence as a loosening, because the only structure available
+    /// to a rule was counting. This type is the structure that was missing.
+    ///
+    /// It carries its own `tokens` rather than taking them from the caller, and
+    /// that is the whole safety argument. Callers preprocess before tokenizing —
+    /// `allNumbers` strips duration idioms out of the text first, `statedTime`
+    /// rewrites "p.m." to "pm", `DeterministicParser` lowercases and trims —
+    /// and a clause list built from one string against a token list built from
+    /// another is misaligned in exactly the silent way this file has been wrong
+    /// before. A rule must index into `index.tokens`, never into a separately
+    /// tokenized array, and the type gives it nowhere else to look.
+    ///
+    /// Nothing in the parser builds one yet. It is O(n) and lazy by absence: a
+    /// sentence that never asks a clause question never pays for the answer,
+    /// which is what keeps `hugeInputStaysCheapAndSilent` honest.
+    struct ClauseIndex {
+
+        /// Exactly `tokenize(utterance)`, and the array the indices below refer
+        /// to. Equal by construction: the clauses are cut only at characters
+        /// `tokenize` already treats as separators, and each piece is handed to
+        /// `tokenize` itself — the tokens are never re-derived here. Proved
+        /// rather than asserted: `clausesAlignWithTokens` walks every string in
+        /// the test corpus.
+        let tokens: [String]
+
+        /// One clause id per token, dense from 0. Deliberately private: the only
+        /// legitimate question is whether two tokens share a clause, and an
+        /// exposed id invites the arithmetic that caused the bug — "two clauses
+        /// apart" is not a smaller version of "same clause", it is the same
+        /// counting mistake one level up.
+        private let ids: [Int]
+
+        /// Token ranges, one per clause, in order. Contiguous and covering:
+        /// `bounds` partitions `0..<tokens.count` with no gaps, which is the
+        /// alignment contract stated as something a test can walk.
+        private let bounds: [Range<Int>]
+
+        /// How many clauses the utterance has. 0 for an utterance with no
+        /// tokens at all; 1 for a sentence with no separator in it.
+        var clauseCount: Int { bounds.count }
+
+        init(_ utterance: String) {
+            var tokens: [String] = []
+            var ids: [Int] = []
+            var bounds: [Range<Int>] = []
+            var clause = 0
+            var clauseStart = 0
+            // Set by a separator, cleared by the next token that actually
+            // lands. A separator does not open a clause — a TOKEN does. That is
+            // what keeps "wait,, what" and a trailing "tiktok 20 a day." from
+            // minting empty clauses that would shift every id after them.
+            var pendingBreak = false
+
+            for piece in ClauseIndex.split(utterance) {
+                for token in NumberParser.tokenize(String(piece)) {
+                    let opensClause = pendingBreak || ClauseIndex.clauseOpeners.contains(token)
+                    if opensClause, !tokens.isEmpty {
+                        bounds.append(clauseStart..<tokens.count)
+                        clauseStart = tokens.count
+                        clause += 1
+                    }
+                    pendingBreak = false
+                    tokens.append(token)
+                    ids.append(clause)
+                }
+                // The gap to the next piece is a separator that was consumed.
+                // (Set after the last piece too, where nothing reads it.)
+                pendingBreak = true
+            }
+            if !tokens.isEmpty { bounds.append(clauseStart..<tokens.count) }
+
+            self.tokens = tokens
+            self.ids = ids
+            self.bounds = bounds
+        }
+
+        /// Whether two token positions fall in the same clause.
+        ///
+        /// Total on purpose: an out-of-range index answers "no" instead of
+        /// trapping. A rule that miscounts should decline to connect two words,
+        /// which costs a silence and defers to the model; a crash in the parser
+        /// costs the user her sentence.
+        ///
+        /// The totality has a cost, and it is the one thing to be careful of
+        /// here: an IN-range position from the wrong tokenization gets a
+        /// confident answer about the wrong two words rather than a trap. The
+        /// parser has several differently preprocessed strings in flight —
+        /// `allNumbers` tokenizes an idiom-stripped copy, so "cap tiktok at an
+        /// hour and a half" is 8 tokens to this index and 3 to that pass — and a
+        /// position carried across from one of them lands somewhere real and
+        /// wrong. Positions passed here must come from `tokens` on THIS index.
+        func sameClause(_ a: Int, _ b: Int) -> Bool {
+            guard tokens.indices.contains(a), tokens.indices.contains(b) else { return false }
+            return ids[a] == ids[b]
+        }
+
+        /// The token range of the clause holding `i`, so a rule can scan the
+        /// words around a door without walking out of its breath. nil when `i`
+        /// is not a token position.
+        ///
+        /// This exists so that "look for the cap word near the door" can be
+        /// written as a bounded scan rather than as a distance threshold. The
+        /// distance thresholds are what failed.
+        func clauseRange(containing i: Int) -> Range<Int>? {
+            guard tokens.indices.contains(i) else { return nil }
+            return bounds[ids[i]]
+        }
+
+        // MARK: Separators
+
+        /// Words that begin a new clause where they stand, keeping the word.
+        ///
+        /// A word separator cannot break alignment the way a character one
+        /// could — it removes no token, it only moves the id boundary — so the
+        /// question for each is purely whether it opens a new predicate often
+        /// enough to be worth the times it does not.
+        ///
+        /// All four cost recall, and the cost is stated here rather than argued
+        /// away, because an earlier draft of this comment called the wrong
+        /// readings "inert" and they are not. What makes them acceptable is the
+        /// DIRECTION of the error. A word that opens a clause it should not have
+        /// opened strands a number from its verb, and a rule that cannot find a
+        /// number declines — a silence, which defers to the model and which the
+        /// user can repair by saying it again. The opposite error, two commands
+        /// read as one breath, is what turned a tightening into a loosening
+        /// twice. Over-splitting is the recoverable direction; every entry here
+        /// is admitted on that ground and none on the ground that it is free.
+        ///
+        /// - "but": the plain adversative, and the only one of the four with no
+        ///   competing sense in this lexicon. "cap tiktok at 20 but give me
+        ///   instagram" is two commands. It costs the quantifier sense: "give me
+        ///   nothing but 20 of tiktok" and "i have but 20 minutes" both break at
+        ///   it, the first harmlessly (door and number stay together on the
+        ///   right), the second into a clause with no door in it.
+        /// - "so": a purpose clause — "block tiktok so i stop scrolling". This
+        ///   one is admitted for what it PREVENTS, not for what it reads: a
+        ///   purpose clause routinely carries a quantity of its own ("block
+        ///   instagram so i can get 8 hours"), and glued to the command that
+        ///   quantity is a number sitting next to a door, which is a cap out of
+        ///   thin air. It costs the intensifier and degree senses — "im so over
+        ///   tiktok, block it" makes three clauses, and "cap tiktok so i only
+        ///   get 20 a day" puts the door in one clause and its number in the
+        ///   next, which reads as a silence. That is the trade: a silence on a
+        ///   sentence a user can repeat, against an invented cap she cannot see.
+        /// - "anyway" and "though": discourse markers that trail a clause more
+        ///   often than they open one, which is precisely why they are safe. A
+        ///   trailing one ("block tiktok though") makes a one-word clause
+        ///   holding no door and no number, which no rule can match; a leading
+        ///   one ("anyway give me 20", typed without the comma it would carry in
+        ///   print) is a fresh command that would otherwise be glued to the
+        ///   previous sentence.
+        ///
+        /// NOT here, and for the first two the corpus itself is the argument:
+        /// - "and" — phrasal far more often than clausal here, and it lives
+        ///   inside a number: splitting "an hour and a half" cuts a single
+        ///   quantity in two, and `allNumbers` reads that idiom as 90. "down
+        ///   hours start at 10 and end at 7" loses by the exclusion, and that
+        ///   is the right trade.
+        /// - "or" — "ten or twenty minutes", "11am or 11pm?", both corpus
+        ///   strings, both phrasal.
+        /// - "then" — as often temporal inside a clause ("and then some",
+        ///   "until then") as it is a clause opener, and no sentence in the
+        ///   corpus needs it to break.
+        private static let clauseOpeners: Set<String> = ["but", "so", "anyway", "though"]
+
+        /// Characters that end a clause wherever they stand, asking nothing
+        /// about their neighbours. Held as SCALARS, not as `Character`s, and
+        /// that is load-bearing twice over.
+        ///
+        /// Once for correctness: a `Character` is an extended grapheme cluster,
+        /// and "\r\n" is ONE of them, equal to neither Character("\r") nor
+        /// Character("\n"). A switch written over characters therefore misses
+        /// every CRLF — which is what a paste from Windows, from most mail
+        /// clients and from many iOS text fields produces — and hands two typed
+        /// lines to the rules as one breath. A per-character test loop cannot
+        /// see that, because it never forms the pair.
+        ///
+        /// Once for alignment: `tokenize` splits on SCALARS, so scalars are the
+        /// unit this has to agree with. The line-break family below is the whole
+        /// of it — LF, VT, FF, CR, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR —
+        /// listed out rather than reached through a predicate so that each one
+        /// is a thing a test can name.
+        private static let unconditionalSeparators: Set<Unicode.Scalar> = [
+            ",", ";", "!", "?",
+            "\u{000A}", "\u{000B}", "\u{000C}", "\u{000D}",
+            "\u{0085}", "\u{2028}", "\u{2029}",
+        ]
+
+        /// Cut the raw text at clause-separating characters, dropping the
+        /// separator. Every character below is one `tokenize` already treats as
+        /// a delimiter, which is what makes the pieces' tokens add up to exactly
+        /// `tokenize(whole)`: splitting on a subset of the delimiters and then
+        /// splitting each piece on all of them is the same partition, once the
+        /// empty pieces are filtered — which `tokenize` does.
+        ///
+        /// That argument is about scalars, and a cluster can hold more than one,
+        /// so a cluster is cut only when EVERY scalar in it is a separator. It
+        /// is not pedantry: "!" followed by a combining acute is one cluster
+        /// whose second scalar is a Unicode mark, and marks are in
+        /// `CharacterSet.alphanumerics` — the tokenizer keeps that mark as a
+        /// token. Cutting the cluster would drop a token the tokenizer kept, and
+        /// the alignment contract would be broken by a stray diacritic.
+        ///
+        /// The unconditional set is , ; ! ? and the line breaks. The full stop
+        /// and the dashes are admitted CONDITIONALLY, because English spells
+        /// both of them inside quantities as well as between clauses. Each of
+        /// the following is not admitted at all:
+        ///
+        /// - ":" is a CLOCK. `tokenize` keeps it as a token character precisely
+        ///   so "10:30" survives whole, so splitting on it would hand back two
+        ///   tokens where the tokenizer hands back one — the alignment contract
+        ///   broken by the very first time someone says a time. It is on
+        ///   everyone's list of sentence punctuation and it cannot be on this
+        ///   one.
+        /// - "'" is a POSSESSIVE. "tiktok's" already arrives as two tokens; if
+        ///   the apostrophe also split clauses, every possessive and every
+        ///   contraction would be a sentence boundary.
+        /// - "/" and brackets separate items, not clauses.
+        private static func split(_ text: String) -> [Substring] {
+            var pieces: [Substring] = []
+            var start = text.startIndex
+            var i = text.startIndex
+            var prev: Character?
+            var prevPrev: Character?
+            // Length of the run of letters and digits ending just before `i`.
+            // Only the full stop consults it, and only to decide a break — it
+            // never decides a token, so approximating the tokenizer's
+            // alphanumeric set with `isLetter || isNumber` is free of
+            // consequence here.
+            var alnumRun = 0
+            // The word standing to the left of `i`, for the dashes: the run in
+            // progress if one is, otherwise the last completed run provided only
+            // whitespace has passed since. Tracked as we go rather than scanned
+            // backwards so the cost stays O(1) per character — the cost test
+            // pins that this whole pass is linear.
+            var currentWord = ""
+            var lastWord = ""
+            var onlyWhitespaceSinceWord = false
+
+            while i < text.endIndex {
+                let c = text[i]
+                let after = text.index(after: i)
+                let next: Character? = after < text.endIndex ? text[after] : nil
+                let wordBefore = currentWord.isEmpty
+                    ? (onlyWhitespaceSinceWord ? lastWord : "")
+                    : currentWord
+                if isSeparator(c, in: text, after: after,
+                               prev: prev, prevPrev: prevPrev, next: next,
+                               alnumRunBefore: alnumRun, wordBefore: wordBefore) {
+                    pieces.append(text[start..<i])
+                    start = after
+                }
+                if c.isLetter || c.isNumber || c == ":" {
+                    currentWord.append(c)
+                } else {
+                    if !currentWord.isEmpty {
+                        lastWord = currentWord
+                        currentWord = ""
+                        onlyWhitespaceSinceWord = true
+                    }
+                    if !c.isWhitespace { onlyWhitespaceSinceWord = false }
+                }
+                alnumRun = (c.isLetter || c.isNumber) ? alnumRun + 1 : 0
+                prevPrev = prev
+                prev = c
+                i = after
+            }
+            pieces.append(text[start...])
+            return pieces
+        }
+
+        /// The word standing to the right of a candidate separator, skipping the
+        /// whitespace between. Bounded by the run it reads and by the gap it
+        /// skips, and those are disjoint between candidates, so the whole pass
+        /// stays linear.
+        private static func wordAfter(_ text: String, from index: String.Index) -> String {
+            var i = index
+            while i < text.endIndex, text[i].isWhitespace { i = text.index(after: i) }
+            var word = ""
+            while i < text.endIndex {
+                let c = text[i]
+                guard c.isLetter || c.isNumber || c == ":" else { break }
+                word.append(c)
+                i = text.index(after: i)
+            }
+            return word
+        }
+
+        /// Whether a word is a QUANTITY rather than a predicate — a count, a
+        /// clock, or the meridiem that finishes one.
+        ///
+        /// Only the dashes ask, and they ask because a dash between two
+        /// quantities is a RANGE, not a clause break. This is not a guess about
+        /// English in general: it is what this product itself writes. The
+        /// aperture's one line is "☾  10:00 PM – 7:00 AM", the settings row
+        /// composes "\(start.display)–\(end.display)", and the doc comments
+        /// spell the domain "1–300 minute" and "3–6 named doors". A dash with a
+        /// clock on each side is the down-hours window, and cutting it hands a
+        /// rule a start with no end — the same "splitting cuts a single quantity
+        /// in two" failure that keeps "and" out of `clauseOpeners`, committed
+        /// against the character English reserves for ranges.
+        private static func isQuantity(_ word: String) -> Bool {
+            guard let first = word.first else { return false }
+            // Anything opening with a digit: "20", "10:00", "7am", "450ms".
+            if first.isNumber { return true }
+            let w = word.lowercased()
+            // The meridiem is half of a clock and stands as its own word.
+            if w == "am" || w == "pm" { return true }
+            return NumberParser.units[w] != nil
+                || NumberParser.teens[w] != nil
+                || NumberParser.tens[w] != nil
+        }
+
+        private static func isSeparator(_ c: Character, in text: String, after: String.Index,
+                                        prev: Character?, prevPrev: Character?, next: Character?,
+                                        alnumRunBefore: Int, wordBefore: String) -> Bool {
+            // Decided over the cluster's scalars, and over ALL of them — see the
+            // note on `split` for the diacritic that makes "all" the operative
+            // word, and on `unconditionalSeparators` for the CRLF that makes
+            // "scalars" it.
+            if c.unicodeScalars.allSatisfy({ unconditionalSeparators.contains($0) }) { return true }
+
+            switch c {
+            case ".":
+                // A full stop is the separator English also spells inside a
+                // number and inside a word, so it looks around before it fires.
+
+                // Next to another dot it is an ellipsis, and in a typed bar an
+                // ellipsis is a hesitation inside one thought rather than the
+                // end of one. "tiktok... 20?" is a single ask; breaking it puts
+                // the door and its number in different breaths, which is the
+                // exact failure this type exists to prevent. Checked on both
+                // sides, or the last dot of the three fires on its own.
+                if prev == "." || prev == "\u{2026}" { return false }
+                if next == "." || next == "\u{2026}" { return false }
+
+                // A DOTTED ABBREVIATION's dot, not a stop — "p.m.", "a.m.",
+                // "e.g.". Both halves of that shape are required, and requiring
+                // them is the fix for a real defect: this test used to read
+                // `alnumRunBefore == 1` alone, and a run of one is also every
+                // single digit and every one-letter word. "cap tiktok at 5. no
+                // cap on instagram" came back as ONE clause holding a cap, a
+                // number, a second door and a cap removal — a tightening and a
+                // loosening in one breath, which is verbatim the confusion that
+                // cost the cap grammar three rounds. "block x. give me 20 of
+                // instagram" did the same, and X is a real door.
+                //
+                // So the run must be a LETTER (a lone digit is never an
+                // abbreviation), and the dot must be one of the two dots that
+                // shape actually has: the INTERNAL one, whose next character is
+                // alphanumeric with no space ("p." of "p.m"), or the CLOSING
+                // one, whose single letter was itself opened by a dot ("m." of
+                // "p.m."). Everything else is a stop.
+                //
+                // WHAT THIS STILL COSTS, named because a rule author will build
+                // on it: the closing dot of an abbreviation is suppressed even
+                // when it is ALSO ending the sentence, so "shut youtube until 9
+                // p.m. give me tiktok back" is one clause holding a close verb,
+                // a door, an hour and a second command. Punctuation cannot tell
+                // that from "shut youtube until 9 p.m. today", which is one
+                // command and which `anAbbreviationDotIsNotAClauseBreak` pins as
+                // one clause. Both readings are pinned in the tests, this one as
+                // a known hole, so the shape is inherited announced rather than
+                // discovered. A clause here may hold more than one predicate,
+                // and the cap and down-hours rules must not assume otherwise.
+                // The fix, if one is wanted, is to break after an abbreviation
+                // when what follows opens a fresh predicate — which needs a verb
+                // lexicon, and a verb lexicon belongs in a rule, not in the
+                // primitive the rules are supposed to be able to trust.
+                if alnumRunBefore == 1, let p = prev, p.isLetter {
+                    if let n = next, n.isLetter || n.isNumber { return false }
+                    if prevPrev == "." { return false }
+                }
+
+                // Digits on both sides is a decimal point or a British clock:
+                // "1.5", "2.30" and "10.30" all reach this line and all need it
+                // — the abbreviation rule above deliberately no longer covers
+                // them, since it now insists on a letter. Digits and not
+                // alphanumerics, deliberately — widened to letters it swallows
+                // the missing space in "block tiktok.give me instagram", which
+                // is a real typed sentence and really is two commands.
+                if let p = prev, p.isNumber, let n = next, n.isNumber { return false }
+
+                return true
+
+            case "\u{2014}", "\u{2013}", "-":
+                // The dashes. A dash between two quantities is a range and must
+                // not break — see `isQuantity` for why this product's own
+                // writing settles that.
+
+                // The hyphen is admitted only with whitespace on BOTH sides,
+                // which is how a phone keyboard spells a clause dash. Without
+                // the spaces it is a number: `tokenize` rewrites "-" to a space
+                // so that "twenty-five" reads as 25, and a break there would put
+                // the tens and the units in different breaths, or would cut the
+                // corpus's "tiktok -5 a day" between the door and its number.
+                // Neither of those has a space on both sides, so the condition
+                // is exactly the thing that tells them apart.
+                if c == "-" {
+                    guard let p = prev, p.isWhitespace, let n = next, n.isWhitespace else {
+                        return false
+                    }
+                }
+                if isQuantity(wordBefore), isQuantity(wordAfter(text, from: after)) { return false }
+                return true
+
+            case "\u{2026}":
+                // The single-character ellipsis, silent for the reason its
+                // three-dot spelling is.
+                return false
+
+            default:
+                return false
+            }
+        }
+    }
+}
