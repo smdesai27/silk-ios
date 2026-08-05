@@ -16,7 +16,32 @@ public enum DeterministicParser {
         let door = firstDoor(in: tokens, state: state)
         let number = NumberParser.singleNumber(in: text)
 
+        // The clause partition, built at most once and only when a rule asks
+        // for it. `ClauseIndex(text)` walks the string once, so it is cheap —
+        // but `hugeInputStaysCheapAndSilent` bounds a ten-thousand-word input,
+        // and the honest way to keep that bound honest is that a sentence which
+        // never asks a clause question never pays for the answer. The cap rules,
+        // rule 3's door guard and rule 5's two removal guards are the only
+        // callers, and every one of them needs a named door first.
+        //
+        // Built from `text` — the same string `tokens` came from — so
+        // `clauses().tokens == tokens` by construction. That equality is the
+        // whole reason ClauseIndex owns its tokens (NumberParser.swift): a
+        // position taken from one tokenization and used against another lands
+        // somewhere real and wrong. Every cap helper below indexes into
+        // `index.tokens` and never into this array.
+        var clauseMemo: NumberParser.ClauseIndex?
+        func clauses() -> NumberParser.ClauseIndex {
+            if let clauseMemo { return clauseMemo }
+            let built = NumberParser.ClauseIndex(text)
+            clauseMemo = built
+            return built
+        }
+
         // 1. STATUS — a question about the balance, with no number and no door verb.
+        //    Ahead of every cap rule by design: "how much of my tiktok budget is
+        //    left" is a question, and the answer to a question is never a new
+        //    rule. (spec §5.8 records the imprecision this leaves.)
         if isStatusAsk(text, hasDoor: door != nil) { return .command(.status) }
 
         // 2. DOWN HOURS — must be checked before budget: both can carry a number.
@@ -54,26 +79,122 @@ public enum DeterministicParser {
             return .command(.downHoursQuery)
         }
 
-        // 3. BUDGET — "make it thirty minutes a day", "thirty a day", "budget of 40".
-        if text.contains(" a day") || text.contains("per day") || text.contains("daily") || text.contains("budget") {
-            if let n = number { return .command(.setBudget(minutes: n)) }
-            return .silence
-        }
-
         // 4. CLOSING VERBS — "no more X today", "block X", "im done with X",
         //    "stop letting me open X", "close X". Lexical proposal only; the
         //    polarity that matters is recomputed by state diff in the Validator.
         //    A trailing "until 9" rides along as a stated hour; "everything" or
         //    "all" in the door slot closes every door at once.
         //    (docs/design/handoff/Silk Mockup.dc.html:327-331)
+        //
+        //    HOISTED, and unchanged in content. It used to sit after BUDGET;
+        //    it now executes ahead of every rule that can produce a ceiling,
+        //    because a close is the tightest thing in the product and is never
+        //    wrong in direction. Rule 4.5 can raise a ceiling and rule 2.5 can
+        //    remove one, and a `!hasClosingVerb` veto written into each of them
+        //    is a list that goes stale the moment a third is added — which is
+        //    exactly how "block tiktok, 20 minutes a day is plenty" came back
+        //    having RAISED a ten-minute ceiling to twenty, parked it for
+        //    tomorrow, and never shut the door at all. ORDER covers every cap
+        //    path at once, including the ones not written yet: a doorful close
+        //    returns here and nothing below it runs, and every cap rule below
+        //    requires a named door, so a doorless close cannot reach them
+        //    either.
+        //
+        //    The rule numbers below are identities, not positions — every
+        //    cross-reference in the source and in docs/design/per-app-caps.md
+        //    still names the same rule.
+        //
+        //    What the hoist costs, stated rather than discovered later: "block
+        //    instagram and make it 30 a day" was `setBudget(30)` and is now a
+        //    close on Instagram. Both are tightenings, the close is the tighter,
+        //    and a sentence naming a close first has never had a second
+        //    compilation. A doorless "cut off my budget at 30 a day" is
+        //    unaffected: rule 4 declines without a door and rule 3 still has it.
         if hasClosingVerb(text) {
             let until = restUntil(in: text)
             if let d = door {
                 return .command(.closeDoorToday(door: d, until: until))
             }
-            if tokens.contains("everything") || tokens.contains("all") {
+            // The doorless close is about the REST OF TODAY, and a period word
+            // with a number is a statement about every day. "cut off all my
+            // apps at 30 a day" and "block everything, 30 a day" set an
+            // allowance and name no door and no deadline; the hoist put this arm
+            // in front of BUDGET and turned both into a close over every door
+            // for the rest of the day. The doorful arm above keeps the hoist
+            // whole — "block tiktok, 20 minutes a day is plenty" is still a
+            // close — because there the sentence named the door it wants shut.
+            if tokens.contains("everything") || tokens.contains("all"),
+               !(statesAPeriod(text) && number != nil) {
                 return .command(.closeAllToday(until: until))
             }
+        }
+
+        // 2.5 + 4.5 CAPS — one ceiling on one door, set or cleared. See
+        //     `capOutcome` for the two rules and what each would get wrong
+        //     without the clause gate.
+        //
+        //     Ahead of BUDGET because a cap sentence may carry a period word
+        //     ("tiktok 20 a day", "no daily limit on tiktok") and rule 3 claims
+        //     100% of those. Ahead of ADD/REMOVE because "remove the tiktok
+        //     cap" and "drop the tiktok limit" both open with a token rule 5
+        //     reads as a door removal — this feature manufactures the two
+        //     sentences that DESTROY a door by asking about its ceiling. Ahead
+        //     of SPEND, which is the rule the set sentences are being taken
+        //     back from: "cap tiktok at 20" granted twenty minutes and
+        //     unshielded the app, in reply to a sentence asking to restrict it.
+        //
+        //     A window word makes a number's meaning ambiguous — "cap tiktok at
+        //     bedtime" is a schedule, and per-app schedules are out of scope —
+        //     so the whole family defers, exactly as SPEND does.
+        if door != nil, !windowMention,
+           let outcome = capOutcome(clauses(), state: state, text: text) {
+            return outcome
+        }
+
+        // 3. BUDGET — "make it thirty minutes a day", "thirty a day", "budget of 40".
+        //
+        //    It no longer needs a cap branch: every period-word sentence that a
+        //    door plainly owns has already been claimed above. What is left here
+        //    is the pool's own sentence — and rule 3 TERMINATES on every path.
+        //    That is not decoration. The previous attempt let one shape fall out
+        //    of this block so a later rule could have it, and when that rule also
+        //    declined, the union of two correct refusals walked past ADD/REMOVE
+        //    into SPEND: "give me 60 a day max on tiktok" debited the entire
+        //    remaining budget and took the wall down, out of a sentence stating a
+        //    daily maximum. A period word makes a sentence a statement about
+        //    every day, and no statement about every day may spend today's pool.
+        if statesAPeriod(text) {
+            guard let n = number else { return .silence }
+            // Naming the pool means the pool, however close a door stands:
+            // "budget of 40 for instagram" is 40 minutes of budget, and "bump
+            // my daily budget to 60 tiktok is killing me" is a budget raise
+            // with a reason attached.
+            if tokens.contains("budget") { return .command(.setBudget(minutes: n)) }
+            // Otherwise the pool's sentence is about no door in particular. If
+            // the clause carrying the number NAMES a door and no cap rule above
+            // could read it, the sentence is about that door and the pool must
+            // not move on it — "20 a day for youtube and reddit" names two doors
+            // and one ceiling, and cutting everyone's budget is not what it
+            // asked for. Silence reaches the widener, which cannot produce a cap
+            // at all (§5.7) and so cannot get the door wrong either.
+            //
+            // The same question asked the other way round for the sentence
+            // whose ceiling word and number were split by a clause opener:
+            // "cap tiktok so i only get 20 a day" puts the door in one breath
+            // and its number in the next, so the number's clause names no door
+            // and the pool moved on a sentence about one app. A ceiling word
+            // LEADING a door is the shape `capSet` itself reads; a clause with
+            // that shape and no number of its own has proposed a ceiling this
+            // grammar cannot resolve, and the pool is not the consolation prize.
+            // Scoped to the LEADING order on purpose — "make it 30 a day, tiktok
+            // is my limit" and "60 a day, tiktok is past my limit" trail their
+            // ceiling word behind the door, where it is commentary, and those
+            // sentences still move the pool.
+            if door != nil, numberClauseNamesADoor(clauses(), state: state)
+                || aCeilingLeadsADoorWithNoNumber(clauses(), state: state) {
+                return .silence
+            }
+            return .command(.setBudget(minutes: n))
         }
 
         // 5. ADD / REMOVE a door. "add reddit" — the name is whatever follows,
@@ -89,7 +210,49 @@ public enum DeterministicParser {
             }
             return .command(.addDoor(name: name))
         }
+        //    The removal branch declines two shapes, and deletion is the one
+        //    outcome this file can never take back, so it gets neither of them.
+        //
+        //    A CEILING NAMED IN THE DOOR'S OWN BREATH is not a door. This is a
+        //    BELT, and says so: the cap rules above claim every removal-shaped
+        //    ceiling sentence they can read, and a clause they cannot read
+        //    terminates in silence rather than walking down here. What is left
+        //    for this guard is the sentence whose ceiling word trails its door
+        //    with no remover beside it — "drop, tiktok is my limit" — which no
+        //    cap rule matches and which must still not delete TikTok. Deletion
+        //    takes the app, its shield and its alias table, and it is the one
+        //    outcome this file can never take back, so it does not get the
+        //    sentences nobody could read.
+        //
+        //    The guard is CLAUSE-scoped, and that is the whole of it: "drop
+        //    tiktok, im at my limit" and "drop instagram, ive hit my limit 20
+        //    times" carry the same noun in a second breath, where it is a reason
+        //    and not an object, and they ARE door removals. A sentence-wide
+        //    `hasCapNoun` reads them as ceilings and answers a request to delete
+        //    a door with silence.
+        //
+        //    A NUMBER THE SENTENCE POINTS AT is a ceiling with the noun elided:
+        //    "drop tiktok to 20" and "drop tiktok down to 20" are somebody
+        //    lowering a cap, and answering them by deleting the door is the
+        //    same unrecoverable mistake. The guard is the DIRECTION, not the
+        //    digit — written as "a number anywhere" it turned "drop instagram
+        //    for good, ive wasted 3 hours today", "remove youtube, i have 2 too
+        //    many" and "remove instagram after 5 years" into GRANTS on the very
+        //    doors the user asked to delete.
+        //    AND BOTH REFUSALS TERMINATE. Declining and walking on is what this
+        //    file's own comment says killed the previous attempt one rule over:
+        //    "the union of two correct refusals walked past ADD/REMOVE into
+        //    SPEND". It happened again here. "drop tiktok to 20" is somebody
+        //    lowering a ceiling; the guard below spared the door, nothing else
+        //    claimed the sentence, and rule 7 answered it by DEBITING TWENTY
+        //    MINUTES AND TAKING THE WALL DOWN on the very app being restricted.
+        //    A removal-shaped sentence this rule cannot read compiles to
+        //    nothing. Silence reaches the widener, which per §5.7 can produce
+        //    neither a cap nor a deletion, so it cannot get this wrong either.
         if (tokens.first == "remove" || tokens.first == "drop"), let d = door {
+            guard !capNounSharesTheDoorsClause(clauses(), state: state, door: d),
+                  !doorsClauseStatesANewCeiling(clauses(), state: state, door: d)
+            else { return .silence }
             return .command(.removeDoor(door: d))
         }
 
@@ -119,21 +282,1417 @@ public enum DeterministicParser {
         return .silence
     }
 
-    // MARK: - Recognizers
+    // MARK: - Doors
 
     private static func firstDoor(in tokens: [String], state: PolicyState) -> Door? {
         // Single-token names and aliases.
         for tok in tokens {
-            if let d = state.door(named: tok) { return d }
+            if let d = door(tok, in: state) { return d }
         }
         // Two-token names ("focus friend" style), just in case.
         for i in 0..<max(0, tokens.count - 1) {
-            if let d = state.door(named: tokens[i] + " " + tokens[i + 1]) { return d }
+            if let d = door(tokens[i] + " " + tokens[i + 1], in: state) { return d }
         }
         return nil
     }
 
-    private static func hasClosingVerb(_ text: String) -> Bool {
+    /// One door name, matched through its inflections. Every door recognizer in
+    /// this file goes through here so they cannot disagree about what counts as
+    /// a name.
+    ///
+    /// "tiktok's daily limit is 20" and "tiktoks daily limit is 20" are one
+    /// sentence with one meaning, and they parsed differently because the
+    /// tokenizer splits on punctuation: the apostrophe form became ["tiktok",
+    /// "s"] and matched, the bare plural stayed one token and did not. So the
+    /// second one named no door, no cap rule could see it, and it cut the
+    /// SHARED budget from 40 to 20 — instantly, because a tighten does not wait
+    /// — on the strength of whether the user typed an apostrophe.
+    ///
+    /// Nothing is minted. The stripped form still has to hit a spoken form
+    /// exactly, so "limits", "caps" and "minutes" match nothing, and the only
+    /// way this can invent a door is if the user owns one whose name is another
+    /// door's name plus an "s".
+    private static func door(_ form: String, in state: PolicyState) -> Door? {
+        if let d = state.door(named: form) { return d }
+        guard let base = deinflected(form) else { return nil }
+        return state.door(named: base)
+    }
+
+    /// A trailing plural or possessive "s", stripped — or nil when the token is
+    /// too short for the ending to be an inflection rather than the word.
+    private static func deinflected(_ form: String) -> String? {
+        guard form.count > 3, form.hasSuffix("s") else { return nil }
+        return String(form.dropLast())
+    }
+
+    /// How many doors a clause names, and which. One door named twice — once by
+    /// name and once by alias, "cap instagram at 20, ig is eating my day" — is
+    /// still one door: the test is on the id, not on the count of matches.
+    private enum ClauseDoors {
+        case none
+        case one(Door)
+        case several
+    }
+
+    private static func doors(in clause: Range<Int>, of index: NumberParser.ClauseIndex,
+                              state: PolicyState) -> ClauseDoors {
+        let t = index.tokens
+        var found: Door?
+        for i in clause {
+            var match = door(t[i], in: state)
+            if match == nil, i + 1 < clause.upperBound {
+                match = door(t[i] + " " + t[i + 1], in: state)
+            }
+            guard let d = match else { continue }
+            if let already = found, already.id != d.id { return .several }
+            found = d
+        }
+        guard let found else { return .none }
+        return .one(found)
+    }
+
+    /// Where a door's name first stands inside a clause, matched exactly as
+    /// `doors(in:of:state:)` matches it so the two can never disagree.
+    private static func doorIndex(in clause: Range<Int>, of index: NumberParser.ClauseIndex,
+                                  state: PolicyState) -> Int? {
+        let t = index.tokens
+        return clause.first { i in
+            door(t[i], in: state) != nil
+                || (i + 1 < clause.upperBound && door(t[i] + " " + t[i + 1], in: state) != nil)
+        }
+    }
+
+    // MARK: - The cap lexicon
+
+    /// The sentence's own word for a ceiling. A NOUN names the rule and can
+    /// stand as its verb ("cap tiktok at 20", "i want tiktok capped at 20"); a
+    /// QUANTIFIER only bounds whatever it is attached to, which may be a
+    /// ceiling or may be this afternoon's ask ("let me on tiktok, max 20").
+    /// The two are separated because only the second is ever a hedge.
+    ///
+    /// Every one of these matches at a TOKEN boundary, never as a substring:
+    /// "unlimited" contains "limit" and is a grant-shaped ask, exactly as
+    /// "unlock" contains "lock", "tonight" contains "night" and "weekend"
+    /// contains "end". This file has paid for the substring four times.
+    private static let capNouns: Set<String> = ["cap", "caps", "capped",
+                                                "limit", "limits", "ceiling"]
+    private static let capQuantifiers: Set<String> = ["max", "maximum", "under"]
+
+    /// The verbs that take a ceiling away. "uncap" needs no noun beside it; the
+    /// rest do.
+    ///
+    /// "without", "forget" and "any" are deliberately NOT here. Each produced a
+    /// loosening out of a demand FOR a ceiling — "no tiktok without a limit",
+    /// "dont forget the tiktok limit", "set any limit on tiktok" — and "any" in
+    /// particular cannot be rescued by structure, because it sits directly on
+    /// the noun in both the demand and the refusal. The only word that tells
+    /// those apart is the NEGATOR, which is already the word doing the work.
+    private static let capRemovers: Set<String> = ["remove", "drop", "lift", "off",
+                                                   "rid", "uncap", "uncapped"]
+
+    /// Words that negate what follows them. A negator is not a lexeme to be
+    /// added to a list of removers; it is a property of the clause that REVERSES
+    /// one. Every other negation precedent in this file errs toward tightening
+    /// ("dont block instagram" still closes); this is the first that can loosen,
+    /// which is why it is modelled rather than ignored.
+    ///
+    /// THE CONTRACTION FAMILY IS COMPLETE, and completing it is the one place a
+    /// list is the right answer in this file. `capSet`'s veto and
+    /// `clearingPhrase` both read this set to REFUSE, so a word added here can
+    /// only ever subtract a ceiling change — the direction both rules must fail
+    /// in. It cost 110 sentences to leave half-written: "i shouldnt cap tiktok
+    /// at 20", "tiktok isnt capped at 20" and the rest of {shouldnt, wouldnt,
+    /// couldnt, isnt, arent, wasnt, havent, hasnt, mustnt, aint} × five setter
+    /// phrasings wrote the ceiling they refuse, which against a capped door is a
+    /// parked RAISE. The apostrophe spellings are here for the reason
+    /// `door(_:in:)` deinflects: an apostrophe is not a rule.
+    ///
+    /// The LEXICAL negators — "refuse", "nobody", "no one" — are the same
+    /// argument. `reportsRatherThanAsks` refuses them in the clearing direction
+    /// by their spoken subject, and that test cannot reach a clause whose
+    /// subject is elided; the word itself can.
+    private static let negators: Set<String> = ["no", "none", "not", "never",
+                                                "dont", "don't", "doesnt", "doesn't",
+                                                "cant", "can't", "wont", "won't",
+                                                "didnt", "didn't",
+                                                "isnt", "isn't", "arent", "aren't",
+                                                "wasnt", "wasn't", "werent", "weren't",
+                                                "shouldnt", "shouldn't",
+                                                "wouldnt", "wouldn't",
+                                                "couldnt", "couldn't",
+                                                "mustnt", "mustn't",
+                                                "havent", "haven't", "hasnt", "hasn't",
+                                                "hadnt", "hadn't", "aint", "ain't",
+                                                "refuse", "refuses", "nobody", "noone"]
+
+    /// The negators that can stand directly on a noun phrase, which is the only
+    /// way a bare word clears a ceiling on its own ("no cap on tiktok").
+    private static let nounNegators: Set<String> = ["no", "none", "not", "never"]
+
+    /// Words that open a noun phrase. Only the clearing rule reads them, and
+    /// only to find where a ceiling's own phrase STARTS — "take the 20 minute
+    /// cap off tiktok" quotes its number to say which ceiling, and that number
+    /// lives inside the phrase the remover is moving.
+    private static let determiners: Set<String> = ["the", "a", "an", "my", "our",
+                                                   "this", "that", "any", "some"]
+
+    /// Prepositions that aim a number at a ceiling. "drop the tiktok limit TO
+    /// 20" states a new one; "remove the 20 minute tiktok cap" does not, and
+    /// the difference is this word and nothing else. A NUMBER IS NOT ALWAYS A
+    /// CEILING, and gating a clearing on the mere absence of a number answered
+    /// a request to remove a restriction by installing one.
+    private static let ceilingPrepositions: Set<String> = ["to", "at", "of", "under", "below"]
+
+    /// The verbs that ask to be let in, as TOKENS — `hasOpeningVerb` matches
+    /// phrases in the raw text, which cannot say WHERE the verb stands, and the
+    /// cap rules need the position. "lemme" is the same word as "let me": the
+    /// tokenizer keeps it whole, so the two spellings reach here as one token
+    /// and as two, and "lemme have under 20 of tiktok" compiled to a permanent
+    /// ceiling while "let me have under 20 of tiktok" spent.
+    /// "have" is on it because the suite's own canonical spend is "can i HAVE
+    /// twenty minutes of tiktok" — the class was always "ask to be let in", and
+    /// the word was missing from it, so "can i have max 20 of tiktok" compiled
+    /// to a permanent ceiling while "give me max 20 of tiktok" spent. "lemme"
+    /// was added beside it and then taken off again: every sentence it would
+    /// have caught spells the ask "lemme HAVE …", so the word had no sentence of
+    /// its own, and a lexeme with no sentence is a lexeme that cannot be tested.
+    private static let askVerbs: Set<String> = ["give", "gimme", "let", "open",
+                                                "unlock", "want", "need", "have"]
+
+    /// The words that can stand INSIDE a ceiling's own noun phrase: a
+    /// determiner, a number, a measure or period word, the door being talked
+    /// about, the prepositions that hang a phrase off a noun, and the particles
+    /// that trail one without predicating anything of it.
+    ///
+    /// A WHITELIST, and that is the entire safety argument. Written as a
+    /// blacklist — "no pronoun and no subordinator between the remover and the
+    /// noun" — every word nobody thought of CLEARS a ceiling, which is the
+    /// direction this file has been lost in three times. Written this way an
+    /// unrecognised word declines, and a declined clearing costs a silence.
+    ///
+    /// What it buys, and each of these was a loosening: "turn off tiktok im at
+    /// my limit" and eleven sentences like it ask for the APP to be shut and
+    /// name the ceiling as the reason — "im", "ive", "until" and "its" cannot
+    /// stand inside a noun phrase, so the ceiling is not what the remover is
+    /// moving. "i dont want a bigger tiktok limit" is a plea for a SMALLER one,
+    /// and "bigger" is the word that says the negation landed on the size.
+    /// "i dont want the tiktok cap removed" predicates a removal OF the ceiling,
+    /// and "removed" is not a noun-phrase word either.
+    private static let measureWords: Set<String> = ["minute", "minutes", "min", "mins",
+                                                    "hour", "hours", "hr", "hrs",
+                                                    "second", "seconds", "sec", "secs",
+                                                    "daily", "day", "days", "week", "weekly"]
+    private static let phrasePrepositions: Set<String> = ["of", "on", "for", "in", "from"]
+    private static let trailingParticles: Set<String> = ["anymore", "please", "today",
+                                                          "tonight", "thanks"]
+
+    /// The auxiliaries and copulas, contractions included. A finite verb is what
+    /// turns a request into a REPORT — "no limit on tiktok" asks for one to go,
+    /// "there IS no limit on tiktok" says one is already gone — and putting one
+    /// in front of the subject is how English asks a question without a question
+    /// mark: "did you take the cap off tiktok".
+    ///
+    /// A closed class, which is what makes it safe to write down. The verbs that
+    /// can head an imperative are an OPEN class and could never be listed; these
+    /// are the whole inventory of English, so the mood test is written as their
+    /// complement. It is also why the contraction family costs nothing to
+    /// complete here and cost a defect in `negators`: "i shouldnt remove the
+    /// tiktok cap" is refused for having a finite verb, not for the "n't".
+    private static let auxiliaries: Set<String> = [
+        "is", "isnt", "isn't", "are", "arent", "aren't", "was", "wasnt", "wasn't",
+        "were", "werent", "weren't", "am", "be", "been", "being",
+        "do", "does", "doesnt", "doesn't", "did", "didnt", "didn't",
+        "has", "hasnt", "hasn't", "have", "havent", "haven't", "had", "hadnt", "hadn't",
+        "can", "cant", "can't", "could", "couldnt", "couldn't",
+        "should", "shouldnt", "shouldn't", "would", "wouldnt", "wouldn't",
+        "will", "wont", "won't", "shall", "may", "might", "must",
+    ]
+
+    /// The MODALS, which are the auxiliaries that ask rather than report. Every
+    /// other finite verb puts a clause in the indicative and makes it a
+    /// description — "the tiktok cap IS 60" — but a modal is how English wraps
+    /// an instruction in politeness: "CAN i cap tiktok at 20", "my tiktok limit
+    /// SHOULD be 20 a day". Both of those are pinned setters, and a mood gate
+    /// written without this exemption refuses them.
+    ///
+    /// A subset of `auxiliaries` rather than a set beside it, so the two cannot
+    /// disagree about whether a word is a finite verb: the mood test asks for a
+    /// finite verb that is NOT a modal.
+    private static let modals: Set<String> = [
+        "can", "cant", "can't", "could", "couldnt", "couldn't",
+        "should", "shouldnt", "shouldn't", "would", "wouldnt", "wouldn't",
+        "will", "wont", "won't", "shall", "may", "might", "must", "mustnt", "mustn't",
+    ]
+
+    /// The REQUEST modals: the half of `modals` that can wrap an instruction.
+    /// "CAN i cap tiktok at 20" and "my tiktok limit SHOULD be 20 a day" are
+    /// pinned setters and are the whole reason the setter's mood gate has a
+    /// modal exemption at all.
+    ///
+    /// The EPISTEMIC half — {will, may, might, must} and "will"'s contraction —
+    /// is not here. Dropping it, together with the wh-word narrowing beside it,
+    /// closed 149 sentences: "the tiktok cap WILL be 60", "tiktok MIGHT be
+    /// capped at 60", "i MUST have capped tiktok at 60", "there WILL be a 60
+    /// minute limit on tiktok". Every one is a speculation or a recollection
+    /// ABOUT a ceiling, and every one wrote the ceiling it speculates about,
+    /// which against a capped door is a parked
+    /// raise. A pinned setter is always a request, never a speculation, so the
+    /// exemption the requests need is narrower than the class it was written on.
+    ///
+    /// A subset of `modals` for the same reason `modals` is a subset of
+    /// `auxiliaries`: the mood test and the finite-verb test must not disagree
+    /// about what a word is.
+    private static let requestModals: Set<String> = [
+        "can", "cant", "can't", "could", "couldnt", "couldn't",
+        "should", "shouldnt", "shouldn't", "would", "wouldnt", "wouldn't", "shall",
+    ]
+
+    /// The wh-words. A question is never a rule change — README rule 1's own
+    /// principle, applied to STATUS since the parser shipped and to nothing
+    /// else, which is how "why is there no limit on tiktok" came back having
+    /// REMOVED the ceiling the sentence was complaining about the absence of.
+    private static let whWords: Set<String> = ["why", "how", "what", "whats", "what's",
+                                               "who", "whos", "who's", "whose",
+                                               "where", "when", "which"]
+
+    /// The pronouns and expletives that can stand as a clause's subject. English
+    /// marks a command by leaving the subject OUT, so a clause that speaks one is
+    /// describing rather than instructing.
+    private static let subjects: Set<String> = [
+        "i", "im", "i'm", "ive", "i've", "id", "i'd", "ill", "i'll",
+        "you", "youve", "you've", "youre", "you're", "we", "weve", "we've",
+        "he", "she", "they", "theyve", "they've", "it", "its", "it's",
+        "there", "theres", "there's", "that", "thats", "that's", "this", "these", "those",
+        "nobody", "noone", "somebody", "someone", "everybody", "everyone", "anybody", "anyone",
+    ]
+
+    /// The verbs of wanting. The one command that does speak its own subject is
+    /// the first-person volition — "i want the tiktok cap gone", "i dont want a
+    /// limit on tiktok" — which the clearing rule already reads as a remover.
+    private static let volitions: Set<String> = ["want", "wanna", "need", "wish"]
+
+    /// The period phrase, as the token shape rule 3's own trigger has: "a day",
+    /// "per day", "daily". Token-shaped rather than substring so that "today"
+    /// is not "a day" and "instagram 20 for the day" is not a habit — that
+    /// sentence is an ordinary spend and reading its "day" as a period would
+    /// turn a grant into a permanent ceiling.
+    private static func periodPhrase(_ t: [String], in clause: Range<Int>) -> Bool {
+        clause.contains { i in
+            if t[i] == "daily" { return true }
+            return t[i] == "day" && i > clause.lowerBound
+                && (t[i - 1] == "a" || t[i - 1] == "per")
+        }
+    }
+
+    /// Whether the sentence is about a period rather than about now. Rule 3's
+    /// own trigger, `internal` so the invariant suite can ask the parser the
+    /// same question the parser asks — a restated copy in the tests would
+    /// drift, and then the property proved is not the property that ships.
+    static func statesAPeriod(_ text: String) -> Bool {
+        text.contains(" a day") || text.contains("per day")
+            || text.contains("daily") || text.contains("budget")
+    }
+
+    /// Whether one token could stand inside a ceiling's own noun phrase. See
+    /// `measureWords` for why this is a whitelist and what it costs.
+    private static func isNounPhraseWord(_ t: [String], _ i: Int, state: PolicyState) -> Bool {
+        let w = t[i]
+        if determiners.contains(w) || measureWords.contains(w)
+            || phrasePrepositions.contains(w) || trailingParticles.contains(w) { return true }
+        // A number premodifies a ceiling to say WHICH one — "the 20 minute cap".
+        if !NumberParser.allNumbers(in: w).isEmpty { return true }
+        // The door names the ceiling — "the TIKTOK cap" — and a two-token name
+        // is admitted from either half, since neither word alone is the door.
+        if door(w, in: state) != nil { return true }
+        if i + 1 < t.count, door(w + " " + t[i + 1], in: state) != nil { return true }
+        if i > 0, door(t[i - 1] + " " + w, in: state) != nil { return true }
+        return false
+    }
+
+    /// Whether every token in a range belongs to one noun phrase. The range is
+    /// always one the clause already gave — between two words the rule found —
+    /// so this is a bounded scan and never a threshold.
+    private static func spansOneNounPhrase(_ t: [String], _ range: Range<Int>,
+                                           state: PolicyState) -> Bool {
+        range.allSatisfy { isNounPhraseWord(t, $0, state: state) }
+    }
+
+    /// Whether this clause TALKS ABOUT a ceiling instead of asking for one to
+    /// move. Two shapes, and both are structure rather than vocabulary.
+    ///
+    /// A FINITE VERB standing before the clearing words. "no limit on tiktok"
+    /// asks for a restriction to go; "there IS no limit on tiktok", "i HAVE no
+    /// limit on tiktok" and "tiktok IS not capped" report that one is already
+    /// absent, and the copula is the whole difference. Fronted, the same verb is
+    /// how English asks a question with no question mark — "did you take the cap
+    /// off tiktok", "should i uncap tiktok", "is the tiktok cap off". Eleven such
+    /// sentences came back as CLEARINGS, and against a capped door a clearing is
+    /// a parked loosening that outlives the conversation that made it. README
+    /// rule 1's own comment already says the answer to a question is never a new
+    /// rule; it was applied to STATUS and to nothing else.
+    ///
+    /// A SPOKEN SUBJECT. English marks a command by leaving the subject out, so
+    /// "remove the tiktok cap" is an instruction and "the tiktok cap isnt coming
+    /// off" is a report. This is what refuses "i refuse to remove the tiktok
+    /// cap" and "nobody should remove the tiktok cap" without adding a single
+    /// word to `negators` — the list a reviewer rightly called arbitrary where
+    /// it stopped, because a semantic class has no edge to stop at. Pronouns,
+    /// auxiliaries and wh-words do.
+    ///
+    /// The one command that speaks its own subject is the first-person volition
+    /// — "i want the tiktok cap gone", "i dont want a limit on tiktok" — reached
+    /// by walking past the subject and whatever negation is glued to it. It is
+    /// asked FIRST, which is the repair the scan below forced: the volition
+    /// escape used to sit behind the scan and was unreachable whenever the scan
+    /// found anything, so widening the scan by one set would have refused "i
+    /// dont want any cap on tiktok" — a pinned clearing.
+    ///
+    /// A SUBJECT STANDING ANYWHERE BEFORE THE PHRASE, not only at the clause's
+    /// first token. "apparently theres no cap on tiktok" speaks its subject one
+    /// word in, and so do "honestly", "unfortunately", "right now", "turns out"
+    /// and twenty more: twenty-three of twenty-nine adverbs tested turned the
+    /// bare report — correctly refused — into a CLEARING. An adverb cannot make
+    /// a report an instruction, and the scan already walked that span for
+    /// auxiliaries and wh-words. One set wider, same bounded scan.
+    /// A DOOR HEADING A NOUN PHRASE, which is the other way English speaks a
+    /// subject and the one this feature manufactures — Settings prints the door
+    /// name beside the word "cap" on a row, so "tiktoks cap sits at 60" is a
+    /// sentence a user now has a reason to say. `subjects` lists the pronouns
+    /// and expletives; a proper noun is a subject too, and the only proper nouns
+    /// this parser knows are its doors.
+    ///
+    /// 160 sentences in one sweep: {tiktoks, tiktok's, tiktok, instagrams,
+    /// instas} × {cap, limit, ceiling} × {sits at, stands at, went to, reads,
+    /// shows, started at, …} × {45, 60} all WROTE the ceiling they report, which
+    /// against a door capped at ten is a parked loosening out of a statement of
+    /// fact. "the tiktok cap sits at 60" was already correctly silent — the only
+    /// difference was the possessive — and the clearing half had the identical
+    /// hole ("tiktoks got no cap" parked a clearing while "tiktok has no cap"
+    /// fell silent). `main` matched none of these at all, having no door
+    /// deinflection, so this PR both found the door and wrote the ceiling.
+    private static func reportsRatherThanAsks(_ t: [String], clause: Range<Int>,
+                                              phraseStart: Int, state: PolicyState) -> Bool {
+        if statesAVolition(t, clause: clause) { return false }
+        for i in clause.lowerBound..<min(phraseStart, clause.upperBound)
+        where auxiliaries.contains(t[i]) || whWords.contains(t[i]) || subjects.contains(t[i]) {
+            return true
+        }
+        if doorHeadsTheSubject(t, clause: clause, state: state) { return true }
+        guard let first = clause.first,
+              subjects.contains(t[first]) || auxiliaries.contains(t[first])
+                || whWords.contains(t[first]) || determiners.contains(t[first])
+        else { return false }
+        return true
+    }
+
+    /// Whether the clause opens with a door standing at the head of a noun
+    /// phrase — the shape of "tiktoks cap sits at 60" and of "instagrams got no
+    /// cap", and NOT the shape of the verbless setters this feature is built on.
+    ///
+    /// The walk runs forward from the door through everything that can belong to
+    /// the noun phrase it heads, and answers YES the moment it meets a word that
+    /// cannot. That word is the predicate, and a clause with a subject and a
+    /// predicate is a report.
+    ///
+    /// Two escapes, and each is paid for by a pinned row:
+    ///  - `per` is a noun-phrase word HERE and nowhere else. "tiktok 20 per day"
+    ///    is a pinned setter whose "per" would otherwise read as the predicate;
+    ///  - a CEILING PREPOSITION carrying a number is the elliptical setter
+    ///    "tiktoks cap to 20", where the preposition aims a quantity rather than
+    ///    predicating anything. "sits AT 60" does not reach this, because "sits"
+    ///    already answered.
+    private static func doorHeadsTheSubject(_ t: [String], clause: Range<Int>,
+                                            state: PolicyState) -> Bool {
+        let first = clause.lowerBound
+        guard first < clause.upperBound, door(t[first], in: state) != nil else { return false }
+        var j = first + 1
+        if j < clause.upperBound, t[j] == "s" { j += 1 }
+        while j < clause.upperBound {
+            let w = t[j]
+            if isNounPhraseWord(t, j, state: state) || capNouns.contains(w)
+                || capQuantifiers.contains(w) || negators.contains(w)
+                || capRemovers.contains(w) || w == "per" { j += 1; continue }
+            if ceilingPrepositions.contains(w), j + 1 < clause.upperBound,
+               !NumberParser.allNumbers(in: t[j + 1]).isEmpty { return false }
+            return true
+        }
+        return false
+    }
+
+    /// Whether the clause is the one command that speaks its own subject: a
+    /// first-person volition, reached by walking past the subject and whatever
+    /// negation or auxiliary is glued to it. "i want a cap on tiktok", "i dont
+    /// want any limit on instagram", "i want my instagram limit to be 20".
+    ///
+    /// Extracted from `reportsRatherThanAsks` so the setter's mood gate can ask
+    /// the same question, and so it can be asked BEFORE the scans rather than
+    /// after them. The entry condition is the same one the scan's guard has, so
+    /// no clause answers this that would not have reached the walk before.
+    private static func statesAVolition(_ t: [String], clause: Range<Int>) -> Bool {
+        guard let first = clause.first,
+              subjects.contains(t[first]) || auxiliaries.contains(t[first])
+                || whWords.contains(t[first]) || determiners.contains(t[first])
+        else { return false }
+        var j = first + 1
+        while j < clause.upperBound, auxiliaries.contains(t[j]) || negators.contains(t[j]) {
+            j += 1
+        }
+        return j < clause.upperBound && volitions.contains(t[j])
+    }
+
+    /// Whether the clause predicates NOTHING of what it names — a bare noun
+    /// phrase, which cannot be a report because a report needs a verb.
+    ///
+    /// The mood gate's one exemption that is not a word: "a 20 minute cap on
+    /// tiktok a day" and "an hour a day of tiktok" open with a determiner, which
+    /// is a shape reports also have ("the tiktok cap is 60"), and both are
+    /// pinned setters. What separates them is that the first two are noun
+    /// phrases all the way to the end and the third has a copula. Written as a
+    /// list of opening frames this would be the same mistake `capSet`'s own
+    /// comment records; written as `spansOneNounPhrase` plus the cap lexicon it
+    /// is the question this file already asks everywhere else, and an
+    /// unrecognised word makes the clause a predicate, which REFUSES.
+    private static func predicatesNothing(_ t: [String], clause: Range<Int>,
+                                          state: PolicyState) -> Bool {
+        clause.allSatisfy { i in
+            isNounPhraseWord(t, i, state: state)
+                || capNouns.contains(t[i]) || capQuantifiers.contains(t[i])
+        }
+    }
+
+    /// Whether this clause DESCRIBES a ceiling instead of asking for one — the
+    /// setter's half of the mood gate, and the root cause of three blockers.
+    ///
+    /// `capCleared` got `reportsRatherThanAsks` and `capSet` got nothing, so the
+    /// pair was perfectly asymmetric: "there is no limit on tiktok" was
+    /// correctly silent and "there is a 60 minute limit on tiktok" WROTE a
+    /// sixty-minute ceiling. Against a door capped at ten that is a parked
+    /// raise, out of a sentence that is not an instruction at all. A report is
+    /// not an instruction in either direction.
+    ///
+    /// A FINITE VERB ANYWHERE IN THE CLAUSE, not only before the phrase. The
+    /// clearing rule scans forward because a clearing phrase runs to the end of
+    /// what it removes; a setter's number can stand before its copula ("30
+    /// minutes a day on tiktok is too much") or after it ("the tiktok cap is
+    /// 60"), and only the whole-clause question reads both.
+    ///
+    /// THREE EXEMPTIONS, and each is paid for by a pinned row:
+    ///  - a REQUEST MODAL before the number or the door marks a REQUEST — "can i
+    ///    cap tiktok at 20", "my tiktok limit should be 20 a day";
+    ///  - a first-person VOLITION is the command that speaks its own subject —
+    ///    "i want my instagram limit to be 20";
+    ///  - a clause that PREDICATES NOTHING is a fragment, and a fragment naming
+    ///    a ceiling has proposed one — "a 20 minute cap on tiktok a day", "an
+    ///    hour a day of tiktok".
+    private static func reportsRatherThanSets(_ t: [String], clause: Range<Int>,
+                                              phraseStart: Int, state: PolicyState) -> Bool {
+        // THE EXEMPTION IS FOR REQUESTS, AND A QUESTION IS NOT ONE. Written
+        // unconditionally on the whole modal class, this early return preempted
+        // the finite-verb test, the wh-word test AND the spoken-subject test, so
+        // one polite auxiliary anywhere ahead of the phrase bought a clause the
+        // right to write a ceiling. Two narrowings, 149 sentences:
+        //  - a WH-WORD before the phrase defeats it. "why should the tiktok cap
+        //    be 60" and "can you tell me why the tiktok cap is 60" are askings
+        //    ABOUT a ceiling and both wrote one; README rule 1's principle is
+        //    that the answer to a question is never a new rule, and the modal
+        //    was letting the question skip the gate that enforces it.
+        //  - only the REQUEST modals qualify. See `requestModals`.
+        let ahead = clause.lowerBound..<min(phraseStart, clause.upperBound)
+        if !ahead.contains(where: { whWords.contains(t[$0]) }),
+           ahead.contains(where: { requestModals.contains(t[$0]) }) { return false }
+        if statesAVolition(t, clause: clause) { return false }
+        let finiteVerb = clause.contains {
+            auxiliaries.contains(t[$0]) && !modals.contains(t[$0])
+        }
+        guard finiteVerb || reportsRatherThanAsks(t, clause: clause, phraseStart: phraseStart,
+                                                  state: state)
+        else { return false }
+        return !predicatesNothing(t, clause: clause, state: state)
+    }
+
+    // MARK: - Caps
+
+    /// The whole cap decision, clause by clause.
+    ///
+    /// **The property the clause index buys, and the one that killed most of the
+    /// defects: a cap sentence has its ceiling word, its door and its number in
+    /// ONE clause.** Every rule below is that sentence, gated on that clause.
+    /// No rule here asks HOW FAR APART two words are — the span-of-three, the
+    /// span-of-two and the reach-of-two that preceded this were approximations
+    /// of clause structure by counting, and counting is what failed three times.
+    /// What is left is order (which word leads), adjacency (which word is the
+    /// next one), and bounded scans between two positions the clause already
+    /// gave. What each rule would get wrong without the gate is recorded on the
+    /// rule.
+    ///
+    /// A clause may hold more than one predicate — a sentence-final abbreviation
+    /// merges with what follows, so "down hours till 11 p.m. cap tiktok at 20"
+    /// is one clause (NumberParser.swift, `split`) — so no rule here assumes one
+    /// clause is one command. The gate is a NECESSARY condition, never a
+    /// sufficient one; every rule still has to read the words it found.
+    ///
+    /// nil means "no clause is cap-shaped", and the ladder keeps going. Anything
+    /// else TERMINATES, `.silence` included: a cap-shaped sentence this cannot
+    /// resolve must never keep walking, because what it walks into is SPEND, and
+    /// the answer to "cap tiktok and instagram at 20" is not twenty minutes of
+    /// TikTok with the wall down.
+    private static func capOutcome(_ index: NumberParser.ClauseIndex,
+                                   state: PolicyState, text: String) -> ParseOutcome? {
+        for clause in clauseRanges(index) {
+            // AND THE CLAUSE MUST BE THE ONE THE SENTENCE IS ABOUT. This loop
+            // walks EVERY clause and sits ahead of SPEND and of rule 5, and the
+            // hoist that put it there was justified by one clause holding both a
+            // cap word and a number — "cap tiktok at 20" granting. It does not
+            // license a cap clause reaching across a boundary to veto a
+            // DIFFERENT clause's intent: "give me 20 of tiktok, uncap instagram"
+            // answered the second breath and dropped the first on the floor, and
+            // "remove instagram, no cap on tiktok" cleared TikTok's ceiling and
+            // never removed Instagram at all.
+            //
+            // Two clauses naming two different doors with two different intents
+            // is the ambiguity `singleNumber` and `capOutcome`'s own `.several`
+            // arm already refuse for numbers and for doors inside one clause.
+            // Applied across clauses, and only backwards: an EARLIER clause
+            // states the sentence's first intent, and this rule may not
+            // overrule it.
+            if let outcome = capCleared(index, clause: clause, state: state),
+               !anotherDoorIsClaimedEarlier(index, before: clause, state: state,
+                                            door: capDoor(of: outcome)) {
+                return outcome
+            }
+            if let outcome = capSet(index, clause: clause, state: state, text: text),
+               !anotherDoorIsClaimedEarlier(index, before: clause, state: state,
+                                            door: capDoor(of: outcome)) {
+                return outcome
+            }
+        }
+        return nil
+    }
+
+    /// The door a cap outcome would move, or nil when the outcome moves none —
+    /// which is the shape of every terminating refusal in this family.
+    private static func capDoor(of outcome: ParseOutcome) -> Door? {
+        guard case .command(.setDoorCap(let d, _)) = outcome else { return nil }
+        return d
+    }
+
+    /// Whether an EARLIER clause names a door and states an intent of its own.
+    ///
+    /// An intent is a NUMBER — that clause names a door and a quantity, which is
+    /// the shape SPEND would have answered — or the REMOVER that OPENS THAT
+    /// CLAUSE, which is rule 5's own shape. Both are things this sentence said
+    /// first, and a ceiling in a later breath does not get to speak for them.
+    ///
+    /// THE REMOVER ARM IS ANCHORED TO ITS CLAUSE, NOT TO THE UTTERANCE. It used
+    /// to require `earlier.lowerBound == 0`, so one greeting ahead of the removal
+    /// undid the whole guard: "hey, remove instagram, no cap on tiktok" cleared
+    /// TikTok's ceiling and never removed Instagram, while the same sentence
+    /// without the "hey," removed the door correctly. The number arm beside it
+    /// never had a position lock, which is exactly why the sibling defect is
+    /// robust and this one was not. A first breath is the first breath that says
+    /// something, not the first token of the string.
+    ///
+    /// NOT SCOPED TO A DIFFERENT DOOR, which was the first cut and left the
+    /// same defect behind an alias: "give me 20 of the gram, uncap instagram"
+    /// names one door twice, and the clearing still swallowed the ask for twenty
+    /// minutes. Whether the second breath happens to spell the same app is not
+    /// what decides whether the first breath was heard.
+    ///
+    /// A cap outcome with no door — the `.silence` `capCleared` returns for two
+    /// doors in one clause — is never suppressed: that silence is a refusal, and
+    /// a refusal may not be talked out of terminating.
+    private static func anotherDoorIsClaimedEarlier(_ index: NumberParser.ClauseIndex,
+                                                    before clause: Range<Int>,
+                                                    state: PolicyState,
+                                                    door d: Door?) -> Bool {
+        guard d != nil else { return false }
+        let t = index.tokens
+        for earlier in clauseRanges(index) where earlier.upperBound <= clause.lowerBound {
+            guard doorIndex(in: earlier, of: index, state: state) != nil else { continue }
+            if earlier.contains(where: { !NumberParser.allNumbers(in: t[$0]).isEmpty }) {
+                return true
+            }
+            if capRemovers.contains(t[earlier.lowerBound]) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// The clause ranges of an utterance, in order. `ClauseIndex` hands out one
+    /// range at a time — deliberately, since a rule's question is always about a
+    /// particular token — so a rule that wants to consider every clause walks
+    /// them by jumping from one range's end to the next. No clause id is ever
+    /// read or subtracted; "two clauses apart" is the counting mistake one level
+    /// up, and the primitive withholds the number that would allow it.
+    private static func clauseRanges(_ index: NumberParser.ClauseIndex) -> [Range<Int>] {
+        var ranges: [Range<Int>] = []
+        var i = 0
+        while i < index.tokens.count, let r = index.clauseRange(containing: i) {
+            ranges.append(r)
+            i = r.upperBound
+        }
+        return ranges
+    }
+
+    /// 2.5 CAP CLEARED — "uncap tiktok", "no cap on tiktok", "remove the tiktok
+    ///     cap", "take the cap off youtube", "i dont want a limit on instagram".
+    ///
+    ///     Claimed rather than left silent, which is the important part. SILENCE
+    ///     IS NOT INERT: `AppModel.handle` hands a silent parse to the on-device
+    ///     model, whose only "less access" verb is `closeDoor` and which has no
+    ///     cap vocabulary at all — so "no cap on tiktok", a request to REMOVE a
+    ///     restriction, is a plausible instant close. A loosening answered with
+    ///     the strongest tightening in the product is the worst outcome
+    ///     available, and it is what leaving these sentences unmatched buys.
+    ///
+    ///     WITHOUT THE CLAUSE GATE this rule reads a remover in one breath and a
+    ///     ceiling in the next as one request. "drop tiktok, im at my limit" is a
+    ///     door removal and came back a cap clearing; "i want 20 of tiktok, no
+    ///     cap needed" is a spend and came back a cap clearing with the request
+    ///     for twenty minutes dropped on the floor; "no tiktok, no limits"
+    ///     refuses the app outright and came back having loosened it. All three
+    ///     are two-clause sentences whose parts were glued together by a
+    ///     tokenizer that could not see a comma.
+    private static func capCleared(_ index: NumberParser.ClauseIndex, clause: Range<Int>,
+                                   state: PolicyState) -> ParseOutcome? {
+        guard let phrase = clearingPhrase(index, clause: clause, state: state) else { return nil }
+        // A QUESTION IS NEVER A RULE CHANGE, and neither is a statement of fact.
+        // See `reportsRatherThanAsks` for the eleven sentences that reached here
+        // and left with the ceiling removed.
+        guard !reportsRatherThanAsks(index.tokens, clause: clause,
+                                     phraseStart: phrase.lowerBound,
+                                     state: state) else { return nil }
+        // AND NOTHING IS PREDICATED OF THE CEILING AFTERWARDS. "i dont want the
+        // tiktok cap removed", "…gone", "…lifted", "…touched", "…raised",
+        // "…any higher" all ask for the ceiling to STAY or to come DOWN, and
+        // every one of them cleared it: the phrase ends at the noun, and the
+        // word that says what she does not want done TO the noun trails it. A
+        // ceiling's phrase may be followed by its own prepositional tail ("a cap
+        // ON TIKTOK") and by nothing else.
+        //
+        // This is also what refuses a REMOVAL trailing the noun — "i dont want
+        // the cap off tiktok" — so `clearingPhrase` needs no separate scan for
+        // one. A remover after the head is a word after the phrase, and no
+        // remover is a noun-phrase word, so the two tests are the same test.
+        guard spansOneNounPhrase(index.tokens, phrase.upperBound + 1..<clause.upperBound,
+                                 state: state) else { return nil }
+        switch doors(in: clause, of: index, state: state) {
+        case .none:
+            return nil
+        case .several:
+            // Two doors and one clearing is the ambiguity `singleNumber` has
+            // refused for numbers since the parser shipped. Silence, never a
+            // fall-through: "no limit on tiktok or instagram" must not remove
+            // whichever ceiling was spelled first.
+            return .silence
+        case .one(let d):
+            // A SENTENCE THAT REFUSES THE APP IS NOT ASKING TO UNCAP IT. "no
+            // tiktok no limits" governs the door with its first negator; the
+            // second one governs "limits" exactly as designed, and the rule
+            // fired on a sentence whose subject is that she wants none of the
+            // app. The comma'd spelling is two clauses and never reaches here;
+            // one word should not be the difference.
+            guard !negatorStandsOnTheDoor(index, clause: clause, state: state) else { return nil }
+            // A stated new ceiling is a SET, and `capSet` below has it: "drop
+            // the tiktok limit to 20" says what the new ceiling is. That used to
+            // be a `statesANewCeiling` guard of its own and is now the number
+            // test below, because the two agreed on every sentence in the corpus
+            // and disagreed only on one: "take the cap OF 20 off tiktok" is the
+            // single shape where a preposition aims at a number INSIDE the
+            // clearing phrase, and there the number says WHICH ceiling to
+            // remove, so the guard was refusing a clearing it should have made.
+            // Two belts, one untested and one wrong where it was reachable.
+            // Every number this clause carries must lie inside the clearing
+            // phrase. A number inside identifies the ceiling being removed
+            // ("remove the 20 minute tiktok cap"); a number outside belongs to
+            // something else, which means the clause is doing two things and
+            // this rule may not answer for both.
+            guard everyNumberLiesInside(phrase, index, clause: clause) else { return nil }
+            return .command(.setDoorCap(door: d, minutes: nil))
+        }
+    }
+
+    /// The span of the phrase that asks for a ceiling to go away, or nil when
+    /// this clause is not asking. Runs from the word that removes to the ceiling
+    /// it removes, in whichever order they were said, so `capCleared` can ask
+    /// whether a number belongs to the request or to something else.
+    ///
+    /// A NEGATOR BEFORE A REMOVER CANCELS IT, and this is a property of the
+    /// clause, not a pair to add to a list. "dont remove the tiktok cap", "never
+    /// remove the tiktok cap", "dont take the cap off tiktok", "please dont drop
+    /// the tiktok limit" and "dont lift the tiktok cap" all cleared the ceiling
+    /// they were pleading for, because an earlier cut special-cased "dont" only
+    /// as the pair "dont want" and then let the next remover fire alone. Every
+    /// one of them is a LOOSENING produced by a sentence that says the opposite,
+    /// and a loosening waits for tomorrow, so the mistake also outlives the
+    /// conversation that made it.
+    ///
+    /// "dont want" survives as a remover — a negated volition IS a request for
+    /// absence — but only while what it governs is the ceiling. Where a removal
+    /// verb comes first the negation lands on the removal instead, so "i dont
+    /// want to remove the tiktok cap" declines and "i dont want any cap on
+    /// tiktok" clears. Which head follows the negator is the whole test.
+    ///
+    /// "off limits" is excluded as an ordered pair, and it is the reason this
+    /// reads positions instead of intersecting two sets. "off" removes a ceiling
+    /// and "limits" is one, but together they are English's flattest way of
+    /// saying FORBIDDEN — so "tiktok is off limits", the strongest tightening
+    /// sentence a person has words for, came back having removed the ceiling.
+    private static func clearingPhrase(_ index: NumberParser.ClauseIndex, clause: Range<Int>,
+                                       state: PolicyState) -> ClosedRange<Int>? {
+        let t = index.tokens
+        func head(after i: Int) -> Int? {
+            (i + 1..<clause.upperBound).first {
+                capRemovers.contains(t[$0]) || capNouns.contains(t[$0])
+            }
+        }
+        var phrase: ClosedRange<Int>?
+        var firstNegator: Int?
+
+        for i in clause where negators.contains(t[i]) {
+            if firstNegator == nil { firstNegator = i }
+            guard let h = head(after: i) else { continue }
+            // The negator's own object is a removal: what she is refusing is the
+            // removing, and nothing in this clause clears anything.
+            if capRemovers.contains(t[h]) { return nil }
+            let governs: Bool
+            if t[i] == "dont" || t[i] == "don't" || t[i] == "doesnt" || t[i] == "doesn't" {
+                // A NEGATED VOLITION IS A REQUEST FOR ABSENCE — but only of what
+                // the wanting takes as its object. "i dont want a cap on tiktok"
+                // wants no ceiling; "i dont want to go over my tiktok limit",
+                // "…to hit my tiktok limit", "…to blow past my instagram cap"
+                // and "i dont want a bigger tiktok limit" all want the ceiling
+                // KEPT, and every one of them removed it. The test is that
+                // everything between "want" and the ceiling belongs to the
+                // ceiling's own noun phrase: an infinitive "to", a verb, or a
+                // comparative is a predicate of its own, and the negation landed
+                // on that instead.
+                governs = i + 1 < clause.upperBound && t[i + 1] == "want"
+                    && spansOneNounPhrase(t, i + 2..<h, state: state)
+            } else if nounNegators.contains(t[i]) {
+                // A bare negator is a DETERMINER: it governs the noun phrase it
+                // opens and nothing else. So it governs the ceiling word only
+                // while the ceiling word is inside that phrase, and two things
+                // say it is not — a SECOND DETERMINER, which opens a phrase of
+                // its own, and a DOOR, which is a noun of its own.
+                //
+                // "no daily limit on tiktok" reaches its noun across an
+                // adjective and clears. "do not take the cap off tiktok" is
+                // pleading for the ceiling to stay, and its "the" says the "not"
+                // landed on the verb; without that test the negator cancelled
+                // the remover and then cleared the ceiling by itself — a
+                // loosening out of a sentence begging for the opposite. "no
+                // tiktok without a limit" is a demand FOR a ceiling, and the
+                // door in between says which noun the "no" landed on.
+                //
+                // Structure, not a token count: an earlier cut asked for the
+                // noun within two tokens, which is the same measurement that
+                // failed three times and which reads "no daily limit" and "not
+                // take the" as the same shape.
+                //
+                // The noun-phrase test rides alongside rather than replacing
+                // those two: it is the same question asked of every OTHER word
+                // in between, and a word that cannot stand inside a noun phrase
+                // says the negator's phrase ended before the ceiling did.
+                governs = !(i + 1..<h).contains { j in
+                    determiners.contains(t[j])
+                        || door(t[j], in: state) != nil
+                        || (j + 1 < clause.upperBound && door(t[j] + " " + t[j + 1], in: state) != nil)
+                } && spansOneNounPhrase(t, i + 1..<h, state: state)
+            } else {
+                governs = false
+            }
+            if governs, phrase == nil { phrase = i...h }
+        }
+
+        for i in clause where capRemovers.contains(t[i]) {
+            // A remover under a negator has already been refused above; a
+            // remover anywhere after one is refused here, and the cost of being
+            // wrong is silence, which is the direction this rule must fail in.
+            if let n = firstNegator, i > n { continue }
+            if t[i] == "uncap" || t[i] == "uncapped" {
+                if phrase == nil { phrase = i...i }
+                continue
+            }
+            // The one pair whose halves reverse each other.
+            if t[i] == "off", i + 1 < clause.upperBound, capNouns.contains(t[i + 1]) { continue }
+            guard let noun = clause.first(where: { capNouns.contains(t[$0]) }) else { continue }
+            // AND THE CEILING MUST BE WHAT THE REMOVER IS MOVING. This arm asked
+            // only whether a cap noun existed ANYWHERE in the clause, so "off"
+            // plus a "limit" in a different predicate read as one noun phrase:
+            // "turn off tiktok im at my limit", "keep tiktok off until i hit my
+            // limit", "cut tiktok off im at my cap" and nine more ask for the
+            // APP to be shut and name the ceiling as the REASON — and every one
+            // of them removed the ceiling instead, a parked loosening out of the
+            // tightest thing the user could have said. The comma'd spelling of
+            // each already declined, and one comma may not be the difference
+            // between closing a door and loosening it.
+            //
+            // The test is the words in between: "remove [the tiktok cap]" is one
+            // phrase, and "off tiktok — im at my limit" is not, because "im",
+            // "ive", "its" and "until" cannot stand inside a noun phrase.
+            // `nounPhraseStart` already walks the noun-before-remover direction;
+            // this is the direction that had no test at all.
+            guard spansOneNounPhrase(t, min(i, noun) + 1..<max(i, noun), state: state)
+            else { continue }
+            if phrase == nil {
+                phrase = nounPhraseStart(t, clause: clause, noun: noun, remover: i)...max(i, noun)
+            }
+        }
+        return phrase
+    }
+
+    /// Where the ceiling's own noun phrase starts, when the remover TRAILS it —
+    /// "take [the 20 minute cap] off tiktok". The number in that shape is a
+    /// premodifier naming which ceiling, and a phrase that began at the noun
+    /// would leave it outside and decline a real clearing.
+    ///
+    /// A noun phrase starts at its determiner, so this walks back to one rather
+    /// than counting tokens: an earlier cut reached back a fixed two, which is
+    /// the same measurement this file is rebuilding to avoid. The walk stops at
+    /// an ask verb or another remover, because neither can stand inside the noun
+    /// phrase, and it never leaves the clause.
+    private static func nounPhraseStart(_ t: [String], clause: Range<Int>,
+                                        noun: Int, remover: Int) -> Int {
+        guard noun < remover else { return min(noun, remover) }
+        var j = noun
+        while j > clause.lowerBound {
+            j -= 1
+            if determiners.contains(t[j]) { return j }
+            if capRemovers.contains(t[j]) || askVerbs.contains(t[j]) { return j + 1 }
+        }
+        return clause.lowerBound
+    }
+
+    /// Whether a bare negator stands directly ON the door — "no tiktok", "not
+    /// tiktok". Adjacency, which is the shape of a determiner on its noun, and
+    /// not a window: a negator two or three words off is governing something
+    /// else.
+    private static func negatorStandsOnTheDoor(_ index: NumberParser.ClauseIndex,
+                                               clause: Range<Int>, state: PolicyState) -> Bool {
+        guard let d = doorIndex(in: clause, of: index, state: state), d > clause.lowerBound
+        else { return false }
+        return nounNegators.contains(index.tokens[d - 1])
+    }
+
+    /// Whether a number in this clause is the TARGET of a ceiling preposition —
+    /// "cap tiktok AT 20", "drop the tiktok limit TO 20", "a limit OF 20". The
+    /// preposition is what makes a number a new ceiling; a number merely present
+    /// is a premodifier, a reason, a count or a date.
+    private static func statesANewCeiling(_ index: NumberParser.ClauseIndex,
+                                          clause: Range<Int>) -> Bool {
+        let t = index.tokens
+        return clause.contains { i in
+            i > clause.lowerBound && ceilingPrepositions.contains(t[i - 1])
+                && !NumberParser.allNumbers(in: t[i]).isEmpty
+        }
+    }
+
+    /// The same question asked of whichever clause names the door — rule 5's
+    /// second guard, and the one that is load-bearing: "drop tiktok to 20" is
+    /// somebody lowering a ceiling with the noun elided, and no cap rule above
+    /// can read it, so without this the sentence deleted the door.
+    ///
+    /// What makes it a ceiling is the PREPOSITION aimed at the number, and
+    /// nothing else. Written as "a number anywhere in the sentence" the guard
+    /// declined on any digit at all, and "drop instagram for good, ive wasted 3
+    /// hours today", "remove youtube, i have 2 too many" and "remove instagram
+    /// after 5 years" fell through to SPEND and GRANTED the doors the user asked
+    /// to delete. Scoped to the door's clause for the same reason the cap-noun
+    /// guard is — a number in a second breath is a reason, not a target — which
+    /// costs nothing and makes the two guards read the same way.
+    ///
+    /// AND TO THE DOOR BEING REMOVED. Both guards walked every clause for one
+    /// naming ANY door, so a ceiling stated about a SECOND app refused the
+    /// removal of the first: "remove reddit, tiktok is my limit" is an
+    /// unambiguous door removal with a reason attached, and it compiled to
+    /// nothing. The guard's own comment claimed it was the door's clause; it was
+    /// any door's clause. Rule 5 knows which door it matched, so it says so.
+    private static func doorsClauseStatesANewCeiling(_ index: NumberParser.ClauseIndex,
+                                                     state: PolicyState, door d: Door) -> Bool {
+        clauseRanges(index).contains { clause in
+            clauseNames(d, in: clause, of: index, state: state)
+                && statesANewCeiling(index, clause: clause)
+        }
+    }
+
+    /// Whether this clause names THIS door, matched exactly as every other door
+    /// recognizer here matches, so they cannot disagree. A clause naming two
+    /// doors names both: the question is about one of them, not about how many.
+    private static func clauseNames(_ d: Door, in clause: Range<Int>,
+                                    of index: NumberParser.ClauseIndex,
+                                    state: PolicyState) -> Bool {
+        let t = index.tokens
+        return clause.contains { i in
+            if door(t[i], in: state)?.id == d.id { return true }
+            return i + 1 < clause.upperBound && door(t[i] + " " + t[i + 1], in: state)?.id == d.id
+        }
+    }
+
+    /// Whether every number this clause carries lies inside the clearing phrase.
+    private static func everyNumberLiesInside(_ phrase: ClosedRange<Int>,
+                                              _ index: NumberParser.ClauseIndex,
+                                              clause: Range<Int>) -> Bool {
+        let t = index.tokens
+        return !clause.contains { i in
+            !phrase.contains(i) && !NumberParser.allNumbers(in: t[i]).isEmpty
+        }
+    }
+
+    /// 4.5 CAP SET — "cap tiktok at 20", "limit tiktok to 20", "tiktok max 20",
+    ///     "20 minute limit on tiktok", "at most 20 of tiktok", "keep tiktok
+    ///     under 20" — and the habitual sentences that name no ceiling word at
+    ///     all: "tiktok 20 a day", "make my instagram 15 min a day", "an hour a
+    ///     day of tiktok".
+    ///
+    ///     Every one of the first group compiled to a GRANT before this rule
+    ///     existed: rule 7 fires on a door plus one number, so a sentence asking
+    ///     to TIGHTEN a door spent the shared budget and unshielded the app,
+    ///     with no recovery — the parse is non-silent, so the widener never
+    ///     runs. Dormant only because nobody says "cap tiktok" to a Silk with no
+    ///     caps; this feature manufactures the utterance and Settings prints the
+    ///     word on a row.
+    ///
+    ///     WITHOUT THE CLAUSE GATE the two shapes read across a boundary in both
+    ///     directions. "tiktok is capped, give me 20 minutes" took its ceiling
+    ///     word and door from one breath and its number from the next, and
+    ///     answered a spend with a cap. "make it 30 a day, instagram is killing
+    ///     me" is a budget move whose door is commentary in a second clause, and
+    ///     the habitual shape read it as an instant per-door tighten under a
+    ///     reply saying the pool was unchanged — it collided EXACTLY with the
+    ///     widest real cap sentence when measured by distance, three tokens
+    ///     each, which is how the measurement was proved unfixable.
+    private static func capSet(_ index: NumberParser.ClauseIndex, clause: Range<Int>,
+                               state: PolicyState, text: String) -> ParseOutcome? {
+        let t = index.tokens
+        guard let doorAt = doorIndex(in: clause, of: index, state: state) else { return nil }
+
+        // The clause reads its OWN numbers. Asking the whole utterance would put
+        // "im at 9. cap tiktok at 20" — two numbers, two breaths — beyond every
+        // rule here, and would hand a clause its neighbour's quantity.
+        let numbers = NumberParser.allNumbers(in: t[clause].joined(separator: " "))
+        // Where the number STANDS, when it stands anywhere: a number the reader
+        // only finds through an idiom ("an hour a day") occupies no token, so
+        // the tests below fall back to the door. Guessing a position for it
+        // would be guessing.
+        let numberAt = clause.first { !NumberParser.allNumbers(in: t[$0]).isEmpty }
+        let lexeme = capLexemeIndex(t, in: clause)
+
+        // Shape one: the clause states a ceiling word, and that word LEADS what
+        // it bounds.
+        //
+        // POSITION is what separates a ceiling from a hedge, not politeness.
+        // Every cap phrasing states the ceiling word first — before the number
+        // ("cap tiktok at 20") or, when the number opens the sentence, before
+        // the door it governs ("20 minute limit ON tiktok"). Every hedged spend
+        // states it last: "20 minutes of tiktok max", "i need 20 minutes of
+        // tiktok max" and "tiktok for 20 minutes max" are the hot path with a
+        // qualifier trailing the ask, and reading them as rules gave the user a
+        // permanent daily ceiling and no open app. A list of opening frames
+        // could tell them apart in neither direction: "i need" was never on it
+        // and "can i" was, so a hedge became a rule and "can i cap tiktok at 20"
+        // became a grant — the very defect this rule exists to kill.
+        var shaped = false
+        // Leading the NUMBER is the ordinary shape; leading the DOOR is the
+        // shape a number that opens the sentence forces ("20 minute limit ON
+        // tiktok"). With no number in the clause at all — an idiom's quantity
+        // occupies no token — the door is what is left to lead.
+        let leadsTheNumber = lexeme.flatMap { l in numberAt.map { l < $0 } } ?? false
+        // The door-leading disjunct is for cap NOUNS ONLY, and both halves of
+        // that are paid for.
+        //
+        // A QUANTIFIER cannot lead by standing before the door when the number
+        // already stood before IT: "20 minutes max on tiktok" and "20 minutes of
+        // tiktok max" are the same sentence with the hedge in a different place,
+        // and the first compiled to a permanent ceiling with no grant and no
+        // open app — against a capped door, to a parked RAISE, so the hot-path
+        // ask returned nothing at all. A cap noun still leads a door it precedes,
+        // which is what "20 minute limit ON tiktok" is.
+        //
+        // AND THE CLAUSE MUST CARRY A NUMBER. Without this, any clause where a
+        // ceiling word merely preceded a door name was declared shaped, failed
+        // `numbers.count == 1` with zero of them, and returned the TERMINATING
+        // `.silence` — so "im at my limit on tiktok, give me 20 minutes" and 158
+        // sentences like it lost the grant that is README rule 1, and "i want a
+        // limit on tiktok" lost the "How long?" that rule 8 exists to give. A
+        // clause that states no number has PROPOSED nothing. The idiom case is
+        // why the test is on `numbers` and not on `numberAt`: "cap tiktok at an
+        // hour" has a quantity and no token holding it.
+        let leadsTheDoor = lexeme.map { l in
+            l < doorAt && !numbers.isEmpty && capNouns.contains(t[l])
+        } ?? false
+        if let lexeme, leadsTheNumber || leadsTheDoor {
+            // AND NOTHING STARTS A NEW PREDICATE BETWEEN THEM. Leading is not
+            // government: "ive hit my limit give me 20 of tiktok" opens with a
+            // ceiling word that governs nothing — it is commentary about why she
+            // is asking — and it leads the number, so the hot path compiled to a
+            // permanent ceiling and the app never opened. The comma'd spelling
+            // is two clauses and the gate has it; this is the same sentence
+            // typed without the comma, where the word standing between the
+            // ceiling word and its number is what says the two belong to
+            // different predicates.
+            //
+            // An ask verb was the only one tested, which reads that sentence and
+            // not its mirror: "give me 20 minutes im at my limit on tiktok"
+            // puts the ask FIRST, so the ask verb is outside the span and the
+            // trailing commentary took the sentence — a lost grant, and against
+            // a capped door a parked raise. A SUBJECT and a DETERMINER say the
+            // same thing an ask verb says: "im", "theres" and "the" each open a
+            // predicate or a phrase of their own, and a ceiling word cannot
+            // reach across one to the number it bounds. All three are closed
+            // classes, and all three are the same question — is there a
+            // boundary in here — rather than three separate exceptions.
+            //
+            // A bounded scan between two positions the clause already gave, not
+            // a threshold: the range is whatever the sentence put between them.
+            // Well-formed by the condition above — entering here requires the
+            // ceiling word to lead one of the two, so the pair never coincides,
+            // which matters because a user may name a door "Max" or "Limit" and
+            // an inverted range traps.
+            let reach = numberAt ?? doorAt
+            let intervenes = (min(lexeme, reach) + 1..<max(lexeme, reach)).contains {
+                askVerbs.contains(t[$0]) || subjects.contains(t[$0])
+                    || determiners.contains(t[$0])
+            }
+            // A BARE QUANTIFIER inside a request to be let in is a quantifier on
+            // the ask, not a rule about tomorrow: "give me under 20 of tiktok"
+            // is a spend. A cap NOUN outranks the frame, the same way "stop
+            // letting" outranks the opener veto in `hasClosingVerb` — "cap" is
+            // the sentence's own noun and no politeness around it makes it an
+            // ask. With a period word the sentence is habitual and the
+            // quantifier bounds the habit, so the veto lifts: "give me 60 a day
+            // max on tiktok" states a daily maximum.
+            //
+            // The frame is read as TOKENS IN THIS CLAUSE, which is the whole
+            // repair. `hasOpeningVerb` is six phrases matched against the whole
+            // utterance, and the comment eight lines above says a frame list
+            // "could tell them apart in neither direction: 'i need' was never on
+            // it" — and then the code used one, so "i need under 20 of tiktok"
+            // and "gimme under 20 of tiktok" compiled to ceilings while "give me
+            // under 20 of tiktok" spent. Reading the whole text was the second
+            // bug in the same line: a "give me" in a DIFFERENT clause vetoed the
+            // rule, so "tiktok max 20, give me instagram" granted twenty minutes
+            // of the door it was asked to cap. `askVerbs` is the same lexicon
+            // this file already owns, as tokens, which is what can say where a
+            // verb stands.
+            let hedged = isQuantifier(t, at: lexeme)
+                && clause.contains { askVerbs.contains(t[$0]) }
+                && !periodPhrase(t, in: clause)
+            // A CLAUSE LED BY A REMOVER HAS STATED A REMOVAL, NOT A CEILING.
+            // "drop instagram ive hit my limit 20 times" opens with rule 5's own
+            // verb, names the door it wants deleted, and then says how many
+            // times she hit the ceiling — and the count became the ceiling, on
+            // the door she asked to delete, which against a capped Instagram is
+            // a parked RAISE. The comma'd spelling removes the door. What says
+            // the ceiling is not what "drop" is moving is the same question
+            // `clearingPhrase` asks of its own remover: the words in between —
+            // "ive" cannot stand inside a noun phrase, so "my limit" is a second
+            // predicate and not the opener's object.
+            let led = clause.lowerBound
+            let removerLeads = capRemovers.contains(t[led])
+                && !spansOneNounPhrase(t, min(led, lexeme) + 1..<max(led, lexeme), state: state)
+            if !intervenes && !hedged && !removerLeads {
+                shaped = true
+            }
+        }
+        // Shape two: the habitual sentence, which names a period and a door and
+        // needs no ceiling word — "tiktok 20 a day". Naming the POOL takes it
+        // back, however close the door stands: "budget of 40 for instagram" is
+        // 40 minutes of budget.
+        //
+        // AND THE DOOR MUST BE A TOPIC RATHER THAN A SUBJECT. This shape names
+        // no ceiling word at all, so the only thing making it a rule is the bare
+        // apposition of a door and a daily quantity — "tiktok 20 a day". Let the
+        // door take a predicate of its own and the same tokens are a REPORT
+        // about what the app does: "tiktok takes 30 minutes a day" and "30
+        // minutes a day on tiktok is too much" both wrote the very number they
+        // complain about as a ceiling, and the second says in words that thirty
+        // is the wrong one. The test is the word standing directly after the
+        // door, asked with the noun-phrase whitelist every other rule here uses,
+        // so an unrecognised word declines.
+        if periodPhrase(t, in: clause), numbers.count == 1, !t.contains("budget"),
+           doorIsATopic(t, clause: clause, doorAt: doorAt, state: state) {
+            shaped = true
+        }
+        guard shaped else { return nil }
+
+        // A NEGATOR REFUSING THE CEILING WRITES NO CEILING. `negators` was read
+        // by the clearing rule and by nothing else, so "dont cap tiktok at 20",
+        // "never limit tiktok to 20" and "i dont want tiktok capped at 20" wrote
+        // the ceiling the sentence refuses — against a capped door a parked
+        // RAISE, which is the forbidden direction, and against an uncapped one
+        // an instant tighten out of a refusal. Symmetry with the clearing rule
+        // is the point: a negator is a property of the clause that reverses one,
+        // whichever rule it lands in.
+        //
+        // BELOW THE SHAPE TESTS, which is the repair. The scan used to sit
+        // inside shape one's `if let lexeme` arm, so the habitual shape — which
+        // by construction has no ceiling word — could never reach it: "dont give
+        // me 30 a day on tiktok", "i cant do 30 minutes a day on tiktok" and
+        // sixteen more wrote a ceiling out of a refusal, while the identical
+        // sentence WITH a cap noun ("dont cap tiktok at 30 a day") was correctly
+        // silent. Whether a ceiling word happens to be spelled is not what
+        // decides whether a sentence is negated.
+        //
+        // The scan runs to whichever of the three the clause led with, so it
+        // reads the words that stand before the proposal and no others: a
+        // negator after it belongs to something else.
+        //
+        // "no more than 20 of tiktok a day" is the one carve-out, and it is the
+        // same one `hasClosingVerb` already makes with its "no more than" strip:
+        // there the "no" belongs to the quantifier and bounds the ask rather
+        // than refusing it.
+        //
+        // `.silence` rather than a decline, because declining walks into SPEND
+        // and buys the app the sentence was trying to restrict.
+        let phraseStart = lexeme ?? numberAt ?? doorAt
+        let refused = (clause.lowerBound..<phraseStart).contains { i in
+            guard negators.contains(t[i]) else { return false }
+            return !(t[i] == "no" && i + 2 < clause.upperBound
+                     && t[i + 1] == "more" && t[i + 2] == "than")
+        }
+        if refused { return .silence }
+
+        // A REPORT IS NOT AN INSTRUCTION. See `reportsRatherThanSets` — the
+        // mirror of the gate `capCleared` already had, and the one this rule
+        // never got.
+        //
+        // WHAT IT COSTS, measured rather than discovered later: a report is
+        // still a sentence naming a door and a number, so a mood refusal that
+        // DECLINED would walk into SPEND and buy the app the sentence was only
+        // describing. It terminates instead. Over a 1,942-sentence sweep the
+        // gate turns 498 ceilings into silence, and 294 of those are sentences
+        // `main` answered with a GRANT — that is the price, and it is the
+        // doctrinally right one: silence reaches the widener, which per §5.7 can
+        // produce neither a cap nor a deletion, and a grant out of a report
+        // cannot be taken back. Zero of the 498 become grants.
+        if reportsRatherThanSets(t, clause: clause, phraseStart: numberAt ?? doorAt,
+                                 state: state) {
+            return .silence
+        }
+
+        // A NUMBER THAT IS NOT A COUNT OF MINUTES WRITES NO CEILING. Per-app
+        // schedules are out of scope, so "cap tiktok at 10 pm" has no
+        // compilation — and it must not acquire one by falling through either.
+        // As a guard in a condition list it did exactly that: the sentence
+        // declined the rule and landed on SPEND, buying ten minutes of the app
+        // it was trying to put on a schedule. Silence is the honest compilation
+        // of a sentence with no compilation.
+        if numberIsNotMinutes(t, in: clause) { return .silence }
+
+        guard case .one(let d) = doors(in: clause, of: index, state: state) else {
+            // Two doors and one ceiling. Falling through answered it by debiting
+            // the pool and unshielding whichever name was spelled first — a
+            // grant, out of a sentence asking to tighten two doors. Silence
+            // reaches the widener, which cannot produce a cap at all (§5.7) and
+            // so cannot get the door wrong either.
+            return .silence
+        }
+        // TWO numbers state no ceiling this rule can write. "drop the tiktok
+        // limit from 30 to 20" is the natural way to say LOWER MY CAP and names
+        // its ceiling twice; the honest answer is nothing, and it may not be a
+        // grant, so the silence terminates.
+        //
+        // ZERO is unreachable and deliberately so: every shape above now
+        // requires the clause to carry a number. It reached here before, and the
+        // blanket silence it got was a veto over the whole utterance — a clause
+        // that merely MENTIONS a ceiling proposed nothing, and killing the
+        // sentence for it cost the spend in the next breath and the "How long?"
+        // in rule 8. The guard keeps the `count == 1` form rather than testing
+        // `> 1`, so that a future shape which forgets to require a number fails
+        // silent rather than crashing on `numbers.first`.
+        guard numbers.count == 1, let n = numbers.first else { return .silence }
+        return .command(.setDoorCap(door: d, minutes: n))
+    }
+
+    /// Where the ceiling word stands in a clause, or nil when the clause names
+    /// none. "at most" is a pair rather than a token because neither word means
+    /// anything alone — "at" is how the clock sentences state an hour ("cap
+    /// tiktok at 9:30"), and "most" is not a quantity.
+    private static func capLexemeIndex(_ t: [String], in clause: Range<Int>) -> Int? {
+        clause.first { i in
+            capNouns.contains(t[i]) || capQuantifiers.contains(t[i])
+                || (t[i] == "at" && i + 1 < clause.upperBound && t[i + 1] == "most")
+        }
+    }
+
+    private static func isQuantifier(_ t: [String], at i: Int) -> Bool {
+        capQuantifiers.contains(t[i]) || t[i] == "at"
+    }
+
+    /// Whether the door is named as a TOPIC rather than as the subject of a
+    /// predicate — the habitual shape's own question. "tiktok 20 a day" puts a
+    /// door and a daily quantity side by side and nothing else; "tiktok takes 30
+    /// minutes a day" makes the door the subject of a verb and reports what the
+    /// app does with her day.
+    ///
+    /// A TOPIC LEADS ITS CLAUSE, which is what scopes this question. A door
+    /// standing anywhere else is the object of something — "20 a day on tiktok",
+    /// "give me 60 a day max on tiktok and thats it" — and what follows it there
+    /// is another phrase rather than its predicate. Asked of every door instead,
+    /// a trailing coordinate clause read as a predicate and cost two pinned
+    /// ceilings.
+    ///
+    /// Then adjacency, which is what a topic has, and the noun-phrase whitelist,
+    /// which is what says the next word continues the phrase instead of
+    /// predicating something of it. A door at the end of its clause predicates
+    /// nothing by construction and answers yes.
+    private static func doorIsATopic(_ t: [String], clause: Range<Int>, doorAt: Int,
+                                     state: PolicyState) -> Bool {
+        guard doorAt == clause.lowerBound else { return true }
+        var after = doorAt + 1
+        // The possessive's orphan. "tiktok's" reaches here as ["tiktok", "s"] —
+        // the tokenizer splits on the apostrophe — and that "s" is the door's
+        // own name continuing, not a predicate of it. Without this, "tiktok's 20
+        // a day" declined while "tiktoks 20 a day" compiled, which is the
+        // apostrophe disagreement `door(_:in:)` deinflects to prevent.
+        if after < clause.upperBound, t[after] == "s" { after += 1 }
+        guard after < clause.upperBound else { return true }
+        return isNounPhraseWord(t, after, state: state)
+            || capNouns.contains(t[after]) || capQuantifiers.contains(t[after])
+    }
+
+    /// Whether a number in this clause is something other than a count of
+    /// minutes — a clock hour, or a duration stated in hours. Either way this
+    /// rule cannot write it, and the answer is silence rather than a ceiling
+    /// off by a factor of sixty or by half a day.
+    ///
+    /// A bare number after "at" is a DURATION — "cap tiktok at 20" is the
+    /// canonical sentence and "at" is its preposition — so only a meridiem, a
+    /// clock word or a boundary word makes an hour. The cost is disclosed rather
+    /// than hidden: against a TikTok capped at 10, "cap tiktok at 11" is a
+    /// parked raise with a row on Now and an Undo on the toast.
+    ///
+    /// THE MERIDIEM IS TESTED IN BOTH SPELLINGS THE TOKENIZER PRODUCES. "10 pm"
+    /// is one token and "10 p.m." is the pair ["p", "m"] — the abbreviation's
+    /// dots are separators — so a test written as `t[i + 1] == "pm"` missed the
+    /// most common WRITTEN form and installed a ten-minute-a-day ceiling,
+    /// instantly and permanently, from a sentence naming an hour of the evening.
+    /// `NumberParser.statedTime` rewrites "p.m." to "pm" before it reads a clock
+    /// for exactly this reason (NumberParser.swift); the clause index works in
+    /// tokens, so the same fact is spelled here in tokens.
+    ///
+    /// HOURS ARE NOT MINUTES. `allNumbers` knows the idioms "an hour" and "half
+    /// an hour" and reads a digit before "hours" as the digit, so "cap tiktok at
+    /// 2 hours" wrote a TWO-MINUTE daily ceiling — sixty times too tight, on the
+    /// tightening side, and permanent where the old misreading was a two-minute
+    /// grant spent by dinner. The idiom shapes are untouched: "an hour" holds
+    /// its quantity in no token at all, so nothing here can see it to refuse.
+    private static func numberIsNotMinutes(_ t: [String], in clause: Range<Int>) -> Bool {
+        let boundaries: Set<String> = ["after", "until", "untill", "till", "til"]
+        let clockWords: Set<String> = ["am", "pm", "oclock", "clock", "noon", "midnight",
+                                       "tonight", "morning", "evening", "afternoon"]
+        let hourWords: Set<String> = ["hour", "hours", "hr", "hrs"]
+        for i in clause where !NumberParser.allNumbers(in: t[i]).isEmpty {
+            if i > clause.lowerBound, boundaries.contains(t[i - 1]) { return true }
+            // The abbreviated meridiem, as its two tokens. "9 a day" is not one:
+            // the "a" has to be followed by the "m".
+            if i + 2 < clause.upperBound, t[i + 1] == "p" || t[i + 1] == "a", t[i + 2] == "m" {
+                return true
+            }
+            // An hours unit must stand ON the number; a clock word may hang off
+            // a preposition ("cap tiktok at 10 in the evening"), so it is looked
+            // for anywhere after the number this clause is about.
+            if i + 1 < clause.upperBound, hourWords.contains(t[i + 1]) { return true }
+            if (i + 1..<clause.upperBound).contains(where: { clockWords.contains(t[$0]) }) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Whether the clause carrying the sentence's first number also names a
+    /// door. Rule 3's last guard, and the reason the pool does not move on a
+    /// sentence about one app.
+    ///
+    /// A number with no token position — an idiom's — cannot be placed in a
+    /// clause, so this answers no and the sentence keeps today's budget reading.
+    private static func numberClauseNamesADoor(_ index: NumberParser.ClauseIndex,
+                                               state: PolicyState) -> Bool {
+        let t = index.tokens
+        guard let at = t.indices.first(where: { !NumberParser.allNumbers(in: t[$0]).isEmpty }),
+              let clause = index.clauseRange(containing: at)
+        else { return false }
+        if case .none = doors(in: clause, of: index, state: state) { return false }
+        return true
+    }
+
+    /// Whether some clause states a ceiling word LEADING a door and carries no
+    /// number of its own — "cap tiktok" in "cap tiktok so i only get 20 a day",
+    /// where the clause opener took the number into the next breath.
+    ///
+    /// Rule 3's second guard. It asks `capSet`'s own shape-one question, minus
+    /// the number that rule needs, which is the point: a clause with that shape
+    /// has proposed a ceiling nobody can resolve, and the pool is not what it
+    /// proposed.
+    ///
+    /// AND THE CEILING WORD MUST BE THE CLAUSE'S OWN FIRST WORD. The one
+    /// sentence justifying this guard is "cap tiktok so i only get 20 a day",
+    /// where the ceiling word is the clause's imperative VERB — that is what
+    /// proposes a ceiling the grammar cannot resolve. Written as "a ceiling word
+    /// before a door in any clause" it also read commentary: "make it 30 a day,
+    /// the limit on tiktok is killing me" states a budget in its first breath
+    /// and names the ceiling as the reason in its second, and it lost the budget
+    /// move that the near-identical "make it 30 a day, tiktok is my limit" — a
+    /// pinned row — still gets. A ceiling word inside a noun phrase governs that
+    /// phrase, not the sentence.
+    private static func aCeilingLeadsADoorWithNoNumber(_ index: NumberParser.ClauseIndex,
+                                                       state: PolicyState) -> Bool {
+        let t = index.tokens
+        return clauseRanges(index).contains { clause in
+            guard let doorAt = doorIndex(in: clause, of: index, state: state),
+                  let lexeme = capLexemeIndex(t, in: clause), lexeme < doorAt,
+                  lexeme == clause.lowerBound
+            else { return false }
+            return NumberParser.allNumbers(in: t[clause].joined(separator: " ")).isEmpty
+        }
+    }
+
+    /// Whether a ceiling NOUN stands in the same clause as a door — rule 5's
+    /// guard, and the invariant suite's filter.
+    ///
+    /// `internal` for the same reason `hasClosingVerb` is: the property test
+    /// asks the parser which sentences it considers cap-shaped rather than
+    /// restating the lexicon, because a second copy drifts and then the property
+    /// proved is not the property that ships.
+    static func capNounSharesTheDoorsClause(_ text: String, state: PolicyState) -> Bool {
+        capNounSharesTheDoorsClause(NumberParser.ClauseIndex(text), state: state)
+    }
+
+    /// The same question asked of ONE door — the door rule 5 matched, which is
+    /// the only one whose deletion is at stake. See
+    /// `doorsClauseStatesANewCeiling` for the sentence that forced the scoping.
+    static func capNounSharesTheDoorsClause(_ text: String, state: PolicyState,
+                                            door d: Door) -> Bool {
+        capNounSharesTheDoorsClause(NumberParser.ClauseIndex(text), state: state, door: d)
+    }
+
+    private static func capNounSharesTheDoorsClause(_ index: NumberParser.ClauseIndex,
+                                                    state: PolicyState) -> Bool {
+        let t = index.tokens
+        return clauseRanges(index).contains { clause in
+            guard doorIndex(in: clause, of: index, state: state) != nil else { return false }
+            return clause.contains { capNouns.contains(t[$0]) }
+        }
+    }
+
+    private static func capNounSharesTheDoorsClause(_ index: NumberParser.ClauseIndex,
+                                                    state: PolicyState, door d: Door) -> Bool {
+        let t = index.tokens
+        return clauseRanges(index).contains { clause in
+            guard clauseNames(d, in: clause, of: index, state: state) else { return false }
+            return clause.contains { capNouns.contains(t[$0]) }
+        }
+    }
+
+    // MARK: - Recognizers
+
+    /// Internal rather than private so the invariant suite can ask the parser
+    /// which sentences it considers closes, instead of restating the list and
+    /// drifting from it — the same reason `isStart` asks `readsAsHour` rather
+    /// than repeating the number reader's rules.
+    static func hasClosingVerb(_ text: String) -> Bool {
         // Exactly two closer phrases embed an opener word, and only those may
         // outrank the opener veto: "stop letting me OPEN instagram" is a
         // close the veto must not see first. The rest stay behind the veto,

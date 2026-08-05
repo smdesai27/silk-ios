@@ -14,6 +14,26 @@ import FoundationModels
 ///  - greedy sampling (same words → same instruction, byte-identical)
 ///  - the door field is constrained to the user's actual doors via the schema
 ///  - unavailable model = silence; the app is complete without it
+///
+/// **`ModelAction` carries no cap verb, and that is a decision rather than an
+/// omission** (docs/design/per-app-caps.md §5.7). `map` switches over
+/// `ModelAction`, not over `Command`, so `Command.setDoorCap` compiled silently
+/// here the day it was added and this widener is structurally incapable of
+/// producing one. Three reasons it stays that way: the model's whole vocabulary
+/// is DIRECTION — "more access" is spend, "less access" is closeDoor — and a
+/// ceiling is neither; a hallucinated `(door, minutes)` pair writes into a keyed
+/// map with no hero number anywhere on screen to contradict it; and a fabricated
+/// LOW cap would silently shorten every future grant on that door through the
+/// Validator's clamp, with no sentence to point at.
+///
+/// The consequence, stated out loud rather than discovered: a cap sentence the
+/// deterministic grammar does not claim reaches this parser, which will answer
+/// it as a spend or as out-of-scope. That is acceptable for the set-shaped and
+/// ask-shaped sentences — the wrong answer is a bounded grant, spent by dinner —
+/// and it is precisely why the grammar claims the CLEARING sentences itself.
+/// There the wrong answer would be "less access", an instant close, in reply to
+/// a request to REMOVE a restriction: the loosest sentence in the product
+/// answered with the tightest thing in it.
 enum SilkModelParser {
 
     static func parse(_ utterance: String, state: PolicyState) async -> ParseOutcome {
