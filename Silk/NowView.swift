@@ -32,7 +32,7 @@ struct NowView: View {
             column
                 .scaleEffect(scale, anchor: .top)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .animation(Silk.motion(0.45), value: model.pendingLoosening != nil)
+                .animation(Silk.motion(0.45), value: pendingSummary)
                 .animation(Silk.motion(0.45), value: model.wallDown)
         }
         // The re-arm picker (docs/market/gaps.md #5) used to be presented
@@ -44,10 +44,26 @@ struct NowView: View {
     /// Bar bottom 44 + bar height 52.
     private static let chromeReserve: CGFloat = 96
 
+    /// What the pending row will actually say, or nil when it will draw nothing.
+    /// The reservation below, the animation above and the row itself all ask
+    /// this one question: keying the first two on `pendingLoosening != nil`
+    /// reserved 62pt for a row that the summary had already taken away. Rare
+    /// before caps and ordinary with them — park a cap raise, then lower that
+    /// cap before the boundary, and the merge delivers nothing while the pending
+    /// waits.
+    ///
+    /// Asking it three times a body pass costs nothing: the merge runs against a
+    /// baseline the model holds in memory, not against an App Group read and a
+    /// JSON decode. (It did, briefly, and `columnHeight` re-runs on every
+    /// GeometryReader layout.)
+    private var pendingSummary: String? {
+        model.pendingLoosening.flatMap { model.pendingSummary($0) }
+    }
+
     /// 62 + wordmark 13 + 32 + greeting 25 + 22 + hero 232 + 40, then 52 a door.
     private var columnHeight: CGFloat {
         let fixed: CGFloat = 62 + 13 + 32 + 25 + 22 + 232 + 40
-        let pending: CGFloat = model.pendingLoosening == nil ? 0 : 62
+        let pending: CGFloat = pendingSummary == nil ? 0 : 62
         let wall: CGFloat = model.wallDown ? 62 : 0
         return fixed + pending + wall + CGFloat(model.policy.doors.count) * 52
     }
@@ -157,17 +173,28 @@ struct NowView: View {
         // sentence proposed has been overtaken by a tighten since. The row goes
         // with it, and so does the key button: an offer that cannot be honoured
         // is worse than no offer, and tapping it would spend the key on a no-op.
-        if let pending = model.pendingLoosening, let summary = model.pendingSummary(pending) {
+        if let summary = pendingSummary {
             HStack(spacing: 4) {
                 Text(SilkStrings.tomorrow)
                     .font(Silk.sans(15))
                     .tracking(Silk.track(-0.005, 15))
                     .foregroundStyle(night ? Silk.paperAlpha(0.36) : Silk.inkAlpha(0.70))
                 // Name what actually moved. A loosening can be a shorter night
-                // as readily as a bigger budget, and printing the budget then
-                // advertised the one thing unchanged.
+                // or a door's own ceiling as readily as a bigger budget, and
+                // printing the budget then advertised the one thing unchanged.
+                //
+                // A cap summary carries a door name, so this is the first thing
+                // in the row that is user data and can be long. The worst case
+                // is the CLEARING form, not the numeric one: "Instagram no cap"
+                // is 16 characters to "Instagram 60"'s 12, about 105pt of serif
+                // 14 inside the 283pt this row has on a 375pt device. (120 is
+                // the widest number the layout is sized against — the cap wheel
+                // tops out at 60, so it is a bound and not a reachable string.)
+                // `columnHeight` reserves a flat 62pt, so a second line would
+                // collide with the door column rather than push it down.
                 Text(summary)
                     .font(Silk.serif(14))
+                    .lineLimit(1)
                     .foregroundStyle(night ? Silk.paperAlpha(0.26) : Silk.inkAlpha(0.50))
                 Spacer()
                 Button {

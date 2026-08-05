@@ -19,11 +19,13 @@ struct SettingsView: View {
     var downHours: String
     var budget: String
     var undo: String
-    /// One row per door, in policy order. Value is "15 min" or "closed" —
-    /// pre-formatted, like everything else here.
+    /// One row per door, in policy order. Value is the door's own daily ceiling
+    /// — "20 min", or "No cap" — pre-formatted, like everything else here. It
+    /// is not the day's balance: this page is the rules, and Now's list is the
+    /// day.
     var doors: [SettingsDoorItem]
-    /// Whether the quiet add row follows the doors: room under the cap of
-    /// six, and something left in the catalogue. The model decides.
+    /// Whether the quiet add row follows the doors: room under the maximum of
+    /// six doors, and something left in the catalogue. The model decides.
     var showsAddRow: Bool
     var night: Bool
     var onTapDownHours: () -> Void
@@ -47,7 +49,11 @@ struct SettingsView: View {
                 .scaleEffect(scale, anchor: .top)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 // A door joining or leaving moves rows and the scale together;
-                // both ride the one curve so nothing jumps.
+                // both ride the one curve so nothing jumps. Keyed on ids only,
+                // deliberately: a door's cap changing moves no row and resizes
+                // nothing, so there is no layout to carry — the new value simply
+                // stands where the old one did, which is how a row that states a
+                // rule should take a new rule.
                 .animation(Silk.motion(0.4), value: doors.map(\.id))
                 .animation(Silk.motion(0.35), value: showsAddRow)
         }
@@ -223,6 +229,10 @@ struct DoorEditOverlay: View {
     var mode: Mode
     var night: Bool
     var onRebind: () -> Void
+    /// Daily cap: the parent takes this editor down and raises the wheel on the
+    /// door — the two never share the screen, so the wheel's own title carries
+    /// the name from here.
+    var onCap: () -> Void
     var onRemove: () -> Void
     var onAdd: (String) -> Void
     var onClose: () -> Void
@@ -274,10 +284,21 @@ struct DoorEditOverlay: View {
         }
     }
 
+    /// Three rows now — 156pt inside the same 280pt frame the wheel's selection
+    /// line spans, which is what the two overlays rhyme on. Only the last row
+    /// drops its rule, so the shift is Change app and Daily cap ruled, Remove
+    /// bare.
+    ///
+    /// The middle row is `dailyCap` and deliberately not `budget`: the overlay's
+    /// title is already the door name, so "TIKTOK / Change app / Budget /
+    /// Remove" reads as "TikTok's budget" — a per-door allowance, which is the
+    /// one thing a cap is not, on a page whose global row already says "Budget".
     private var menuRows: some View {
         VStack(spacing: 0) {
             editorRow(SilkStrings.rebind, id: "silk.settings.rebind",
                       showsRule: true, action: onRebind)
+            editorRow(SilkStrings.dailyCap, id: "silk.settings.cap",
+                      showsRule: true, action: onCap)
             editorRow(SilkStrings.remove, id: "silk.settings.remove",
                       showsRule: false, action: onRemove)
         }
@@ -385,10 +406,13 @@ private enum PreviewValues {
     static let window = "\u{263E}\u{00A0} 10:00 PM \u{2013} 7:00 AM"
     static let budget = "60 min \u{00B7} \(SilkStrings.perDay)"
     static let undo = "60 s"
-    static let doors = [SettingsDoorItem(name: "Instagram", value: "15 min"),
+    /// A door's own ceiling, or the wheel's first seat where it has none. Most
+    /// doors are uncapped — a cap is the exception a user reaches for, and a
+    /// preview whose every row carries one would read as an allowance table.
+    static let doors = [SettingsDoorItem(name: "Instagram", value: "20 min"),
                         SettingsDoorItem(name: "TikTok", value: "15 min"),
-                        SettingsDoorItem(name: "Clash", value: SilkStrings.closed),
-                        SettingsDoorItem(name: "YouTube", value: SilkStrings.closed)]
+                        SettingsDoorItem(name: "Clash", value: SilkStrings.noCap),
+                        SettingsDoorItem(name: "YouTube", value: SilkStrings.noCap)]
 }
 
 /// The whole page, rehearsed against the picker: tap a row, spin or tap a
@@ -436,8 +460,8 @@ private struct SettingsRehearsal: View {
                     columns: [WheelColumn(id: "down.start", values: WheelValues.downStart, selected: startIndex),
                               WheelColumn(id: "down.end", values: WheelValues.downEnd, selected: endIndex)],
                     night: night) { picks in
-                        startIndex = picks[0]
-                        endIndex = picks[1]
+                        // nil = the wheel was never moved, which is a dismissal.
+                        if let picks { startIndex = picks[0]; endIndex = picks[1] }
                         editing = nil
                     }
             case .budget:
@@ -445,7 +469,7 @@ private struct SettingsRehearsal: View {
                     title: SilkStrings.budget,
                     columns: [WheelColumn(id: "budget", values: WheelValues.budgets, selected: budgetIndex)],
                     night: night) { picks in
-                        budgetIndex = picks[0]
+                        if let picks { budgetIndex = picks[0] }
                         editing = nil
                     }
             case .undo:
@@ -453,7 +477,7 @@ private struct SettingsRehearsal: View {
                     title: SilkStrings.undo,
                     columns: [WheelColumn(id: "undo", values: WheelValues.undos, selected: undoIndex)],
                     night: night) { picks in
-                        undoIndex = picks[0]
+                        if let picks { undoIndex = picks[0] }
                         editing = nil
                     }
             case nil:

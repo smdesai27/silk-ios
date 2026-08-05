@@ -334,6 +334,42 @@ public enum Validator {
         return min(next, dayEnd)
     }
 
+    /// What Silk would actually GIVE this door right now, if she asked for
+    /// everything — the number the wall's subtitle promises.
+    ///
+    /// It lives here, beside the `.spend` arm, because the wall and the bar
+    /// answering the same question with different arithmetic is the exact lie
+    /// the subtitle was rewritten to end. Every clamp the arm applies before it
+    /// mints a grant is reproduced, in the arm's own order:
+    ///
+    ///  - down hours, and the **edge**. The edge is the one the shield used to
+    ///    miss: at 21:50 against a 22:00 window, a door with 40 in the pool and
+    ///    no ceiling can still only be given 10, because `relock` is
+    ///    `min(now + asked, nextDownHoursStart)`. The wall promised four times
+    ///    what the bar would mint, on the surface she hits first.
+    ///  - a close recorded by hand, which refuses outright.
+    ///  - the pool, and the door's own ceiling.
+    ///
+    /// A running grant is deliberately *not* consulted: this answers "what could
+    /// I be given", and a door with a live grant is not behind a wall to ask
+    /// from. `SilkCoreTests` pins the parity — for every fixture, asking for this
+    /// number grants exactly it.
+    public static func askableMinutes(door: Door, state: PolicyState, ledger: GrantLedger,
+                                      now: Date, dayStart: Date,
+                                      calendar: Calendar = .current) -> Int {
+        if state.downHours.contains(timeOfDay(now, calendar: calendar)) { return 0 }
+        if ledger.isClosed(door.id, at: now, dayStart: dayStart) { return 0 }
+        let ceiling = state.doorCaps[door.id].map {
+            ledger.remainingMinutes(cap: $0, doorID: door.id, dayStart: dayStart)
+        }
+        var askable = min(ledger.remainingMinutes(budget: state.budgetMinutes, dayStart: dayStart),
+                          ceiling ?? Int.max)
+        if let edge = nextDownHoursStart(after: now, downHours: state.downHours, calendar: calendar) {
+            askable = min(askable, Int(edge.timeIntervalSince(now) / 60))
+        }
+        return max(0, askable)
+    }
+
     public static func timeOfDay(_ date: Date, calendar: Calendar) -> TimeOfDay {
         let c = calendar.dateComponents([.hour, .minute], from: date)
         return TimeOfDay(hour: c.hour ?? 0, minute: c.minute ?? 0)

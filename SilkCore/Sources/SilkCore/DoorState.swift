@@ -89,6 +89,35 @@ extension GrantLedger {
         // `· 5:00` is a deadline, and an unspent cap has none.
         return .live
     }
+
+    /// The one per-door rule the status sentence names after the balance —
+    /// "40 min left. TikTok closed until 7:00." — as the door and the instant it
+    /// lifts (nil meaning the day boundary, exactly as `.rest` carries it).
+    ///
+    /// A door closed BY HAND is preferred over one that has merely spent its
+    /// ceiling, and it is looked for across all the doors before any rest is
+    /// named: taking the first `.rest` in door order would let a capped-out
+    /// TikTok sorting first swallow the Instagram close she made a second ago,
+    /// which is exactly the fact this clause exists to state.
+    ///
+    /// Both searches require the door to be at rest, in one pass, so the
+    /// preference cannot strand the fallback. Testing `isClosed` on its own and
+    /// re-deriving the state afterwards reads the same and is not: a door that
+    /// satisfies `isClosed` but is not `.rest` would take the preference, fail
+    /// the state match, and drop the fallback with it — the clause whose job is
+    /// to name the rule in force would then name nothing.
+    public func ruleInForce(for policy: PolicyState, at now: Date, dayStart: Date,
+                            calendar: Calendar = .current) -> (door: Door, lifts: Date?)? {
+        var resting: (door: Door, lifts: Date?)?
+        for door in policy.doors {
+            guard case .rest(let until) = state(of: door, at: now, dayStart: dayStart,
+                                                cap: policy.doorCaps[door.id],
+                                                calendar: calendar) else { continue }
+            if isClosed(door.id, at: now, dayStart: dayStart) { return (door, until) }
+            if resting == nil { resting = (door, until) }
+        }
+        return resting
+    }
 }
 
 extension DayBoundary {

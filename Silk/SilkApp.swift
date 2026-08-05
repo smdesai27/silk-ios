@@ -164,9 +164,20 @@ struct RootView: View {
                             .zIndex(20)
                         }
 
-                        // The wheel picker sits over even the shield (README.md:154)
-                        // — z 22 against the shield's 20 — though the two should
-                        // never be up at once: Settings has no door rows to tap.
+                        // The wheel picker sits over even the shield
+                        // (README.md:154) — and, at 23, over the door editor as
+                        // well. Equal zIndex in a ZStack resolves by declaration
+                        // order, so while both stood at 22 the editor below drew
+                        // on top.
+                        //
+                        // That used to be harmless because the two could not
+                        // coexist. The cap row deletes that invariant: it raises
+                        // this wheel from inside the editor, and although
+                        // `openCapWheel` takes the editor down first, the editor
+                        // leaves on its own 0.4s curve — so for most of half a
+                        // second the wheel would be mounted under a .97 veil,
+                        // invisible and uncommittable, with the departing
+                        // editor's backdrop eating every touch aimed at it.
                         if let kind = model.picker {
                             WheelPickerOverlay(title: model.pickerTitle(for: kind),
                                                columns: model.pickerColumns(for: kind),
@@ -174,7 +185,7 @@ struct RootView: View {
                                 model.commitPicker(kind, picks: picks)
                             }
                             .transition(.opacity)
-                            .zIndex(22)
+                            .zIndex(23)
                         }
 
                         // The door editor — the same overlay stratum as the
@@ -190,6 +201,7 @@ struct RootView: View {
                                 }(),
                                 night: night,
                                 onRebind: { if case .menu(let door) = edit { model.rebind(door) } },
+                                onCap: { if case .menu(let door) = edit { model.openCapWheel(for: door) } },
                                 onRemove: { if case .menu(let door) = edit { model.removeDoor(door) } },
                                 onAdd: { model.addDoor(named: $0) },
                                 onClose: { model.closeDoorEdit() })

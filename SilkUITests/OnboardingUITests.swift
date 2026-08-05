@@ -749,4 +749,286 @@ final class OnboardingUITests: XCTestCase {
         tap(undo, "the toast's Undo")
         XCTAssertTrue(instagramRow.waitForExistence(timeout: Self.appear), "Undo did not restore the door")
     }
+
+    // MARK: - Per-app daily caps
+    //
+    // The Settings wheel is the only surface that sets a cap, so these walks are
+    // the whole feature's front door: what the editor offers, what the wheel
+    // writes, what the row reads back, and — in `…ClampsTheGrantAtTheBar` — that
+    // the ceiling is real by the time the bar is asked for minutes past it.
+
+    /// The editor opens the door's own overlay, and the cap row is the middle
+    /// one of three. Between, not merely present: the row order is the reading
+    /// order, and a cap that landed under Remove would read as part of removing
+    /// the door.
+    @MainActor
+    func testSettingsDoorEditorOffersTheCapRow() throws {
+        let app = launchFresh()
+        completeSetup(app)   // one door: Reddit
+
+        let doorRow = element(app, "silk.settings.door.Reddit")
+        tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
+
+        let editor = element(app, "silk.settings.editor")
+        tap(doorRow, "the Reddit row", raising: editor, "the door editor")
+
+        let cap = app.buttons["silk.settings.cap"]
+        XCTAssertTrue(cap.waitForExistence(timeout: Self.appear), "the editor offered no Daily cap")
+        expect(cap, label: "Daily cap", "the cap row did not carry its own word")
+        let rebind = app.buttons["silk.settings.rebind"]
+        let remove = app.buttons["silk.settings.remove"]
+        XCTAssertTrue(rebind.exists, "the editor offered no Change app")
+        XCTAssertTrue(remove.exists, "the editor offered no Remove")
+        XCTAssertLessThan(rebind.frame.midY, cap.frame.midY,
+                          "the cap row sat above Change app")
+        XCTAssertLessThan(cap.frame.midY, remove.frame.midY,
+                          "the cap row sat below Remove")
+    }
+
+    /// The cap row hands the door to the wheel and takes the editor down on the
+    /// way. Both matter: the wheel's title is the only thing left saying which
+    /// door is being capped, and an editor left standing would draw its own .97
+    /// veil over the wheel and eat every touch aimed at it.
+    @MainActor
+    func testSettingsCapRowOpensTheWheelWithTheDoorTitle() throws {
+        let app = launchFresh()
+        completeSetup(app)   // one door: Reddit
+
+        let doorRow = element(app, "silk.settings.door.Reddit")
+        tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
+        let editor = element(app, "silk.settings.editor")
+        tap(doorRow, "the Reddit row", raising: editor, "the door editor")
+
+        let picker = element(app, "silk.picker")
+        tap(app.buttons["silk.settings.cap"], "Daily cap", raising: picker, "the cap wheel")
+
+        // The title is asked for by identifier PREFIX and not by its own
+        // `silk.picker.title`, because the overlay's `silk.picker` rides on the
+        // ZStack and an identifier on a container stamps itself onto every
+        // element inside it — the child's own identifier is overwritten, not
+        // added to. Measured, not assumed: with the wheel up, the tree carries
+        // four elements all identified `silk.picker` — the backdrop Button
+        // (label "OK"), this StaticText (label "Reddit"), the wheel (value "No
+        // cap") and the selection frame. The label is what separates them.
+        //
+        // It must be the prefix match rather than a bare `staticTexts[…]` on the
+        // name: the Settings door row behind the veil is still in the tree and
+        // still reads "Reddit", so a query that does not pin the identifier
+        // would pass with the wheel absent entirely.
+        let named = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS[c] %@",
+                        "silk.picker", "Reddit")).firstMatch
+        XCTAssertTrue(named.waitForExistence(timeout: Self.appear),
+                      "the cap wheel did not name the door")
+        XCTAssertTrue(editor.waitForNonExistence(timeout: Self.overlay),
+                      "the door editor outlived the cap tap and would cover the wheel")
+    }
+
+    /// A fresh door has no ceiling, and the row says so in the wheel's own
+    /// first-seat word — the round-trip rule: the row must read back what the
+    /// wheel would show. It is deliberately not the shared budget, which four
+    /// rows printing "40 min" would have made read as an allowance table.
+    @MainActor
+    func testSettingsUncappedDoorRowReadsNoCap() throws {
+        let app = launchFresh()
+        completeSetup(app)   // one door: Reddit, capped by nothing
+
+        let doorRow = element(app, "silk.settings.door.Reddit")
+        tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
+        expect(doorRow, labelContains: "No cap", "an uncapped door's row did not read the wheel's first seat")
+    }
+
+    /// The feature end to end, from the only surface that has it: set a ceiling
+    /// on the wheel, watch the receipt and the row read it back, then ask the bar
+    /// for more minutes than the ceiling allows and get the ceiling.
+    @MainActor
+    func testSettingsCapCommitTightensAndTheRowReadsItBack() throws {
+        let app = launchFresh()
+        let bar = completeSetup(app)   // one door: Reddit, budget 40
+
+        let doorRow = element(app, "silk.settings.door.Reddit")
+        tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
+        let editor = element(app, "silk.settings.editor")
+        tap(doorRow, "the Reddit row", raising: editor, "the door editor")
+        let picker = element(app, "silk.picker")
+        tap(app.buttons["silk.settings.cap"], "Daily cap", raising: picker, "the cap wheel")
+
+        // An uncapped door opens on "No cap", the first seat; "20 min" is four
+        // seats down the table (5, 10, 15, 20).
+        dragWheel(app, rows: -4)
+        tapPickerBackdrop(app)
+        XCTAssertTrue(picker.waitForNonExistence(timeout: Self.overlay), "the cap wheel did not fade out")
+
+        // Adding a ceiling is a tighten: it lands now, and its receipt names the
+        // door and the ceiling rather than the pool's number — which did not
+        // move, and which a bare status already says.
+        let toast = app.staticTexts["silk.toast"]
+        XCTAssertTrue(toast.waitForExistence(timeout: Self.appear), "the cap tighten did not toast")
+        expect(toast, label: "Reddit 20 min \u{00B7} day.", "the receipt did not state the new ceiling")
+        XCTAssertTrue(app.buttons["silk.toast.undo"].exists, "the cap tighten carried no Undo")
+        expect(doorRow, labelContains: "20 min", "the door row did not read the new cap back")
+
+        // And the ceiling is real. Sixty against a budget of 40 clamped to 40
+        // before this feature existed; against a cap of 20 it clamps to 20, and
+        // the pool is debited by what was actually granted.
+        // Back to Now for the hero: the bar answers from any page, but the ensō
+        // is only drawn on one. No `raising:` here — the pager keeps every page
+        // in the tree, so a hero already matched would prove nothing about the
+        // tap.
+        tap(app.buttons["silk.dot.0"], "the Now dot")
+        say(bar, "give me sixty minutes of reddit\n")
+        let capped = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Reddit is open for 20")
+        ).firstMatch
+        XCTAssertTrue(capped.waitForExistence(timeout: Self.answer),
+                      "the grant was not clamped to the door's own ceiling")
+        XCTAssertTrue(app.staticTexts["20"].waitForExistence(timeout: Self.appear),
+                      "ensō did not debit the pool by the capped grant")
+    }
+
+    /// A running grant outranks the ceiling the receipt just set — and the
+    /// receipt has to know that, because it is the only thing this commit says.
+    ///
+    /// Thirty minutes of Reddit are granted, then Reddit is capped at 20: the
+    /// ceiling is already overdrawn, but the door is open until the grant runs
+    /// out, the wall is down, the Now row draws `· till`, and the bar would
+    /// answer with the same deadline. The receipt used to say "Reddit closed
+    /// until 7:00." in that second — four surfaces, one door, and the only one
+    /// she is shown was the false one.
+    ///
+    /// `Caps.receipt`'s own ordering is pinned in the spine; this walk pins the
+    /// wiring, which is the half a spine test cannot see.
+    @MainActor
+    func testACapSetOverARunningGrantDoesNotClaimTheDoorIsShut() throws {
+        let app = launchFresh()
+        let bar = completeSetup(app)   // one door: Reddit, budget 40
+
+        say(bar, "give me thirty minutes of reddit\n")
+        let granted = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Reddit is open for 30")
+        ).firstMatch
+        XCTAssertTrue(granted.waitForExistence(timeout: Self.answer), "the grant did not land")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).tap()
+
+        let doorRow = element(app, "silk.settings.door.Reddit")
+        tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
+        let editor = element(app, "silk.settings.editor")
+        tap(doorRow, "the Reddit row", raising: editor, "the door editor")
+        let picker = element(app, "silk.picker")
+        tap(app.buttons["silk.settings.cap"], "Daily cap", raising: picker, "the cap wheel")
+        dragWheel(app, rows: -4)          // No cap → 20 min
+        tapPickerBackdrop(app)
+        XCTAssertTrue(picker.waitForNonExistence(timeout: Self.overlay), "the cap wheel did not fade out")
+
+        let toast = app.staticTexts["silk.toast"]
+        XCTAssertTrue(toast.waitForExistence(timeout: Self.appear), "the cap tighten did not toast")
+        expect(toast, label: "Reddit 20 min \u{00B7} day.",
+               "the receipt did not name the ceiling it set")
+        XCTAssertFalse((toast.label).contains("closed until"),
+                       "the receipt said the door was shut while a grant was still running")
+        expect(doorRow, labelContains: "20 min", "the door row did not read the new cap back")
+    }
+
+    /// A cap survives a relaunch, the Settings row reads it back, and re-opening
+    /// its wheel to look costs nothing.
+    ///
+    /// Note what this walk does NOT prove, because the name it used to carry
+    /// claimed it: 20 is an exact `Caps.wheelTable` seat, so an untouched commit
+    /// here would round-trip to 20 and `settle`'s own `proposed != policy` guard
+    /// would swallow it with no toast either way. The untouched-wheel rule is
+    /// proved by `testBudgetWheelDismissedUntouchedKeepsAnOffGridValue`, where
+    /// the value is off-grid and a commit would visibly move it, and by
+    /// `CapWheelSeatTests` in the spine. Nothing off-grid is reachable on the
+    /// cap wheel until the grammar lands (PR 2), so the cap analogue of the
+    /// budget walk belongs to that PR.
+    ///
+    /// The app is put down and brought back so no earlier toast is left standing
+    /// to confuse the absence being asserted — which is what pins the storage
+    /// round trip.
+    @MainActor
+    func testSettingsCapSurvivesARelaunchAndReOpeningItsWheelCostsNothing() throws {
+        let app = launchFresh()
+        completeSetup(app)   // one door: Reddit
+
+        let doorRow = element(app, "silk.settings.door.Reddit")
+        tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
+        let editor = element(app, "silk.settings.editor")
+        tap(doorRow, "the Reddit row", raising: editor, "the door editor")
+        let picker = element(app, "silk.picker")
+        tap(app.buttons["silk.settings.cap"], "Daily cap", raising: picker, "the cap wheel")
+        dragWheel(app, rows: -4)
+        tapPickerBackdrop(app)
+        expect(doorRow, labelContains: "20 min", "the cap did not land")
+
+        // No -silkReset: the walk above is what this relaunch is standing on.
+        Self.stop(app)
+        app.launchArguments = []
+        app.launch()
+        XCTAssertTrue(app.textFields["silk.bar"].waitForExistence(timeout: Self.launch),
+                      "did not land on Now when already onboarded")
+
+        let row = element(app, "silk.settings.door.Reddit")
+        tap(app.buttons["silk.dot.2"], "the Settings dot", raising: row, "the Reddit row")
+        expect(row, labelContains: "20 min", "the cap did not survive a relaunch")
+
+        let editorAgain = element(app, "silk.settings.editor")
+        tap(row, "the Reddit row", raising: editorAgain, "the door editor")
+        let wheel = element(app, "silk.picker")
+        tap(app.buttons["silk.settings.cap"], "Daily cap", raising: wheel, "the cap wheel")
+        tapPickerBackdrop(app)
+        XCTAssertTrue(wheel.waitForNonExistence(timeout: Self.overlay), "the cap wheel did not fade out")
+
+        // A commit would have toasted — a tighten with Undo, or "Applies
+        // tomorrow." — so the absence of any toast is the whole assertion. Three
+        // seconds is the receipt's own arrival time over, not a guess.
+        XCTAssertFalse(app.staticTexts["silk.toast"].waitForExistence(timeout: 3),
+                       "a wheel put back where it started still wrote something")
+        expect(row, labelContains: "20 min", "an untouched wheel moved the cap")
+    }
+
+    /// The untouched-wheel rule, on the value that can actually be caught by it
+    /// today. A wheel opens an off-grid number on its NEAREST seat, so
+    /// dismissing one that committed writes that seat: a budget of 35 opens on
+    /// "30 min" and would be silently tightened to 30 by a screen that was only
+    /// being read. Caps make an off-grid value ordinary — a cap wheel has eight
+    /// seats — but the budget wheel has had this hole since it shipped.
+    ///
+    /// This is the half that can be walked. The other half — that the seat a
+    /// wheel OPENS on stays reachable, which a first fix broke by comparing the
+    /// committed indices against the opening ones — needs a spin away and back
+    /// to the same seat, and two drags chained on one wheel do not land where
+    /// they are aimed: the attempt landed on 45 and then on 15, never on the
+    /// seat the wheel opened on, because the second drag starts before the first
+    /// has settled. A walk tuned until it passes is not a pin, so it is not
+    /// here. The direction that would actually hurt someone is this one, and
+    /// it is covered: if `touched` were ever true on mount, this walk goes red.
+    @MainActor
+    func testBudgetWheelDismissedUntouchedKeepsAnOffGridValue() throws {
+        let app = launchFresh()
+        let bar = completeSetup(app)
+
+        // 40 → 35 is a tighten, so it lands instantly and the receipt states the
+        // balance it leaves. No wheel can express 35.
+        say(bar, "set the budget to 35\n")
+        XCTAssertTrue(app.staticTexts["35 left today."].waitForExistence(timeout: Self.answer),
+                      "the off-grid budget did not land")
+
+        // The thread's tap-out catcher covers the screen while the bar holds
+        // focus, so a tap on the ground is the blur that takes the thread down
+        // and gives the dots back.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).tap()
+
+        let budgetRow = element(app, "silk.settings.budget")
+        tap(app.buttons["silk.dot.2"], "the Settings dot", raising: budgetRow, "Settings")
+        expect(budgetRow, labelContains: "35 min", "the budget row did not read the off-grid value")
+
+        let picker = element(app, "silk.picker")
+        tap(budgetRow, "the budget row", raising: picker, "the wheel")
+        tapPickerBackdrop(app)
+        XCTAssertTrue(picker.waitForNonExistence(timeout: Self.overlay), "the wheel did not fade out")
+
+        XCTAssertFalse(app.staticTexts["silk.toast"].waitForExistence(timeout: 3),
+                       "dismissing an untouched wheel committed its nearest seat")
+        expect(budgetRow, labelContains: "35 min", "an untouched wheel snapped the budget to a seat")
+    }
 }

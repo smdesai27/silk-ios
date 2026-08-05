@@ -64,12 +64,34 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
         // one line that says where to go ask *and* what there is to ask for.
         // A non-door or a spent door says only where to go: dangling "0 left
         // today" on a wall that cannot open is an argument, not a statement.
-        if isDoor(application, policy: p) {
+        //
+        // The number is what Silk would actually GIVE, not what the pool holds.
+        // The pool's figure was a promise this wall could not keep: a door
+        // closed by hand at noon, one that has spent its own ceiling, or an ask
+        // ten minutes short of the night window all still rendered "Open Silk ·
+        // 30 left today" — and this is the surface she hits first, so she walked
+        // to Silk and got something smaller, or nothing.
+        //
+        // So the wall does not reproduce the clamps; it calls the one that mints
+        // the grant. `Validator.askableMinutes` is the `.spend` arm's own
+        // arithmetic, and `SilkCoreTests` pins the two together: for every
+        // fixture, asking for this number grants exactly it. A clamp added to
+        // the arm and not here now fails a test instead of shipping a wall that
+        // promises what Silk refuses. (Reproducing two of the three clamps by
+        // hand is what left the down-hours edge out, under a comment claiming
+        // parity.)
+        //
+        // The Validator's ORDERING between its refusals is not reproduced and is
+        // not needed: it decides which hour a refusal quotes, and this wall
+        // quotes none. Every one of them arrives here as zero, and zero falls
+        // through to saying only where to go.
+        if let door = door(for: application, policy: p) {
             let ledger = SharedStore.loadLedger()
             let dayStart = DayBoundary.dayStart(now: now, downHours: p.downHours)
-            let remaining = ledger.remainingMinutes(budget: p.budgetMinutes, dayStart: dayStart)
-            if remaining > 0 {
-                return day(subtitle: "\(SilkStrings.openSilk) · \(remaining) \(SilkStrings.leftToday)")
+            let askable = Validator.askableMinutes(door: door, state: p, ledger: ledger,
+                                                   now: now, dayStart: dayStart)
+            if askable > 0 {
+                return day(subtitle: "\(SilkStrings.openSilk) · \(askable) \(SilkStrings.leftToday)")
             }
         }
         return day(subtitle: SilkStrings.openSilk)
@@ -242,15 +264,19 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
 
     // MARK: - Helpers
 
-    private func isDoor(_ application: Application, policy: PolicyState) -> Bool {
-        guard let token = application.token else { return false }
+    /// Which door this wall belongs to, if any. It returns the `Door` rather
+    /// than a Bool because the subtitle now has to ask the ledger about this
+    /// door in particular — its close, its ceiling — and the loop already has
+    /// the door in hand.
+    private func door(for application: Application, policy: PolicyState) -> Door? {
+        guard let token = application.token else { return nil }
         let selections = SharedStore.loadDoorSelections()
         for door in policy.doors {
             if let sel = selections[door.id], sel.applicationTokens.contains(token) {
-                return true
+                return door
             }
         }
-        return false
+        return nil
     }
 
     private func currentTimeOfDay(_ date: Date) -> TimeOfDay {

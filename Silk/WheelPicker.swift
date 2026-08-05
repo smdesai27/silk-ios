@@ -10,6 +10,12 @@ import SilkCore
 // Tapping the backdrop commits and closes. There is no OK button and no
 // Cancel: the value resting in the selection frame *is* the choice, and a
 // second confirmation would be the system doubting what it can already see.
+//
+// With one qualification, which is the whole of `touched` below: a wheel that
+// was never moved was never a choice. It opens on the seat NEAREST the stored
+// value, so a wheel opened only to be read would otherwise write a number
+// nobody chose — a budget of 35 opens on "30 min". Never moved is a dismissal;
+// moved at all, including away and back to the seat it opened on, is the choice.
 
 // ============================================================
 // The column
@@ -29,10 +35,10 @@ struct WheelColumn: Identifiable {
     var selected: Int
 }
 
-/// The four tables, verbatim from the handoff (README.md:174-177 = Silk
-/// Mockup.dc.html:236-239). They live beside the picker so the strings are
-/// audited in one place; the model passes them in as columns and maps the
-/// committed indices back out.
+/// The five tables — four verbatim from the handoff (README.md:174-177 = Silk
+/// Mockup.dc.html:236-239), and the caps, which the handoff predates. They live
+/// beside the picker so the strings are audited in one place; the model passes
+/// them in as columns and maps the committed indices back out.
 enum WheelValues {
     static let downStart = ["8:00 PM", "8:30 PM", "9:00 PM", "9:30 PM",
                             "10:00 PM", "10:30 PM", "11:00 PM", "11:30 PM"]
@@ -40,6 +46,12 @@ enum WheelValues {
                           "7:00 AM", "7:30 AM", "8:00 AM", "8:30 AM"]
     static let budgets = ["15 min", "30 min", "45 min", "60 min", "75 min", "90 min", "120 min"]
     static let undos = ["15 s", "30 s", "60 s", "90 s", "2 min", "5 min"]
+
+    /// A door's own ceiling — `SilkCore.Caps.wheelValues`, not a copy of it.
+    /// The seats and the minutes behind them are derived from one table there,
+    /// so a wheel that shows "20 min" cannot commit 30; keeping the strings here
+    /// and the values in the model was two hand-kept lists one edit apart.
+    static let caps = Caps.wheelValues
 }
 
 // ============================================================
@@ -59,14 +71,30 @@ struct WheelPickerOverlay: View {
     var title: String
     var columns: [WheelColumn]
     var night: Bool
-    /// One selected index per column, in column order. Commit and dismiss are
-    /// the same gesture, so this is the overlay's only exit.
-    var onCommit: ([Int]) -> Void
+    /// One selected index per column, in column order — or **nil when no wheel
+    /// was ever moved**. Commit and dismiss are the same gesture, so this is the
+    /// overlay's only exit, and the two meanings have to be told apart here.
+    ///
+    /// Looking at a wheel must cost nothing: a wheel opens on the seat NEAREST
+    /// the stored value, so a bare dismissal that committed would write a value
+    /// the user never chose (budget 35 opens on "30 min"; a cap of 25 opens on
+    /// "20 min", a silent tighten). But the model cannot infer that from the
+    /// indices it receives — comparing them against the ones the wheel opened on
+    /// also swallows a deliberate spin away and back, which made the opening
+    /// seat permanently uncommittable: with the budget at 35 there was no
+    /// gesture on that wheel that could set it to 30. Movement is a fact only
+    /// the wheel has, so the wheel is what reports it.
+    var onCommit: ([Int]?) -> Void
 
     @State private var selections: [Int]
+    /// Set by the one `onChange` below, which sees every way a seat can change:
+    /// a drag's settle, a tap on a row, and VoiceOver's adjustable action. It is
+    /// never set on mount — `Wheel` seeds its scroll position from the selection
+    /// and only writes back a landing that differs.
+    @State private var touched = false
 
     init(title: String, columns: [WheelColumn], night: Bool,
-         onCommit: @escaping ([Int]) -> Void) {
+         onCommit: @escaping ([Int]?) -> Void) {
         self.title = title
         self.columns = columns
         self.night = night
@@ -91,7 +119,7 @@ struct WheelPickerOverlay: View {
             (night ? Self.nightVeil.opacity(0.97) : Silk.paperAlpha(0.97))
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
-                .onTapGesture { onCommit(selections) }
+                .onTapGesture { onCommit(touched ? selections : nil) }
                 // The backdrop is the commit — VoiceOver needs it named to
                 // leave the picker at all. Activation lands on the tap above.
                 // Identifier last: it must ride the element the label creates.
@@ -125,6 +153,11 @@ struct WheelPickerOverlay: View {
                 .overlay { selectionFrame }
             }
         }
+        // One place, watching the bindings themselves rather than the three
+        // gestures that write them: a wheel is touched when a seat changes, by
+        // whatever hand. Watching the gestures would have to enumerate them, and
+        // the fourth one added would be the one that forgot.
+        .onChange(of: selections) { touched = true }
         .accessibilityIdentifier("silk.picker")
     }
 
@@ -330,7 +363,8 @@ private struct PickerRehearsal: View {
                     title: "Undo",
                     columns: [WheelColumn(id: "undo", values: WheelValues.undos, selected: undoIndex)],
                     night: night) { picks in
-                        undoIndex = picks[0]
+                        // nil = the wheel was never moved, which is a dismissal.
+                        if let picks { undoIndex = picks[0] }
                         editing = nil
                     }
             }
@@ -340,8 +374,7 @@ private struct PickerRehearsal: View {
                     columns: [WheelColumn(id: "down.start", values: WheelValues.downStart, selected: startIndex),
                               WheelColumn(id: "down.end", values: WheelValues.downEnd, selected: endIndex)],
                     night: night) { picks in
-                        startIndex = picks[0]
-                        endIndex = picks[1]
+                        if let picks { startIndex = picks[0]; endIndex = picks[1] }
                         editing = nil
                     }
             }

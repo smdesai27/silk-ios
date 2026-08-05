@@ -9,6 +9,17 @@ final class AppModel {
     private(set) var policy: PolicyState
     private(set) var ledger: GrantLedger
     private(set) var pendingLoosening: PolicyState?
+    /// The policy the parked loosening was measured against — held here rather
+    /// than re-read, and always written by `park` in the same breath as the
+    /// pending itself.
+    ///
+    /// `matured` is asked three times on every body pass of Now (the row, the
+    /// height it reserves, and the animation that keys them together), and each
+    /// ask used to be an App Group read plus a whole `PolicyState` decode on the
+    /// main thread — on every clock tick, keyboard rise and layout pass. In
+    /// memory the merge is free, so the three call sites can go on asking the
+    /// one question, which is the point of asking it.
+    @ObservationIgnored private var pendingBaseline: PolicyState?
     /// Setup is complete once a policy has been persisted. Until then the app
     /// shows onboarding and holds nothing.
     private(set) var onboarded: Bool
@@ -28,10 +39,17 @@ final class AppModel {
     /// handoff has no jump anywhere in it.
     var page = 0
 
-    /// Which wheel is up, if any. The three global rows on Settings set this;
-    /// the backdrop tap commits and clears it. (handoff README.md §4)
+    /// Which wheel is up, if any. The three global rows on Settings set this,
+    /// and now the door editor's cap row does too; the backdrop tap commits and
+    /// clears it. (handoff README.md §4)
     var picker: PickerKind?
-    enum PickerKind: String { case down, budget, undo }
+    /// No raw type: Swift forbids associated values on a raw-value enum, and
+    /// `cap` needs to know which door. Nothing ever read the String — there is
+    /// no `.rawValue` and no `PickerKind(rawValue:)` anywhere — so dropping it
+    /// is free. Carrying the door in the case rather than in a parallel
+    /// `var capDoor: Door?` is the point: two properties could disagree about
+    /// which door is being edited after a removal, and this shape cannot.
+    enum PickerKind: Equatable { case down, budget, undo, cap(Door) }
 
     /// The take-it-back window, in seconds. One number bounds both offers:
     /// the undo-bearing toast and the thread's Undo pill. The third Settings
@@ -56,6 +74,7 @@ final class AppModel {
         self.policy = saved ?? AppModel.defaultPolicy
         self.ledger = SharedStore.loadLedger()
         self.pendingLoosening = SharedStore.loadPendingLoosening()
+        self.pendingBaseline = SharedStore.loadPendingBaseline()
         self.undoSeconds = SharedStore.loadUndoSeconds()
         toasts.undoLifetime = .seconds(undoSeconds)
         // No local state means a fresh install — and possibly a previous
@@ -486,7 +505,7 @@ final class AppModel {
                 // branch of the design's reply table says something, and a
                 // screen that does not move is indistinguishable from a
                 // dropped command. State what is true instead.
-                return (receipt(for: policy), nil)
+                return (receipt(for: policy, movedFrom: policy), nil)
             }
             return enact(proposed, polarity)
         }
@@ -499,7 +518,7 @@ final class AppModel {
     private func enact(_ proposed: PolicyState, _ polarity: Polarity) -> (reply: String, undo: (() -> Void)?) {
         switch polarity {
         case .unchanged:
-            return (receipt(for: policy), nil)
+            return (receipt(for: policy, movedFrom: policy), nil)
 
         case .tighten:
             // The undo window to take it back. Undo restores the prior values
@@ -530,7 +549,7 @@ final class AppModel {
             policy = proposed
             commit()
             Silk.Haptic.tighten()
-            return (receipt(for: proposed), { [weak self] in
+            return (receipt(for: proposed, movedFrom: previous), { [weak self] in
                 guard let self else { return }
                 // Undo puts back what this turn changed and nothing else. The
                 // window runs up to five minutes with Settings usable
@@ -547,6 +566,13 @@ final class AppModel {
                 if proposed.downHours != previous.downHours {
                     restored.downHours = previous.downHours
                 }
+                // Per key, for the same reason the budget and window clauses are
+                // per field: the window runs up to five minutes with Settings
+                // usable underneath, so a wholesale restore would erase a cap
+                // set on a different door in between. `Caps.restoring` states
+                // that rule where it can be tested; here it is one call.
+                restored.doorCaps = Caps.restoring(previous.doorCaps, over: proposed.doorCaps,
+                                                   into: restored.doorCaps)
                 var selections = SharedStore.loadDoorSelections()
                 var returning: [Door] = []
                 for door in dropped {
@@ -566,6 +592,10 @@ final class AppModel {
                     selections[door.id] = droppedSelections[door.id]
                     returning.append(door)
                 }
+                // Closing the closure: a cap restored above for a door the yield
+                // refused to bring back would be an orphan nothing can remove.
+                // One line makes the rule structural rather than remembered.
+                restored.doorCaps = restored.owned(restored.doorCaps)
                 self.policy = restored
                 if !returning.isEmpty { SharedStore.save(doorSelections: selections) }
                 self.commit()
@@ -575,17 +605,27 @@ final class AppModel {
         case .loosen:
             // Applies at the next day start — or now, with the key. Undo here
             // withdraws the ask and puts back whatever was already waiting.
+            //
+            // There is exactly ONE pending slot, and the decision recorded here
+            // is that the newest ask replaces the waiting one — silently, with
+            // no receipt: parking a second loosening discards the first and
+            // answers "Applies tomorrow." both times, and Now's row then names
+            // only the survivor. That was tolerable while three dimensions could
+            // be parked and no gesture chained them; caps take it to 3 + N (up
+            // to nine) and make chaining ordinary — park a raise on TikTok, then
+            // clear the cap on Instagram, and the first ask is gone. Knowingly
+            // unfixed (spec §6.9); surfacing the displacement in the reply is
+            // the recommended follow-up, and PR 4 lists it under Build status in
+            // `docs/design/README.md`.
             let previous = pendingLoosening
             // The baseline travels with the pending: at maturity it is the only
             // way to tell which of the four fields the sentence actually moved.
             // Undo puts back the withdrawn pending's own baseline, not this one.
-            let previousBaseline = SharedStore.loadPendingBaseline()
-            pendingLoosening = proposed
-            SharedStore.save(pendingLoosening: proposed, baseline: policy)
+            let previousBaseline = pendingBaseline
+            park(proposed, baseline: policy)
             return (SilkStrings.appliesTomorrow, { [weak self] in
                 guard let self else { return }
-                self.pendingLoosening = previous
-                SharedStore.save(pendingLoosening: previous, baseline: previousBaseline)
+                self.park(previous, baseline: previousBaseline)
             })
         }
     }
@@ -619,17 +659,20 @@ final class AppModel {
         seconds < 120 ? "\(seconds) s" : "\(seconds / 60) \(SilkStrings.minutes)"
     }
 
-    /// One row per door. Silk has one shared budget and no per-door
-    /// allowance, so the honest per-door rule is thinner than the design's
-    /// mock data: a door shut for the day rests; every other door draws on
-    /// the one pool, and the pool is the allowance it can name.
+    /// One row per door. Settings is the rules; Now's list is the day. So the
+    /// value is the door's own ceiling — or the wheel's No-cap seat when it has
+    /// none, because the row must read back what the wheel would show (the same
+    /// round-trip rule the undo row states just above). Printing
+    /// `policy.budgetMinutes` on every row made one column mean two things the
+    /// moment one door had a cap: four rows reading "40 min" and one reading
+    /// "20 min" is an allocation summing to 140 against a budget of 40, which is
+    /// the model this feature is not. The `.rest` → "closed" branch goes with
+    /// it: a rule has no today, and a capped door that spent its cap would
+    /// otherwise hide its own cap on the one page whose job is to show it,
+    /// precisely on the day it bit.
     var settingsDoors: [SettingsDoorItem] {
-        policy.doors.map { door in
-            if case .rest = state(of: door) {
-                return SettingsDoorItem(name: door.name, value: SilkStrings.closed)
-            }
-            return SettingsDoorItem(name: door.name,
-                                    value: "\(policy.budgetMinutes) \(SilkStrings.minutes)")
+        policy.doors.map {
+            SettingsDoorItem(name: $0.name, value: Caps.settingsValue(cap: policy.doorCaps[$0.id]))
         }
     }
 
@@ -643,9 +686,11 @@ final class AppModel {
 
     /// A stored value said at the bar can sit between wheel seats ("budget of
     /// 50"), so the wheel opens on the nearest one rather than crashing or
-    /// snapping to the top.
+    /// snapping to the top. The cap table and its seat arithmetic live in
+    /// `SilkCore.Caps`, where the +1 No-cap offset can be asserted in a tenth of
+    /// a second; this is the same helper, shared so there is one of it.
     private static func nearestIndex(to value: Int, in table: [Int]) -> Int {
-        table.indices.min { abs(table[$0] - value) < abs(table[$1] - value) } ?? 0
+        Caps.nearestIndex(to: value, in: table)
     }
 
     func pickerTitle(for kind: PickerKind) -> String {
@@ -653,6 +698,10 @@ final class AppModel {
         case .down: SilkStrings.downHours
         case .budget: SilkStrings.budget
         case .undo: SilkStrings.undo
+        // The door's own name, exactly as the editor's title carried it — the
+        // editor is taken down before this wheel goes up, so this title is the
+        // only thing left saying which door is being capped.
+        case .cap(let door): door.name
         }
     }
 
@@ -674,17 +723,42 @@ final class AppModel {
             [WheelColumn(id: "undo", values: WheelValues.undos,
                          selected: Self.nearestIndex(to: undoSeconds,
                                                      in: Self.undoTable))]
+        case .cap(let door):
+            // Seat 0 is "No cap", so a capped door opens one seat past its
+            // nearest minute — the same off-by-one `commitPicker` undoes.
+            [WheelColumn(id: "cap", values: WheelValues.caps,
+                         selected: Caps.wheelSeat(for: policy.doorCaps[door.id]))]
         }
     }
 
-    /// The backdrop tap: commit and close in one gesture. Budget and window
-    /// go through `enact` — the same path a sentence takes — so the polarity
-    /// rule holds from Settings too: a tighten lands now with Undo on the
-    /// toast, a loosening answers "Applies tomorrow." and waits. The undo
+    /// The backdrop tap: commit and close in one gesture. Budget, window and a
+    /// door's cap go through `enact` — the same path a sentence takes — so the
+    /// polarity rule holds from Settings too: a tighten lands now with Undo on
+    /// the toast, a loosening answers "Applies tomorrow." and waits. The undo
     /// window is not a policy, so it commits directly and quietly: the row
     /// reading the new value is its own receipt.
-    func commitPicker(_ kind: PickerKind, picks: [Int]) {
+    ///
+    /// `picks` is nil when the wheel was never moved. Looking at a wheel must
+    /// cost nothing: the backdrop tap is the overlay's only exit, so a dismissal
+    /// and a commit are the same gesture — and `nearestIndex` opens an off-grid
+    /// value on its nearest seat, so leaving without touching anything would
+    /// write that seat. A budget of 35 opens on "30 min" and would silently
+    /// become 30; a cap of 25 opens on "20 min" and would silently tighten,
+    /// answered by nothing. (Reachable on the budget wheel today; caps make an
+    /// off-grid value ordinary once the bar can set one.)
+    ///
+    /// The overlay decides it, not this method, and it decides it from whether
+    /// the wheel actually MOVED. Comparing the committed indices against the
+    /// ones the wheel opened on reads the same and is not: it also swallows a
+    /// deliberate spin away and back, which made the seat a wheel opened on
+    /// permanently uncommittable — with the budget at 35 there was no gesture on
+    /// that wheel that could set it to 30. One silent wrong write traded for one
+    /// silently dead control. Whether a wheel was touched is a fact only the
+    /// wheel has; asking it is the fix an index comparison structurally cannot
+    /// be. (Spec §6.2 prescribes the index form and is amended.)
+    func commitPicker(_ kind: PickerKind, picks: [Int]?) {
         defer { picker = nil }
+        guard let picks else { return }
         switch kind {
         case .down:
             guard picks.count == 2 else { return }
@@ -703,6 +777,19 @@ final class AppModel {
             undoSeconds = Self.undoTable[picks[0]]
             SharedStore.save(undoSeconds: undoSeconds)
             toasts.undoLifetime = .seconds(undoSeconds)
+        case .cap(let door):
+            guard picks.count == 1 else { return }
+            var proposed = policy
+            // Seat 0 is "No cap": the nil-bearing subscript removes the key,
+            // which is what an absent ceiling actually is.
+            proposed.doorCaps[door.id] = Caps.wheelMinutes(atSeat: picks[0])
+            // `settle`, never `commitDoorChange`. A cap is policy, and the whole
+            // point of `enact` is that the polarity rule cannot be sidestepped
+            // by choosing which door you knock on: raising or clearing a cap
+            // waits for tomorrow exactly as it does at the bar. The neighbouring
+            // door writes go through `commitDoorChange` because a door add or
+            // removal is instant by decision — the wrong neighbour to copy.
+            settle(proposed)
         }
     }
 
@@ -721,7 +808,33 @@ final class AppModel {
     /// A tighten states the balance it leaves, read through the ledger — not the
     /// new budget. Printing the budget put "40 min left today" on screen beside
     /// a hero reading 15, because 25 of those 40 were already spent.
-    private func receipt(for proposed: PolicyState) -> String {
+    ///
+    /// A cap moved the pool's number not at all, so the pool's sentence is the
+    /// wrong receipt for it: "40 left today." after capping TikTok is
+    /// byte-identical to what a bare status says, and it advertises the one
+    /// number that did not move. Worse, capping a door *below what it has
+    /// already spent today* shuts that door for the rest of the day, and
+    /// clearing the cap again is a loosening that waits until tomorrow — so this
+    /// sentence is the only thing standing between the user and being locked out
+    /// of a door by a change she was told nothing about.
+    ///
+    /// What moved is derived by state diff — the same discipline polarity is
+    /// held to — in `Caps.receipt`, which is where the composition and its
+    /// ordering can be asserted without a simulator. A nil there means no
+    /// ceiling moved, and the pool's own sentence is the receipt it has always
+    /// had.
+    ///
+    /// `previous` is passed in rather than read off `policy`, because the one
+    /// caller that has a change to report has already assigned `policy` by the
+    /// time it asks — diffing the live policy there compares a state against
+    /// itself, finds nothing, and quietly falls back to the pool's sentence,
+    /// which is the exact failure this rewrite exists to end. The two callers
+    /// with nothing to report pass the same state twice, which is what they mean.
+    private func receipt(for proposed: PolicyState, movedFrom previous: PolicyState) -> String {
+        if let capped = Caps.receipt(for: proposed, movedFrom: previous, ledger: ledger,
+                                     now: now, dayStart: dayStart) {
+            return capped
+        }
         let remaining = ledger.remainingMinutes(budget: proposed.budgetMinutes, dayStart: dayStart)
         return "\(remaining) \(SilkStrings.leftToday)."
     }
@@ -739,16 +852,19 @@ final class AppModel {
     private func status(remaining: Int) -> String {
         var s = "\(remaining) \(SilkStrings.minLeft)"
         // The design's second clause names a rule in force ("Social until
-        // 5:00."). Silk's only per-door rule is a door shut for the day, so
-        // that is what it can honestly name — a plain close runs to the day
-        // boundary, and that boundary is its deadline.
-        for door in policy.doors {
-            if case .rest(let until) = state(of: door) {
-                let lifts = until ?? DayBoundary.nextDayStart(after: dayStart)
-                let t = Validator.timeOfDay(lifts, calendar: .current).display
-                s += " \(door.name) \(SilkStrings.closedUntil) \(t)."
-                break
-            }
+        // 5:00."). Silk's per-door rules are a door shut for the day and a door
+        // that has spent its own ceiling, so that is what it can honestly name —
+        // a plain close runs to the day boundary, and that boundary is its
+        // deadline.
+        //
+        // A door closed by hand is preferred over a cap-exhausted one, and it is
+        // looked for across ALL the doors before any rest is named — which is
+        // `ledger.ruleInForce`'s whole job, in one pass, so the preference
+        // cannot strand the fallback.
+        if let rule = ledger.ruleInForce(for: policy, at: now, dayStart: dayStart) {
+            let lifts = rule.lifts ?? DayBoundary.nextDayStart(after: dayStart)
+            let t = Validator.timeOfDay(lifts, calendar: .current).display
+            s += " \(rule.door.name) \(SilkStrings.closedUntil) \(t)."
         }
         return s
     }
@@ -819,6 +935,20 @@ final class AppModel {
         doorEdit = nil
     }
 
+    /// Daily cap: the editor's middle row hands the door to the wheel — and puts
+    /// the editor down first, in that order.
+    ///
+    /// Both overlays are drawn on the same stratum and the editor fades out over
+    /// its own 0.4s curve, so leaving it standing would mount the wheel under a
+    /// .97 veil for most of half a second, with the editor's backdrop eating
+    /// every touch aimed at the wheel — including the blind coordinate tap the
+    /// UI walk commits with. The wheel's title carries the door name from here,
+    /// so the editor's has done its job.
+    func openCapWheel(for door: Door) {
+        closeDoorEdit()
+        picker = .cap(door)
+    }
+
     /// Change app: the same sheet setup uses, so there is one idiom and not
     /// two. It opens on the tap — the reading beat existed to buy time for a
     /// line the sheet was about to cover, and the line now rides inside the
@@ -833,6 +963,19 @@ final class AppModel {
     /// ordering. Instant by decision (the task's call; see the receipt's
     /// undo): removal reads as tighten-adjacent housekeeping.
     ///
+    /// **Known exemption from the polarity rule, accepted:** removing a capped
+    /// door and adding it back is an instant, keyless uncapping. Doors are keyed
+    /// by UUID (spec §2.1, deliberately, so a re-added name cannot inherit a
+    /// ceiling the user never set on it), and both halves are instant, so the
+    /// door returns with a fresh id and no cap while clearing that cap from the
+    /// wheel would have parked until tomorrow. It is not the loosening it looks
+    /// like from the outside — between the two taps the app is not blocked at
+    /// all, so the re-add is strictly a tightening on the state it starts from —
+    /// but the two-tap route does reach a place rule 3 makes the one-tap route
+    /// wait for. Closing it means keying a removed cap by name for the rest of
+    /// the Silk day, which is a model change and belongs in the spec first.
+    /// Recorded here; PR 4 lists it under Build status in `docs/design/README.md`.
+    ///
     /// The undo is surgical: the one door back at its old seat, its one
     /// selection back in the dictionary. The undo window runs up to five
     /// minutes and the editor stays usable under the toast, so a snapshot
@@ -841,8 +984,17 @@ final class AppModel {
     func removeDoor(_ door: Door) {
         let removedIndex = policy.doors.firstIndex { $0.id == door.id }
         let removedSelection = SharedStore.loadDoorSelections()[door.id]
+        // The cap leaves with the door and comes back with it. Without the pair,
+        // remove-then-undo is a two-tap keyless uncapping: the door returns with
+        // no ceiling and free to draw the whole pool, delivered instantly by a
+        // button labelled "Put back.", with no key, no wait and no diff to
+        // audit. It would also break maturity for good — the live cap would move
+        // away from the pending's baseline permanently, so a parked cap raise on
+        // that door could never mature even after the removal was undone.
+        let removedCap = policy.doorCaps[door.id]
         var newPolicy = policy
         newPolicy.doors.removeAll { $0.id == door.id }
+        newPolicy.doorCaps[door.id] = nil
         var selections = SharedStore.loadDoorSelections()
         selections[door.id] = nil
         // The re-lock timers were armed for a door that no longer exists.
@@ -861,6 +1013,10 @@ final class AppModel {
                                     count: restored.doors.count) else { return }
             restored.doors.insert(door, at: min(removedIndex ?? restored.doors.count,
                                                 restored.doors.count))
+            // After the yield, never before it: a door that cannot come back
+            // must leave no cap behind, and an orphan keyed by a doorless id can
+            // never be seen, spent or removed.
+            restored.doorCaps[door.id] = removedCap
             var selections = SharedStore.loadDoorSelections()
             selections[door.id] = removedSelection
             self.commitDoorChange(policy: restored, selections: selections)
@@ -1070,6 +1226,11 @@ final class AppModel {
         if doorEdit == .add {
             var newPolicy = policy
             newPolicy.doors.removeAll { $0.id == door.id }
+            // A door added seconds ago has no cap to drop, so this line is
+            // structure rather than repair: every site a door leaves from takes
+            // its ceiling with it, and a rule with an exception in it is a rule
+            // the next door-removal path will forget.
+            newPolicy.doorCaps[door.id] = nil
             var selections = SharedStore.loadDoorSelections()
             selections[door.id] = nil
             commitDoorChange(policy: newPolicy, selections: selections)
@@ -1093,8 +1254,7 @@ final class AppModel {
         // where nothing consults the screen.
         guard next != policy else { return }
         policy = next
-        pendingLoosening = nil
-        SharedStore.save(pendingLoosening: nil, baseline: nil)
+        park(nil, baseline: nil)
         // The NFC key will record through the same call when the hardware flow
         // lands.
         SharedStore.recordKeyUse()
@@ -1102,12 +1262,23 @@ final class AppModel {
         commit()
     }
 
+    /// One write, both halves, in memory and in the App Group. The pair is the
+    /// truth: `save(pendingLoosening:)` was already the call most likely to be
+    /// got half-right, and now that the baseline is also held in memory,
+    /// splitting the two would let Now read a merge against a baseline the store
+    /// no longer has. Nothing outside this method assigns either.
+    private func park(_ pending: PolicyState?, baseline: PolicyState?) {
+        pendingLoosening = pending
+        pendingBaseline = baseline
+        SharedStore.save(pendingLoosening: pending, baseline: baseline)
+    }
+
     /// What a parked loosening would actually deliver, merged against what the
     /// policy has become since. Everything on screen reads this rather than the
     /// snapshot: the pending is what was *asked for*, and after a tighten the
     /// two are no longer the same thing.
     private func matured(_ pending: PolicyState) -> PolicyState {
-        policy.maturing(pending, parkedAgainst: SharedStore.loadPendingBaseline())
+        policy.maturing(pending, parkedAgainst: pendingBaseline)
     }
 
     /// What a pending loosening will change, in one value — or nil when it will
@@ -1125,12 +1296,16 @@ final class AppModel {
         if next.downHours != policy.downHours {
             return "\(next.downHours.start.display)–\(next.downHours.end.display)"
         }
-        return nil
+        // A parked cap loosening had no row at all, and the "Apply now." button
+        // that spends the key lives only inside that row — so the user was told
+        // "Applies tomorrow." and then found nothing on Now to see, apply or
+        // cancel. The line itself is composed in `Caps.pendingSummary`, where
+        // the whole seat-0 → park → row → key round trip is pinned.
+        return Caps.pendingSummary(next: next, live: policy)
     }
 
     func cancelPending() {
-        pendingLoosening = nil
-        SharedStore.save(pendingLoosening: nil, baseline: nil)
+        park(nil, baseline: nil)
     }
 
     /// A loosening matures once a day boundary has passed since it was asked
@@ -1148,8 +1323,7 @@ final class AppModel {
             // untouched — inventing one from the live policy here would make
             // `live == baseline` true for every field and hand the snapshot a
             // wholesale revert at the next boundary.
-            SharedStore.save(pendingLoosening: pending,
-                             baseline: SharedStore.loadPendingBaseline())
+            park(pending, baseline: pendingBaseline)
             return
         }
         let dayStart = DayBoundary.dayStart(now: .now, downHours: policy.downHours)
@@ -1160,8 +1334,7 @@ final class AppModel {
         // a card on Now offering a change that will never come. A loosening
         // lost is the safe direction; the sentence can be said again.
         policy = matured(pending)
-        pendingLoosening = nil
-        SharedStore.save(pendingLoosening: nil, baseline: nil)
+        park(nil, baseline: nil)
         // `commit`, not `persist`: the window this just moved decides which
         // doors count as open, so the wall has to be re-applied, and the orphan
         // sweep has to run on this write like every other one that goes through
