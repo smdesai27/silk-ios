@@ -120,6 +120,26 @@ public enum Caps {
         return nil
     }
 
+    /// What a parked ceiling change will deliver for ONE door — the value alone,
+    /// because every surface that says it has already named the door: the detail
+    /// card is titled with it, and the pending row prefixes it below. nil when
+    /// this door's ceiling is not what the merge will move.
+    ///
+    /// The value is the row's, not the wheel's: bare minutes and a lowercased
+    /// "no cap". `settingsValue` says "20 min" and "No cap" because it is read
+    /// as a standing rule under a label; this is read after "Tomorrow:" or after
+    /// a door's name, mid-sentence, where the unit is redundant and a capital is
+    /// wrong — the same reason `till` is lowercased in the row's serif slot.
+    public static func pendingValue(next: PolicyState, live: PolicyState,
+                                    door: Door) -> String? {
+        guard next.doorCaps[door.id] != live.doorCaps[door.id] else { return nil }
+        // Minutes cannot express absence, so the wheel's own first seat says it.
+        guard let cap = next.doorCaps[door.id] else {
+            return SilkStrings.noCap.lowercased()                          // "no cap"
+        }
+        return "\(cap)"                                                    // "20"
+    }
+
     /// The pending row's line for a parked cap change — or nil when no ceiling
     /// is what the merge will deliver.
     ///
@@ -127,12 +147,14 @@ public enum Caps {
     /// deterministic across launches, and going through the door list handles a
     /// removed door for free — its key is unreachable, the summary falls to nil,
     /// and the row and its "Apply now." button correctly disappear.
+    ///
+    /// Composed FROM `pendingValue` rather than beside it, so the card ("no cap")
+    /// and the row ("TikTok no cap") and the Settings toast ("Tomorrow: TikTok no
+    /// cap") cannot drift into three renderings of one waiting fact.
     public static func pendingSummary(next: PolicyState, live: PolicyState) -> String? {
-        for door in live.doors where next.doorCaps[door.id] != live.doorCaps[door.id] {
-            guard let cap = next.doorCaps[door.id] else {
-                return "\(door.name) \(SilkStrings.noCap.lowercased())"     // "TikTok no cap"
-            }
-            return "\(door.name) \(cap)"                                   // "TikTok 20"
+        for door in live.doors {
+            guard let value = pendingValue(next: next, live: live, door: door) else { continue }
+            return "\(door.name) \(value)"                    // "TikTok no cap" / "TikTok 20"
         }
         return nil
     }

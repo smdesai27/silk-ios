@@ -20,19 +20,33 @@ private extension Color {
 // The value
 // ============================================================
 
-/// What a toast is: words, and whether something can still be taken back.
+/// What a toast is: words, and the one thing that can still be done about them.
 ///
-/// The undo *action* lives beside this on ToastCenter. Behaviour inside the
+/// The action itself lives beside this on ToastCenter. Behaviour inside the
 /// value would make the value uncomparable, and this one has to diff — the
 /// arrival and the departure are driven by comparing it against nothing.
+///
+/// The label used to be synthesized from `SilkStrings.undo` whenever an action
+/// existed, and the value could not carry another word. That made the toast a
+/// liar in the one place it speaks after a Settings commit: a parked loosening's
+/// only affordance read "Undo" while meaning "withdraw the ask I just made", and
+/// the thing the user actually wanted — have it now — was two page-swipes away
+/// on a row she had no reason to look for. So the word is carried, not assumed.
 struct SilkToast: Equatable, Identifiable {
     let id = UUID()
     var message: String
-    /// Non-nil only when an Undo rides along, and then it is always
-    /// SilkStrings.undo — the toast speaks no words of its own.
-    var undoLabel: String? = nil
+    /// Non-nil only when an action rides along: `SilkStrings.undo` for a change
+    /// that can be taken back, `SilkStrings.applyNow` for one that is waiting for
+    /// tomorrow. The toast still speaks no words of its own — both come from the
+    /// string table, and the caller chooses which.
+    var actionLabel: String? = nil
+    /// The action's name in the accessibility tree, chosen by the caller for the
+    /// same reason the label is: the two buttons do opposite things and a walk
+    /// has to be able to tell them apart. `silk.toast.undo` is unchanged and
+    /// stays the default, so every walk that matches on it still does.
+    var actionID: String = "silk.toast.undo"
 
-    var carriesUndo: Bool { undoLabel != nil }
+    var carriesAction: Bool { actionLabel != nil }
 }
 
 // ============================================================
@@ -49,28 +63,46 @@ final class ToastCenter {
     private(set) var current: SilkToast?
 
     /// Kept out of the observed value on purpose (see SilkToast).
-    @ObservationIgnored private var undoAction: (() -> Void)?
+    @ObservationIgnored private var action: (() -> Void)?
     @ObservationIgnored private var expiry: Task<Void, Never>?
 
     /// Long enough to read; short enough that it is gone before it nags.
     /// (Interactive.html:401 — `undoFn?4500:2200`)
     private static let plainLifetime: Duration = .milliseconds(2200)
 
-    /// Undo buys longer because it asks for a decision, not just a glance.
+    /// An action buys longer because it asks for a decision, not just a glance.
     /// The prototype's 4.5s stands as the default, but the window is a
     /// setting now — the third row on Settings — so the owner sets it here
-    /// and every undo-bearing toast lives exactly that long.
+    /// and every action-bearing toast lives exactly that long. It is the undo
+    /// window's own number, and the second thing it now bounds — "Apply now."
+    /// — deserves it for the identical reason: it is a decision on screen, and
+    /// the receipt is the only place it is offered at the point of the gesture.
     var undoLifetime: Duration = .milliseconds(4500)
 
+    /// The general form: words, one labelled action, and the name that action
+    /// answers to. Both callers below fold into this.
+    func show(_ message: String, label: String, id: String, action: @escaping () -> Void) {
+        show(message, toast: SilkToast(message: message, actionLabel: label, actionID: id),
+             action: action)
+    }
+
+    /// The undo-bearing form, unchanged at every call site that had it: the word
+    /// is `SilkStrings.undo` and the identifier is `silk.toast.undo`.
     func show(_ message: String, undo: (() -> Void)? = nil) {
+        show(message,
+             toast: SilkToast(message: message,
+                              actionLabel: undo == nil ? nil : SilkStrings.undo),
+             action: undo)
+    }
+
+    private func show(_ message: String, toast: SilkToast, action: (() -> Void)?) {
         expiry?.cancel()
-        undoAction = undo
-        current = SilkToast(message: message,
-                            undoLabel: undo == nil ? nil : SilkStrings.undo)
+        self.action = action
+        current = toast
 
         // Read before the sleep: the lifetime the toast was shown with is the
         // lifetime it gets, even if the setting moves under it.
-        let lifetime = undo == nil ? Self.plainLifetime : undoLifetime
+        let lifetime = action == nil ? Self.plainLifetime : undoLifetime
         expiry = Task { [weak self] in
             try? await Task.sleep(for: lifetime)
             // A replaced toast cancels its predecessor mid-sleep; the loser
@@ -80,10 +112,12 @@ final class ToastCenter {
         }
     }
 
-    /// The change is its own receipt. Undo runs and the toast goes at once —
-    /// Silk does not confirm a confirmation.
-    func performUndo() {
-        let action = undoAction
+    /// The change is its own receipt. The action runs and the toast goes at
+    /// once — Silk does not confirm a confirmation. True of both words it can
+    /// carry: an undone change reads itself back off the row, and a loosening
+    /// applied by the key lands on the row the same instant.
+    func performAction() {
+        let action = self.action
         dismiss()
         action?()
     }
@@ -91,7 +125,7 @@ final class ToastCenter {
     func dismiss() {
         expiry?.cancel()
         expiry = nil
-        undoAction = nil
+        action = nil
         current = nil
     }
 }
@@ -103,10 +137,28 @@ final class ToastCenter {
 /// Ink on paper flips here, and only here. A toast is laid *on* the page, so
 /// it takes the opposite ground of whatever it covers — dark on the day paper,
 /// light on the night lacquer. (Interactive.html:158, 164)
+///
+/// **It may not wrap and it may not truncate** — `.lineLimit(1)` plus
+/// `.fixedSize(horizontal: true, …)` means an over-long capsule grows past the
+/// glass and clips rather than folding. The widest thing it can now be asked to
+/// say is a parked ceiling clearing on the longest name in the launch catalogue:
+/// "Tomorrow: Instagram no cap", 26 characters, beside "Apply now."
+///
+/// Measured rather than estimated. The walk lays out "Tomorrow: Reddit no cap"
+/// with the key beside it and reads back **285.2pt** including this view's 36pt
+/// of padding; "Instagram" is 22pt wider than "Reddit" at this font, so the worst
+/// case is **307pt of the 375** on the narrowest device Silk supports, with 68 to
+/// spare. Silk's fonts are fixed size, so Dynamic Type cannot widen it.
+///
+/// Door names come from the catalogue and nowhere else (`addDoor` is only reached
+/// from the add overlay's chips and setup's; the bar's `.addDoor` is refused with
+/// "Add it in Settings."), so nine characters is a bound and not a hope — and
+/// `ParkedReceiptTests` walks every catalogue entry against it, so a thirteenth
+/// name long enough to crowd the glass fails in the spine rather than on a phone.
 private struct ToastCapsule: View {
     var toast: SilkToast
     var night: Bool
-    var onUndo: () -> Void
+    var onAction: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {                       // .undo margin-left:12px (Interactive.html:162)
@@ -119,8 +171,8 @@ private struct ToastCapsule: View {
                 .foregroundStyle(night ? Silk.ink : Silk.paper)
                 .accessibilityIdentifier("silk.toast")
 
-            if let label = toast.undoLabel {
-                Button(action: onUndo) {
+            if let label = toast.actionLabel {
+                Button(action: onAction) {
                     // Weight 500 is Silk's ceiling — the canon gives it no
                     // bold, and the colour already sets the word apart.
                     Text(label)
@@ -130,7 +182,7 @@ private struct ToastCapsule: View {
                         .contentShape(Rectangle().inset(by: -14))
                 }
                 .buttonStyle(.plain)                // no system tint on Silk's ground
-                .accessibilityIdentifier("silk.toast.undo")
+                .accessibilityIdentifier(toast.actionID)
             }
         }
         .lineLimit(1)
@@ -191,7 +243,7 @@ struct ToastHost<Content: View>: View {
     @ViewBuilder
     private var toastLayer: some View {
         if let toast = center.current {
-            ToastCapsule(toast: toast, night: night) { center.performUndo() }
+            ToastCapsule(toast: toast, night: night) { center.performAction() }
                 .padding(.top, 58)                  // top:58px (Interactive.html:158)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 // 58 is measured from the glass, not from the safe area —
@@ -232,22 +284,35 @@ private struct ToastGallery: View {
     /// component adds no sentence of its own, and neither does its preview.
     private let refusal = "0 \(SilkStrings.leftToday)"
     private let receipt = "\(SilkStrings.tomorrow) 60"
+    /// The widest capsule the app can produce: the longest catalogue name, the
+    /// clearing form of a ceiling, and a second control beside it. It is in the
+    /// gallery so the one thing that would break this component — a message that
+    /// runs off the glass — is looked at every time anyone opens the file.
+    private let widest = "\(SilkStrings.tomorrow) Instagram \(SilkStrings.noCap.lowercased())"
 
     var body: some View {
         ToastHost(center: center, night: night) {
             VStack(spacing: 20) {
                 Spacer()
                 ToastCapsule(toast: SilkToast(message: refusal),
-                             night: night, onUndo: {})
-                ToastCapsule(toast: SilkToast(message: receipt, undoLabel: SilkStrings.undo),
-                             night: night, onUndo: {})
+                             night: night, onAction: {})
+                ToastCapsule(toast: SilkToast(message: receipt,
+                                              actionLabel: SilkStrings.undo),
+                             night: night, onAction: {})
+                ToastCapsule(toast: SilkToast(message: widest,
+                                              actionLabel: SilkStrings.applyNow,
+                                              actionID: "silk.toast.apply"),
+                             night: night, onAction: {})
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(night ? Silk.lacquer : Silk.paper)
             .contentShape(Rectangle())
             .onTapGesture { center.show(refusal) }
-            .onLongPressGesture { center.show(receipt) {} }
+            .onLongPressGesture {
+                center.show(widest, label: SilkStrings.applyNow,
+                            id: "silk.toast.apply", action: {})
+            }
         }
     }
 }

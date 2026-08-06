@@ -223,6 +223,88 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
             #expect(Caps.pendingSummary(next: next, live: live) == "TikTok 45")
         }
     }
+
+    // The card's half of the same fact: the value alone, because the card is
+    // already titled with the door's name.
+
+    @Test func theCardSaysTheValueAloneBecauseItHasNamedTheDoor() {
+        let live = policy(caps: [tiktok.id: 20])
+        #expect(Caps.pendingValue(next: policy(caps: [tiktok.id: 45]), live: live,
+                                  door: tiktok) == "45")
+        #expect(Caps.pendingValue(next: policy(), live: live, door: tiktok) == "no cap")
+    }
+
+    @Test func aDoorWithNothingWaitingOnItSaysNothingOnItsCard() {
+        let live = policy(caps: [tiktok.id: 20])
+        // The ask is on TikTok; Instagram's card must not draw a pending row.
+        #expect(Caps.pendingValue(next: policy(), live: live, door: instagram) == nil)
+        #expect(Caps.pendingValue(next: live, live: live, door: tiktok) == nil)
+    }
+
+    /// The card and the row are two renderings of one waiting fact, and they are
+    /// composed from one call so they cannot drift. If `pendingSummary` ever
+    /// stops being "name, space, value", this is what says so.
+    @Test func theRowIsTheCardsLineWithTheDoorNamedInFrontOfIt() {
+        let live = policy(caps: [tiktok.id: 20])
+        for next in [policy(), policy(caps: [tiktok.id: 45])] {
+            let value = Caps.pendingValue(next: next, live: live, door: tiktok)!
+            #expect(Caps.pendingSummary(next: next, live: live) == "\(tiktok.name) \(value)")
+        }
+    }
+}
+
+// MARK: - The receipt a parked loosening leaves
+//
+// The reply that made clearing a cap read as broken. "Applies tomorrow." is
+// seventeen characters carrying no user data, byte-identical after a budget
+// raise, a shortened night and a cleared ceiling — and every loosening, by rule
+// 3, is a gesture that visibly changes nothing. A constant answer over an
+// unchanged screen is indistinguishable from a dropped command.
+
+@Suite struct ParkedReceiptTests {
+    @Test func theReplyNamesWhatIsWaiting() {
+        #expect(SilkStrings.parked("Reddit no cap") == "Tomorrow: Reddit no cap")
+        #expect(SilkStrings.parked("60") == "Tomorrow: 60")
+    }
+
+    /// It is composed from `tomorrow`, not from a second sentence about
+    /// tomorrow: the row on Now already prefixes its line with that word, so the
+    /// toast and the row read alike.
+    @Test func itIsTheRowsOwnWordAndNotAThirdOne() {
+        #expect(SilkStrings.parked("60").hasPrefix(SilkStrings.tomorrow))
+    }
+
+    /// A loosening no surface can summarise — turning the wall itself off has no
+    /// pending row and no card — still gets an answer. "Tomorrow:" with nothing
+    /// after it would be worse than the constant it replaces.
+    @Test func aLooseningNothingCanNameFallsBackToTheConstant() {
+        #expect(SilkStrings.parked(nil) == SilkStrings.appliesTomorrow)
+    }
+
+    /// THE GEOMETRY PIN, and the reason it is a test rather than a comment.
+    ///
+    /// `Silk/Toast.swift` sets `.lineLimit(1)` and `.fixedSize(horizontal: true,
+    /// …)`, so an over-long capsule grows past the glass and clips rather than
+    /// folding. The worst case is the CLEARING form on the longest name in the
+    /// launch catalogue — "Tomorrow: Instagram no cap", 26 characters, which
+    /// measures 177pt at `Silk.sans(13, .medium)`; beside "Apply now." and the
+    /// capsule's 36pt of padding that is 293pt of the 375 on the narrowest
+    /// device Silk supports. It fits with 82pt to spare.
+    ///
+    /// Door names come from this catalogue and nowhere else — `addDoor` is
+    /// reached only from the add overlay's chips and setup's, and the bar's
+    /// `.addDoor` is refused with "Add it in Settings." — so the bound is real.
+    /// A thirteenth name three characters longer than "Instagram" would take the
+    /// capsule to roughly 350pt and start crowding the glass; this fails first.
+    @Test func theWidestReceiptTheCatalogueCanProduceStillFitsOnTheGlass() {
+        for entry in LaunchCatalog.entries {
+            let door = Door(name: entry.display)
+            let live = policy([door], caps: [door.id: 20])
+            let summary = Caps.pendingSummary(next: policy([door]), live: live)
+            #expect(SilkStrings.parked(summary).count <= 26,
+                    "\(entry.display) makes a receipt too wide for the capsule")
+        }
+    }
 }
 
 // MARK: - The undo's cap half

@@ -909,6 +909,119 @@ final class OnboardingUITests: XCTestCase {
                       "ensō did not debit the pool by the capped grant")
     }
 
+    /// The other direction, which nothing walked before this: taking a ceiling
+    /// off again. It is a LOOSENING (an absent cap reads as infinity), so rule 3
+    /// parks it for tomorrow and the row correctly goes on showing the ceiling
+    /// still in force — which is exactly the report. "I set a cap it works, but
+    /// when I try to go back to no cap it doesn't work."
+    ///
+    /// Nothing about rule 3 changes here. What this pins is that the app now
+    /// SAYS so: the reply names the door and the value it is holding for
+    /// tomorrow, the affordance beside it is the key and not "Undo" — which
+    /// would have withdrawn the ask while reading as undoing the waiting — and
+    /// the card where the wheel was spun states the wait next to the ceiling it
+    /// is waiting behind. Tapping the key closes the round trip in one gesture,
+    /// at the point the gesture was made.
+    ///
+    /// It also measures the capsule. `Silk/Toast.swift` cannot wrap and cannot
+    /// truncate, and this reply is the longest thing it can be asked to say
+    /// *and* it now carries a second control — so the walk asserts the laid-out
+    /// capsule is inside the glass rather than trusting an estimate.
+    @MainActor
+    func testClearingACapParksAndTheReplyNamesItAndOffersTheKey() throws {
+        let app = launchFresh()
+        completeSetup(app)   // one door: Reddit, budget 40
+
+        let doorRow = element(app, "silk.settings.door.Reddit")
+        tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
+        let editor = element(app, "silk.settings.editor")
+        let picker = element(app, "silk.picker")
+        let capRow = element(app, "silk.settings.cap")
+
+        // A ceiling first, so there is one to take off. This half is the tighten
+        // walk's, in four lines: it lands, instantly, and the row reads it back.
+        tap(doorRow, "the Reddit row", raising: editor, "the door detail card")
+        tap(capRow, "Daily cap", raising: picker, "the cap wheel")
+        dragWheel(app, rows: -4)          // No cap → 20 min
+        tapPickerBackdrop(app)
+        XCTAssertTrue(picker.waitForNonExistence(timeout: Self.overlay),
+                      "the cap wheel did not fade out")
+        expect(doorRow, labelContains: "20 min", "the cap did not land")
+
+        // And now take it off. The wheel opens on the LIVE ceiling — deliberately,
+        // because seating it on the pending would show a value that is not in
+        // force — so four seats back up is the No-cap seat it started from.
+        tap(doorRow, "the Reddit row", raising: editor, "the door detail card")
+        tap(capRow, "Daily cap", raising: picker, "the cap wheel")
+        dragWheel(app, rows: 4)           // 20 min → No cap
+        tapPickerBackdrop(app)
+        XCTAssertTrue(picker.waitForNonExistence(timeout: Self.overlay),
+                      "the cap wheel did not fade out")
+
+        // The reply names the door and the value. It used to be seventeen
+        // characters of "Applies tomorrow." — byte-identical to what a budget
+        // raise says, carrying no user data at all, over a screen that had
+        // visibly not changed.
+        let toast = app.staticTexts["silk.toast"]
+        XCTAssertTrue(toast.waitForExistence(timeout: Self.appear), "the loosening did not toast")
+        expect(toast, label: "Tomorrow: Reddit no cap",
+               "the parked receipt did not name the door and the value")
+
+        // The affordance is the key, not Undo. Both halves matter: Undo here
+        // withdrew the ask, which is not what anyone wants in that second and is
+        // not what the word reads as.
+        let apply = app.buttons["silk.toast.apply"]
+        XCTAssertTrue(apply.waitForExistence(timeout: Self.appear),
+                      "the parked receipt did not offer the key")
+        XCTAssertFalse(app.buttons["silk.toast.undo"].exists,
+                       "the parked receipt still offered Undo")
+
+        // Measured, not estimated. The capsule is the two labels plus 18pt of
+        // padding a side, and it may not wrap and may not truncate — so what it
+        // has to fit inside is the screen.
+        //
+        // Two assertions, because the runner is not the narrowest device. The
+        // first is the literal one: on whatever this is running on, nothing ran
+        // off. The second is the one that matters — 375 is the narrowest glass
+        // Silk supports, and a suite that only ever runs on a 402pt phone would
+        // let a message grow past it unseen. Silk's fonts are fixed size, so
+        // this width is the same number on every device.
+        // Measured on this walk: 285.2pt for "Tomorrow: Reddit no cap" beside
+        // "Apply now.", and the catalogue's longest name ("Instagram") adds 22pt
+        // on top of that — 307pt of the 375, with 68 to spare.
+        let capsule = toast.frame.union(apply.frame).insetBy(dx: -18, dy: 0)
+        XCTAssertTrue(app.frame.insetBy(dx: -0.5, dy: -0.5).contains(capsule),
+                      "the receipt ran off the glass — \(capsule.width)pt of \(app.frame.width)")
+        XCTAssertLessThanOrEqual(capsule.width, 375,
+                                 "the receipt would not fit the narrowest device Silk supports")
+
+        // Rule 3 still holds, and that is the point: nothing landed. The row
+        // behind the toast goes on stating the ceiling in force.
+        expect(doorRow, labelContains: "20 min", "the loosening applied instantly")
+
+        // And the card where the wheel was spun now says what it is waiting for,
+        // beside what is still in force. This is what breaks the retry loop: the
+        // wheel used to re-open on the live ceiling with the ask invisible on
+        // every surface, so clearing it again produced the same reply over the
+        // same unchanged screen.
+        tap(doorRow, "the Reddit row", raising: editor, "the door detail card")
+        expect(capRow, labelContains: "20 min", "the card stopped stating the ceiling in force")
+        let pendingRow = element(app, "silk.settings.pending")
+        XCTAssertTrue(pendingRow.waitForExistence(timeout: Self.appear),
+                      "the card said nothing about the parked change")
+        expect(pendingRow, labelContains: "no cap", "the card did not name what is waiting")
+
+        // The key, spent from the receipt — the whole reason it is offered there.
+        tap(apply, "Apply now. on the receipt")
+        expect(capRow, labelContains: "No cap", "the key did not clear the ceiling")
+        XCTAssertTrue(pendingRow.waitForNonExistence(timeout: Self.overlay),
+                      "the card still offered a change that had already landed")
+
+        // …and it is real behind the card too.
+        tap(editor, "the backdrop")
+        expect(doorRow, labelContains: "No cap", "the cleared ceiling did not reach the row")
+    }
+
     /// A running grant outranks the ceiling the receipt just set — and the
     /// receipt has to know that, because it is the only thing this commit says.
     ///

@@ -323,11 +323,26 @@ struct DoorDetailCard: View {
     /// (CapsTests), and reading back exactly what the wheel would show is the
     /// entire reason this row exists.
     var cap: String
+    /// The ceiling this door is *waiting* for — "no cap", "45" — or nil when
+    /// nothing is parked on it. Composed through `Caps.pendingValue`, the same
+    /// call Now's pending row composes its own line from, so the two surfaces
+    /// cannot disagree about what tomorrow holds.
+    ///
+    /// This row is the whole answer to the report. Clearing a ceiling is a
+    /// loosening (rule 3), so it parks — and the row behind this card, this
+    /// card's cap row and the wheel all went on reading the ceiling still in
+    /// force, with the ask visible on none of them. Re-opening the wheel and
+    /// clearing it again produced the same reply over the same unchanged screen,
+    /// which is exactly what "it doesn't work for some reason" describes. The
+    /// card states the wait where the gesture was made.
+    var pending: String?
     var night: Bool
     /// Daily cap: the parent takes this card down and raises the wheel on the
     /// door in one un-animated frame — the two never share the screen, so the
     /// wheel's own title carries the door name from here.
     var onCap: () -> Void
+    /// The key, spent from here. The same call Now's pending row makes.
+    var onApplyNow: () -> Void
     var onRebind: () -> Void
     var onRemove: () -> Void
     var onClose: () -> Void
@@ -366,6 +381,13 @@ struct DoorDetailCard: View {
                 // What the door currently IS …
                 capRow
 
+                // … and what it is waiting to become, when something is. Under
+                // the cap row and above the rule, because it is a second
+                // statement about the ceiling and not a third verb: the rule
+                // divides what is stated from what is offered, and a parked
+                // change is stated.
+                if let pending { pendingRow(pending) }
+
                 // … and, under the one rule, what can be done about it. The rule
                 // divides the statement from the offers; it is not a row
                 // separator, which is why there is exactly one and it does not
@@ -377,6 +399,12 @@ struct DoorDetailCard: View {
                 actionRow(SilkStrings.rebind, id: "silk.settings.rebind", action: onRebind)
                 actionRow(SilkStrings.remove, id: "silk.settings.remove", action: onRemove)
             }
+            // The key spent from this card takes the pending row away and moves
+            // the cap row's value in the same frame, and the card is still up to
+            // watch it happen. One curve, the overlay's own — scoped to this
+            // column and no wider, so the card's 0.4 is never lent to the page
+            // underneath it.
+            .animation(Silk.motion(Silk.Motion.overlay), value: pending)
         }
     }
 
@@ -419,6 +447,56 @@ struct DoorDetailCard: View {
             .accessibilityIdentifier("silk.settings.cap")
         }
         .buttonStyle(SilkPressStyle())
+    }
+
+    /// The parked ceiling, and the one way to have it before the day turns.
+    ///
+    /// Now's pending row, on the card's grid — the same three parts in the same
+    /// order (sans label, serif value, the key riding the far edge), because it
+    /// is the same fact and a user who has seen one should recognise the other.
+    /// The value takes the page's quieter value ink rather than the card's full
+    /// voice, and that is the point rather than a nicety: the ceiling above it is
+    /// in force and this one is not, so the row that states the live rule stays
+    /// the loudest thing on the card.
+    ///
+    /// Nothing here explains polarity. The canon's rule is that a deferral is a
+    /// time-statement and never an explanation, so the *why* is carried by form:
+    /// the live ceiling is stated above, unchanged, and this line sits under it
+    /// naming a different day. Two rows, one glance, no lecture.
+    private func pendingRow(_ value: String) -> some View {
+        HStack(spacing: 4) {
+            HStack(spacing: 4) {
+                Text(SilkStrings.tomorrow)
+                    .font(Silk.sans(15, weight: .medium))
+                    .tracking(Silk.track(-0.005, 15))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.36) : Silk.inkAlpha(0.70))
+                Text(value)
+                    .font(Silk.serif(15))
+                    .lineLimit(1)
+                    .foregroundStyle(night ? Silk.paperAlpha(0.26) : Silk.inkAlpha(0.50))
+            }
+            // Folded first, so the identifier rides an element whose label is
+            // the statement entire ("Tomorrow: no cap") — and folded on this
+            // inner stack and not the row, so it cannot swallow the button's own
+            // identifier the way a container identifier stamps its descendants.
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("silk.settings.pending")
+
+            Spacer(minLength: 8)
+
+            Button(action: onApplyNow) {
+                Text(SilkStrings.applyNow)
+                    .font(Silk.serif(12.5))
+                    .tracking(Silk.track(0.015, 12.5))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.44) : Silk.inkAlpha(0.45))
+                    .frame(height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("silk.settings.pending.apply")
+        }
+        .frame(height: 52)
+        .transition(.opacity)
     }
 
     /// The two verbs, demoted under the rule. Sans and not the old serif 19:
@@ -567,16 +645,31 @@ struct DoorAddOverlay: View {
 #Preview("Door card — day") {
     ZStack {
         Ground(night: false).ignoresSafeArea()
-        DoorDetailCard(name: "Instagram", icon: nil, cap: "20 min", night: false,
-                       onCap: {}, onRebind: {}, onRemove: {}, onClose: {})
+        DoorDetailCard(name: "Instagram", icon: nil, cap: "20 min", pending: nil,
+                       night: false,
+                       onCap: {}, onApplyNow: {}, onRebind: {}, onRemove: {}, onClose: {})
     }
 }
 
 #Preview("Door card — night") {
     ZStack {
         Ground(night: true).ignoresSafeArea()
-        DoorDetailCard(name: "TikTok", icon: nil, cap: SilkStrings.noCap, night: true,
-                       onCap: {}, onRebind: {}, onRemove: {}, onClose: {})
+        DoorDetailCard(name: "TikTok", icon: nil, cap: SilkStrings.noCap, pending: nil,
+                       night: true,
+                       onCap: {}, onApplyNow: {}, onRebind: {}, onRemove: {}, onClose: {})
+    }
+}
+
+/// The state the report is about: a ceiling of 20 still in force, a clearing
+/// parked against it, and the key offered where the wheel was spun. The two rows
+/// disagree on purpose — that disagreement IS the feature, and it is the whole
+/// reason "Applies tomorrow." over an unchanged card read as a dropped command.
+#Preview("Door card — a parked clearing") {
+    ZStack {
+        Ground(night: false).ignoresSafeArea()
+        DoorDetailCard(name: "Instagram", icon: nil, cap: "20 min",
+                       pending: SilkStrings.noCap.lowercased(), night: false,
+                       onCap: {}, onApplyNow: {}, onRebind: {}, onRemove: {}, onClose: {})
     }
 }
 

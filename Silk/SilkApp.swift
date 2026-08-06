@@ -250,8 +250,10 @@ struct RootView: View {
                                     name: door.name,
                                     icon: model.doorIcons[door.id],
                                     cap: model.settingsCap(for: door),
+                                    pending: model.settingsPendingCap(for: door),
                                     night: night,
                                     onCap: { model.openCapWheel(for: door) },
+                                    onApplyNow: { model.keyTapped() },
                                     onRebind: { model.rebind(door) },
                                     onRemove: { model.removeDoor(door) },
                                     onClose: { model.closeDoorEdit() })

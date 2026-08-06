@@ -76,6 +76,34 @@ public enum SilkStrings {
     public static let tomorrow = "Tomorrow:"          // composes: "Tomorrow: 60"
     public static let appliesTomorrow = "Applies tomorrow."
     public static let applyNow = "Apply now."
+
+    /// The receipt a parked loosening leaves — "Tomorrow: Reddit no cap",
+    /// "Tomorrow: 60", "Tomorrow: 10:00–7:00".
+    ///
+    /// A rendering, not a new sentence: both halves are already here, and
+    /// `summary` is user data (a door's name, a number, an hour) composed by
+    /// `AppModel.pendingSummary` — the same call Now's pending row makes, so
+    /// the reply and the row cannot disagree about what is waiting.
+    ///
+    /// Why it replaces the bare constant everywhere it can: "Applies tomorrow."
+    /// names nothing. It is byte-identical after a budget raise, a shortened
+    /// night and a cleared ceiling, and a gesture that visibly changes nothing —
+    /// which every loosening is, by rule 3 — answered by a sentence carrying no
+    /// user data at all is indistinguishable from a dropped command. Every other
+    /// receipt in the app states what moved; this one now does too.
+    ///
+    /// The constant stays, and this falls back to it, because a loosening can
+    /// still be one no surface can summarise (the wall itself). Saying "Tomorrow:"
+    /// with nothing after it would be worse than saying less.
+    ///
+    /// Deliberately NOT an explanation. The canon's rule is that a deferral is a
+    /// time-statement and never a lecture, so the sentence names the day and the
+    /// thing, and the *reason* it is not now is carried by form and placement —
+    /// the key offered beside it, the ceiling still standing on the row behind it.
+    public static func parked(_ summary: String?) -> String {
+        guard let summary else { return appliesTomorrow }
+        return "\(tomorrow) \(summary)"
+    }
     public static let undo = "Undo"
     public static let putBack = "Put back."
 

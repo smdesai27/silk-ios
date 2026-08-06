@@ -29,18 +29,23 @@ final class AppModel {
     /// the older one restores a pre-both ledger and erases the newer turn
     /// whole. An undo applies whole or not at all.
     @ObservationIgnored private var ledgerGeneration = 0
-    private(set) var pendingLoosening: PolicyState?
-    /// The policy the parked loosening was measured against — held here rather
-    /// than re-read, and always written by `park` in the same breath as the
-    /// pending itself.
+
+    /// The one parked ask, the policy it was measured against, and the
+    /// generation that keys its undo offers. All three move together or not at
+    /// all, which is why they are one value and not three properties — see
+    /// `SilkCore.PendingSlot`, where the staleness rule is stated and pinned.
     ///
-    /// `matured` is asked three times on every body pass of Now (the row, the
-    /// height it reserves, and the animation that keys them together), and each
-    /// ask used to be an App Group read plus a whole `PolicyState` decode on the
-    /// main thread — on every clock tick, keyboard rise and layout pass. In
-    /// memory the merge is free, so the three call sites can go on asking the
-    /// one question, which is the point of asking it.
-    @ObservationIgnored private var pendingBaseline: PolicyState?
+    /// Observed, unlike the ledger's generation: Now's row, the reservation it
+    /// makes and the detail card all read the pending, and they must redraw when
+    /// it moves. The baseline rides inside for the reason it was held in memory
+    /// in the first place — `matured` is asked three times on every body pass of
+    /// Now, and each ask used to be an App Group read plus a whole `PolicyState`
+    /// decode on the main thread, on every clock tick, keyboard rise and layout
+    /// pass. In memory the merge is free, so the call sites can go on asking.
+    private var slot: PendingSlot
+
+    /// What is waiting, for everything that only needs to know that.
+    var pendingLoosening: PolicyState? { slot.pending }
     /// Setup is complete once a policy has been persisted. Until then the app
     /// shows onboarding and holds nothing.
     private(set) var onboarded: Bool
@@ -108,8 +113,8 @@ final class AppModel {
         self.policy = saved ?? AppModel.defaultPolicy
         self.ledger = SharedStore.loadLedger()
         self.ledgerStamp = SharedStore.ledgerStamp()
-        self.pendingLoosening = SharedStore.loadPendingLoosening()
-        self.pendingBaseline = SharedStore.loadPendingBaseline()
+        self.slot = PendingSlot(pending: SharedStore.loadPendingLoosening(),
+                                baseline: SharedStore.loadPendingBaseline())
         self.undoSeconds = SharedStore.loadUndoSeconds()
         toasts.undoLifetime = .seconds(undoSeconds)
         // No local state means a fresh install — and possibly a previous
@@ -745,27 +750,59 @@ final class AppModel {
 
         case .loosen:
             // Applies at the next day start — or now, with the key. Undo here
-            // withdraws the ask and puts back whatever was already waiting.
+            // withdraws the ask and puts back whatever was already waiting; it
+            // is offered in the thread, where a sentence was said, and NOT on
+            // the Settings toast, which offers the key instead (see `settle`).
             //
             // There is exactly ONE pending slot, and the decision recorded here
             // is that the newest ask replaces the waiting one — silently, with
-            // no receipt: parking a second loosening discards the first and
-            // answers "Applies tomorrow." both times, and Now's row then names
-            // only the survivor. That was tolerable while three dimensions could
+            // no receipt: parking a second loosening discards the first, each
+            // reply names only its own ask, and Now's row then names only the
+            // survivor. That was tolerable while three dimensions could
             // be parked and no gesture chained them; caps take it to 3 + N (up
             // to nine) and make chaining ordinary — park a raise on TikTok, then
             // clear the cap on Instagram, and the first ask is gone. Knowingly
             // unfixed (spec §6.9); surfacing the displacement in the reply is
             // the recommended follow-up, and PR 4 lists it under Build status in
             // `docs/design/README.md`.
-            let previous = pendingLoosening
+            //
+            // What is NOT left standing is the second loss that hid behind it.
+            // The offer below used to restore blind, so tapping a displaced one
+            // put back this park's predecessor and DELETED the newer ask on top
+            // of it — two losses in one tap, under a pill that then wrote "Put
+            // back." `PendingSlot`'s generation is what closes that.
+            let previous = slot.pending
             // The baseline travels with the pending: at maturity it is the only
             // way to tell which of the four fields the sentence actually moved.
             // Undo puts back the withdrawn pending's own baseline, not this one.
-            let previousBaseline = pendingBaseline
-            park(proposed, baseline: policy)
-            return (SilkStrings.appliesTomorrow, { [weak self] in
+            let previousBaseline = slot.baseline
+            // Keyed to this park's own generation, exactly as a ledger undo is
+            // keyed to its mutation's. Any later park expires this offer.
+            let generation = park(proposed, baseline: policy)
+            // The one haptic on this path, and it is the warning rather than the
+            // impact. `tighten()`'s rigid thump is the feel of a rule landing,
+            // and nothing landed here — saying so with the same tap would make
+            // the two states physically identical, which is most of why clearing
+            // a cap reads as broken. `grant()`'s success is worse: it is the feel
+            // of "you have it", and she does not. `refusal()` is the two-beat
+            // warning Silk already fires when an edge holds, and rule 3 is an
+            // edge holding — the softest one it has, because it names a day
+            // rather than a no. Three haptics still, and no fourth.
+            Silk.Haptic.refusal()
+            // Named, not a constant. `pendingSummary` is the same call Now's row
+            // makes, so the receipt and the row cannot disagree about what is
+            // waiting; the composition is `SilkStrings.parked`, in the spine
+            // where it is pinned.
+            return (SilkStrings.parked(pendingSummary(proposed)), { [weak self] in
                 guard let self else { return false }
+                // An undo applies whole or not at all. A second loosening parked
+                // in the meantime — the window runs to five minutes — has
+                // displaced this one, and putting back this ask's predecessor
+                // would delete that newer ask on top of restoring something
+                // nobody asked for. The offer expires instead, and reports it,
+                // so the thread does not write "Put back." over a park that
+                // never happened.
+                guard self.slot.stands(generation) else { return false }
                 self.park(previous, baseline: previousBaseline)
                 return true
             })
@@ -933,9 +970,10 @@ final class AppModel {
     /// The backdrop tap: commit and close in one gesture. Budget, window and a
     /// door's cap go through `enact` — the same path a sentence takes — so the
     /// polarity rule holds from Settings too: a tighten lands now with Undo on
-    /// the toast, a loosening answers "Applies tomorrow." and waits. The undo
-    /// window is not a policy, so it commits directly and quietly: the row
-    /// reading the new value is its own receipt.
+    /// the toast, a loosening names what it parked ("Tomorrow: Reddit no cap")
+    /// and offers the key beside it. The undo window is not a policy, so it
+    /// commits directly and quietly: the row reading the new value is its own
+    /// receipt.
     ///
     /// `picks` is nil when the wheel was never moved. Looking at a wheel must
     /// cost nothing: the backdrop tap is the overlay's only exit, so a dismissal
@@ -1007,6 +1045,30 @@ final class AppModel {
         guard proposed != policy else { return }
         let polarity = PolarityEngine.classify(current: policy, proposed: proposed)
         let (reply, undo) = enact(proposed, polarity)
+        if polarity == .loosen {
+            // The one affordance beside a parked receipt is the key, not Undo,
+            // and this is where that decision is made rather than in the toast.
+            //
+            // Undo on a parked loosening means "withdraw the ask" — it does not
+            // undo the waiting, which is what the word plainly reads as after a
+            // gesture that visibly changed nothing. Withdrawing is also not what
+            // anyone wants in that second: she asked for the change, was told it
+            // waits, and the one thing she wants is to have it now. That control
+            // existed and was two page-swipes away on Now's pending row, on a row
+            // she had no reason to look for. It is here now, at the point of the
+            // gesture, and it spends the key exactly as Now's does.
+            //
+            // The withdrawal is not lost with it. A loosening said at the BAR
+            // still lands in the thread with its Undo pill — `handle` offers the
+            // closure `enact` returned — and a loosening committed from a wheel
+            // is withdrawn the way rule 3 already provides for: tighten the same
+            // field, and the merge declines the parked ask. The card now shows
+            // the parked change, so that is a visible act rather than a guess.
+            toasts.show(reply, label: SilkStrings.applyNow, id: "silk.toast.apply") {
+                [weak self] in self?.keyTapped()
+            }
+            return
+        }
         // The landing report is the thread's concern — its pill rewrites the
         // reply to a receipt, and only a landed restore may earn one. A toast
         // dismisses on tap either way and rewrites nothing, and the policy
@@ -1521,7 +1583,7 @@ final class AppModel {
     }
 
     func keyTapped() {
-        guard let pending = pendingLoosening else { return }
+        guard let pending = slot.pending else { return }
         // The key buys the wait, not the merge: a tighten made since the
         // sentence was said still stands, exactly as it would at the boundary.
         let next = matured(pending)
@@ -1549,10 +1611,14 @@ final class AppModel {
     /// got half-right, and now that the baseline is also held in memory,
     /// splitting the two would let Now read a merge against a baseline the store
     /// no longer has. Nothing outside this method assigns either.
-    private func park(_ pending: PolicyState?, baseline: PolicyState?) {
-        pendingLoosening = pending
-        pendingBaseline = baseline
+    ///
+    /// Returns the generation this park landed as, so a caller offering a way
+    /// back can key it to its own park and expire when anything else parks.
+    @discardableResult
+    private func park(_ pending: PolicyState?, baseline: PolicyState?) -> Int {
+        let generation = slot.park(pending, baseline: baseline)
         SharedStore.save(pendingLoosening: pending, baseline: baseline)
+        return generation
     }
 
     /// What a parked loosening would actually deliver, merged against what the
@@ -1560,7 +1626,7 @@ final class AppModel {
     /// snapshot: the pending is what was *asked for*, and after a tighten the
     /// two are no longer the same thing.
     private func matured(_ pending: PolicyState) -> PolicyState {
-        policy.maturing(pending, parkedAgainst: pendingBaseline)
+        policy.maturing(pending, parkedAgainst: slot.baseline)
     }
 
     /// What a pending loosening will change, in one value — or nil when it will
@@ -1586,8 +1652,22 @@ final class AppModel {
         return Caps.pendingSummary(next: next, live: policy)
     }
 
-    func cancelPending() {
-        park(nil, baseline: nil)
+    /// What a parked ceiling change will deliver for ONE door — the detail
+    /// card's own line, and nil for a door with nothing waiting on it.
+    ///
+    /// The card is where the gesture happened, and before this it stated only the
+    /// ceiling in force. So clearing a cap left the row, the card and the wheel
+    /// all reading the old ceiling with the ask invisible on every one of them:
+    /// re-open the wheel, spin to No cap again, and the same reply arrives over
+    /// an unchanged screen. That loop is what "it doesn't work for some reason"
+    /// is. The card says it now, and offers the key beside it.
+    ///
+    /// The WHEEL still opens on the live ceiling, deliberately: seating it on the
+    /// pending would show a value that is not in force, which is a worse lie than
+    /// the one this fixes.
+    func settingsPendingCap(for door: Door) -> String? {
+        guard let pending = slot.pending else { return nil }
+        return Caps.pendingValue(next: matured(pending), live: policy, door: door)
     }
 
     /// A loosening matures once a day boundary has passed since it was asked
@@ -1605,7 +1685,7 @@ final class AppModel {
             // untouched — inventing one from the live policy here would make
             // `live == baseline` true for every field and hand the snapshot a
             // wholesale revert at the next boundary.
-            park(pending, baseline: pendingBaseline)
+            park(pending, baseline: slot.baseline)
             return
         }
         let dayStart = DayBoundary.dayStart(now: .now, downHours: policy.downHours)

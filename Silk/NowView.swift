@@ -208,6 +208,14 @@ struct NowView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // The one control on this row, and until now the only button in
+                // the app with no name in the accessibility tree — so the round
+                // trip that ends here (park a loosening, come and have it early)
+                // could not be walked at all. Outside the label and on the
+                // button, exactly as `silk.wall.raise` above it carries its own:
+                // under `.plain` the Button is a real element, and the walks
+                // match it as a button.
+                .accessibilityIdentifier("silk.pending.apply")
             }
             .padding(.horizontal, 46)
             .padding(.top, 18)
