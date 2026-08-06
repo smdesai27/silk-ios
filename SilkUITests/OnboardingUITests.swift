@@ -1174,4 +1174,192 @@ final class OnboardingUITests: XCTestCase {
                        "dismissing an untouched wheel committed its nearest seat")
         expect(budgetRow, labelContains: "35 min", "an untouched wheel snapped the budget to a seat")
     }
+
+    // MARK: - Where a wheel is actually resting
+    //
+    // Every cap walk above either taps a row or drags, which SETS the seat, or
+    // reads a label. None of them asks the question the two walks below ask:
+    // where does a wheel come to rest when it is merely handed a seat? The
+    // answer was "offset 0, whatever it was handed", and no label in this file
+    // could see it — the row, the card and the wheel's own accessibility value
+    // are all composed from the selection, and the selection was never wrong.
+    // Only the scroll was, and a scroll has no label. So this is measured.
+
+    /// The laid-out geometry of every wheel on screen, left to right: the 128×312
+    /// window, and the frame of the column of seats scrolling inside it.
+    ///
+    /// The rows themselves have no elements to ask, deliberately — `Wheel` folds
+    /// into ONE adjustable element because the resting value is its whole
+    /// VoiceOver reading. What the tree does carry is the scroll view and the
+    /// single child that is its content, and that is enough: the child's frame is
+    /// reported unclipped and is exactly `52 × count` tall, so seat *i* occupies
+    /// `column.minY + 52i` for 52pt. The 52 is not this file's invention — it is
+    /// `Wheel`'s own snap unit, the number 312 − 2×130 of content margin exists
+    /// to leave exactly one of.
+    @MainActor
+    private func wheels(_ app: XCUIApplication) -> [(window: CGRect, column: CGRect)] {
+        app.scrollViews.allElementsBoundByIndex
+            .map { (window: $0.frame, column: $0.children(matching: .other).firstMatch.frame) }
+            .sorted { $0.window.minX < $1.window.minX }
+    }
+
+    /// The honest assertion about an opening seat: the row carrying the stored
+    /// value is the row lying between the hairlines.
+    ///
+    /// The reading line is the window's own centre. `selectionFrame` straddles it
+    /// with two hairlines at ∓26.5, and the 130pt content margins leave exactly
+    /// one 52pt seat in the middle of the 312pt window — so "centred in the
+    /// window" and "inside the selection band" are the same sentence, and the
+    /// window is the element that actually exists.
+    @MainActor
+    private func expect(_ app: XCUIApplication, wheel i: Int, restingOn seat: Int,
+                        _ what: String, file: StaticString = #filePath, line: UInt = #line) {
+        let all = wheels(app)
+        guard i < all.count else {
+            return XCTFail("\(what) — there is no wheel \(i) on screen (found \(all.count))",
+                           file: file, line: line)
+        }
+        let (window, column) = all[i]
+        let row = CGRect(x: column.minX, y: column.minY + 52 * CGFloat(seat),
+                         width: column.width, height: 52)
+        XCTAssertEqual(row.midY, window.midY, accuracy: 1,
+                       String(format: "%@ — seat %d sits %.1fpt off the reading line; "
+                              + "the wheel is resting on seat %.2f",
+                              what, seat, row.midY - window.midY,
+                              (window.midY - column.minY - 26) / 52),
+                       file: file, line: line)
+    }
+
+    /// **A wheel opens resting on the seat it was given.**
+    ///
+    /// `.scrollPosition(id:anchor:)` moves a scroll view in response to a CHANGE
+    /// in what it is bound to, and a value the binding was born holding is not
+    /// one — so a wheel seeded with its selection laid out at offset 0 and
+    /// stayed there. A door capped at 10 min opened with the selection frame over
+    /// "No cap" and "10 min" two rows below it in full ink.
+    ///
+    /// Both pickers, because the fix has to be per wheel: down hours mounts two
+    /// with independent selections, and a fix that seated "the wheel" would seat
+    /// one of them and leave the other reading someone else's answer.
+    @MainActor
+    func testWheelsOpenRestingOnTheSeatTheyWereGiven() throws {
+        // The window is pinned rather than parked six hours out, because here
+        // the seats ARE the assertion and (hour + 6) puts them wherever the wall
+        // clock happens to be — usually on seat 0, which is the one seat a wheel
+        // that never scrolled gets right by accident. 9:00 PM is downStart seat
+        // 2 and 8:00 AM is downEnd seat 6: different from each other, and
+        // neither of them 0. Nothing in this walk makes a grant, so the parked
+        // window every other walk launches with is protecting nothing here.
+        let app = XCUIApplication()
+        app.launchArguments += ["-silkReset", "YES", "-silkDownStart", "21", "-silkDownEnd", "8"]
+        app.launch()
+        completeSetup(app)
+
+        let downRow = element(app, "silk.settings.down")
+        tap(app.buttons["silk.dot.2"], "the Settings dot", raising: downRow, "Settings")
+        expect(downRow, labelContains: "9:00\u{00A0}PM", "the pinned night window did not take")
+
+        let picker = element(app, "silk.picker")
+        tap(downRow, "the down row", raising: picker, "the down wheels")
+        expect(app, wheel: 0, restingOn: 2, "the start wheel did not open on 9:00 PM")
+        expect(app, wheel: 1, restingOn: 6, "the end wheel did not open on 8:00 AM")
+        // Asked twice. The wheel "opens already resting on it, no animation" —
+        // a seat arriving on the 0.4s curve is not resting on anything, and two
+        // reads of one frame are far enough apart to catch it still moving.
+        expect(app, wheel: 0, restingOn: 2, "the start wheel was still travelling to its seat")
+        expect(app, wheel: 1, restingOn: 6, "the end wheel was still travelling to its seat")
+        tapPickerBackdrop(app)
+        XCTAssertTrue(picker.waitForNonExistence(timeout: Self.overlay),
+                      "the down wheels did not fade out")
+        // A non-breaking space before the meridiem, not a plain one:
+        // `displayWithMeridiem` sets it so "9:00 PM" can never wrap, and a
+        // `CONTAINS` with an ordinary space matches nothing at all.
+        expect(downRow, labelContains: "9:00\u{00A0}PM",
+               "looking at the down wheels moved the window")
+
+        // And now the reported case in its own numbers. A fresh door first: seat
+        // 0 is the one a wheel gets right for free, so this half proves nothing
+        // on its own — it is here to set the ceiling the half below reads back.
+        let doorRow = element(app, "silk.settings.door.Reddit")
+        XCTAssertTrue(doorRow.waitForExistence(timeout: Self.appear), "the Reddit row is missing")
+        let editor = element(app, "silk.settings.editor")
+        tap(doorRow, "the Reddit row", raising: editor, "the door detail card")
+        tap(element(app, "silk.settings.cap"), "Daily cap", raising: picker, "the cap wheel")
+        expect(app, wheel: 0, restingOn: 0, "an uncapped door's wheel did not open on No cap")
+        dragWheel(app, rows: -2)          // No cap → 10 min
+        tapPickerBackdrop(app)
+        expect(doorRow, labelContains: "10 min", "the cap did not land")
+
+        // Reopened on the ceiling in force. `Caps.wheelSeat(for: 10)` is 2 —
+        // seat 0 is No cap, and 10 is the second minute in `Caps.wheelTable`;
+        // `CapWheelSeatTests.tenMinutesIsTheSeatTheReportedCaseOpensOn` holds
+        // that number in the spine so this walk is not the only place it lives.
+        tap(doorRow, "the Reddit row", raising: editor, "the door detail card")
+        tap(element(app, "silk.settings.cap"), "Daily cap", raising: picker, "the cap wheel")
+        expect(app, wheel: 0, restingOn: 2, "the cap wheel did not open on the ceiling in force")
+        expect(app, wheel: 0, restingOn: 2, "the cap wheel was still travelling to its seat")
+    }
+
+    /// **And a bare look still costs nothing.** The companion to the walk above,
+    /// and the reason it is safe to seat a wheel programmatically at all.
+    ///
+    /// `touched` is the whole of it: the overlay raises it from `onChange(of:
+    /// selections)`, and `Wheel` writes a landing back into its selection — so a
+    /// seating that nudged `selection`, even transiently, even to the value it
+    /// already held by a different route, would make every wheel in the product
+    /// commit on a bare look.
+    ///
+    /// That is invisible unless the wheel opens somewhere it cannot commit
+    /// without moving something, so the ceiling here is OFF-GRID. 25 min is a
+    /// value the bar can say and the wheel has no seat for; it opens on 20, the
+    /// nearest (`CapWheelSeatTests.anOffGridCeilingOpensOnItsNearestSeat`), and a
+    /// commit from an untouched wheel would silently tighten the door from 25 to
+    /// 20 and toast about it.
+    ///
+    /// This is the cap analogue of `testBudgetWheelDismissedUntouchedKeepsAnOff
+    /// GridValue`, which the seating bug had quietly hollowed out: with the wheel
+    /// resting at seat 0 instead of on the nearest seat, that walk was proving
+    /// the rule about a wheel that was not where it said it was.
+    @MainActor
+    func testCapWheelOpenedOnAnOffGridCeilingAndOnlyLookedAtKeepsIt() throws {
+        let app = launchFresh()
+        let bar = completeSetup(app)   // one door: Reddit, no ceiling
+
+        // Raising a ceiling from infinity is a tighten, so it lands now.
+        say(bar, "cap reddit at 25\n")
+        let landed = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Reddit 25")).firstMatch
+        XCTAssertTrue(landed.waitForExistence(timeout: Self.answer),
+                      "the off-grid ceiling did not land")
+
+        // Relaunched rather than waited out: what this walk asserts at the end is
+        // the ABSENCE of a receipt, and a tighten's own receipt stands for a
+        // minute carrying Undo. It also proves 25 survives storage, which is what
+        // makes the seat below the stored value's rather than the sentence's.
+        Self.stop(app)
+        app.launchArguments = []
+        app.launch()
+        XCTAssertTrue(app.textFields["silk.bar"].waitForExistence(timeout: Self.launch),
+                      "did not land on Now when already onboarded")
+
+        let doorRow = element(app, "silk.settings.door.Reddit")
+        tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
+        expect(doorRow, labelContains: "25 min", "the off-grid ceiling did not survive a relaunch")
+
+        let editor = element(app, "silk.settings.editor")
+        tap(doorRow, "the Reddit row", raising: editor, "the door detail card")
+        let picker = element(app, "silk.picker")
+        tap(element(app, "silk.settings.cap"), "Daily cap", raising: picker, "the cap wheel")
+        expect(app, wheel: 0, restingOn: 4, "25 min did not open on its nearest seat, 20 min")
+
+        // …and then nothing at all. No drag, no tap on a row, no adjustable step
+        // — only the backdrop, which is the picker's one exit.
+        tapPickerBackdrop(app)
+        XCTAssertTrue(picker.waitForNonExistence(timeout: Self.overlay),
+                      "the cap wheel did not fade out")
+        XCTAssertFalse(app.staticTexts["silk.toast"].waitForExistence(timeout: 3),
+                       "a wheel that was only looked at committed the seat it opened on")
+        expect(doorRow, labelContains: "25 min",
+               "a wheel that was only looked at tightened the ceiling to its nearest seat")
+    }
 }

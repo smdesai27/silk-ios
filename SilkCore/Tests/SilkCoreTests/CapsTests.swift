@@ -78,6 +78,22 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
         #expect(Caps.wheelMinutes(atSeat: Caps.wheelSeat(for: 500)) == 60)
     }
 
+    @Test func tenMinutesIsTheSeatTheReportedCaseOpensOn() {
+        // The seat `testWheelsOpenRestingOnTheSeatTheyWereGiven` measures a
+        // scroll offset against — held here so the walk is not the only place it
+        // lives. A simulator assertion whose expected value is derived nowhere is
+        // a constant waiting to be tuned until the walk goes green.
+        #expect(Caps.wheelSeat(for: 10) == 2)
+        #expect(Caps.wheelValues[2] == "10 \(SilkStrings.minutes)")
+        // The down-hours pair in that same walk is the same arithmetic on the
+        // picker's other two tables: 9:00 PM is the third half-hour from 8:00 PM,
+        // and 8:00 AM the seventh from 5:00 AM. `AppModel` owns those tables and
+        // is not in the spine, so they are restated as the expressions that
+        // build them rather than as two bare numbers.
+        #expect(Caps.nearestIndex(to: 21 * 60, in: (0..<8).map { 20 * 60 + $0 * 30 }) == 2)
+        #expect(Caps.nearestIndex(to: 8 * 60, in: (0..<8).map { 5 * 60 + $0 * 30 }) == 6)
+    }
+
     @Test func aSeatBeyondTheTableClampsRatherThanTraps() {
         #expect(Caps.wheelMinutes(atSeat: 99) == Caps.wheelTable.last)
     }

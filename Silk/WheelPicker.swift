@@ -89,8 +89,10 @@ struct WheelPickerOverlay: View {
     @State private var selections: [Int]
     /// Set by the one `onChange` below, which sees every way a seat can change:
     /// a drag's settle, a tap on a row, and VoiceOver's adjustable action. It is
-    /// never set on mount — `Wheel` seeds its scroll position from the selection
-    /// and only writes back a landing that differs.
+    /// never set on mount — `Wheel` puts itself on the selection's own seat and
+    /// writes back only a landing that DIFFERS from it, and it will not write
+    /// back at all until that seat has been applied. Both halves are load-bearing
+    /// and both live in `Wheel.seat()`.
     @State private var touched = false
 
     init(title: String, columns: [WheelColumn], night: Bool,
@@ -199,18 +201,16 @@ private struct Wheel: View {
     /// and XCUI never sees it.
     var axID: String
 
-    /// What the scroll view reports at the centre anchor. Seeded from the
-    /// selection so the wheel opens already resting on it, no animation —
-    /// the prototype sets `scrollTop` directly on mount (Silk Mockup.dc.html:264).
+    /// What the scroll view reports at the centre anchor, and the one handle
+    /// that moves it. Deliberately NOT seeded from the selection in an init —
+    /// see `seat()`, which is where the wheel is put on its opening seat and
+    /// where the reason it cannot be done in an init is written down.
     @State private var centred: Int?
 
-    init(values: [String], selection: Binding<Int>, night: Bool, axID: String) {
-        self.values = values
-        self._selection = selection
-        self.night = night
-        self.axID = axID
-        _centred = State(initialValue: selection.wrappedValue)
-    }
+    /// False until the opening seat has been applied. Until then the scroll view
+    /// is resting somewhere nobody chose, and nothing it reports may reach
+    /// `selection`.
+    @State private var seated = false
 
     var body: some View {
         ScrollView(.vertical) {
@@ -266,10 +266,25 @@ private struct Wheel: View {
                 .frame(height: 312 * 0.32)
                 .allowsHitTesting(false)
         }
+        // The opening seat, applied the moment the wheel is on screen and never
+        // again. `onAppear` and not `task`: a hop costs a rendered frame at the
+        // wrong seat, and there is nothing to await.
+        .onAppear { seat() }
         // The settle is the choice — the binding lands when the scroll rests,
         // which is the debounced `round(scrollTop / 52)` of the prototype.
+        //
+        // `seated` guards it, and that guard is what keeps `touched` honest.
+        // Before the seat is applied the column is resting at offset 0 whatever
+        // the selection says, and a position reported from there would be
+        // written into `selection` — which is the overlay's `touched`, which is
+        // the whole difference between a commit and a dismissal. A wheel that
+        // wrote its own arrival into the selection would commit on a bare look,
+        // every time, which is the regression this file's header exists to
+        // prevent. Seating itself cannot trip it from the other side either: it
+        // sets `centred` TO `selection`, so `landed != selection` is false.
         .onChange(of: centred) { _, landed in
-            if let landed, landed != selection { selection = landed }
+            guard seated, let landed, landed != selection else { return }
+            selection = landed
         }
         // One adjustable element per wheel: swipe up or down steps the value
         // and rides it to centre on the same curve the tap uses. The rows fold
@@ -284,6 +299,45 @@ private struct Wheel: View {
             }
         }
         .accessibilityIdentifier(axID)
+    }
+
+    /// Put the wheel on the seat it was opened with — once, instantly.
+    ///
+    /// `.scrollPosition(id:anchor:)` scrolls in response to a CHANGE in the
+    /// value bound to it, and a value the binding was born holding is not one.
+    /// So seeding `centred` in an init did nothing whatsoever: by the scroll
+    /// view's first layout the binding already read the seat, there was nothing
+    /// for the modifier to reconcile, and the column laid out at offset 0 and
+    /// stayed there. Measured, not deduced — the column's own frame sat at the
+    /// No-cap seat two seconds after the wheel opened, with the ink two rows
+    /// below it on the stored value, because the ink is keyed on `selection` and
+    /// only the scroll was wrong.
+    ///
+    /// That disagreement is the second cause of a bug the owner reported. A door
+    /// capped at 10 min opened with the frame over "No cap"; the backdrop was
+    /// tapped by someone who could see she had chosen No cap; and because no
+    /// seat had actually moved the overlay correctly reported a dismissal, so
+    /// nothing committed and nothing was said. "I set a cap it works, but when I
+    /// try to go back to no cap it doesn't work."
+    ///
+    /// nil → selection IS a change, so the opening seat now rides the one
+    /// mechanism that always worked: the same `centred` write the row tap and
+    /// the VoiceOver step already make. `ScrollViewReader.scrollTo` would move
+    /// it too, but it is a second positioning API stacked on the one already
+    /// here — Apple's own note is that `scrollPosition` supersedes it — and two
+    /// handles on one scroll is a thing to debug later, not a fix.
+    ///
+    /// Animations off, explicitly. The wheel "opens already resting on it, no
+    /// animation" (the prototype sets `scrollTop` directly on mount, Silk
+    /// Mockup.dc.html:264), and `onAppear` can be reached inside the transaction
+    /// that raised the overlay — whose 0.4s would otherwise be handed to the
+    /// seat and scroll it visibly into place from the wrong row.
+    private func seat() {
+        guard !seated else { return }
+        seated = true
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) { centred = selection }
     }
 
     private func step(_ delta: Int) {
