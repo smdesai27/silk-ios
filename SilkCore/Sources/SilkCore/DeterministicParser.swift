@@ -360,11 +360,45 @@ public enum DeterministicParser {
     }
 
     /// A trailing plural or possessive "s", stripped — or nil when the token is
-    /// too short for the ending to be an inflection rather than the word.
+    /// too short for the ending to be an inflection rather than the word, or
+    /// when the token is a word of English in its own right.
     private static func deinflected(_ form: String) -> String? {
-        guard form.count > 3, form.hasSuffix("s") else { return nil }
+        guard form.count > 3, form.hasSuffix("s"), !ordinaryWords.contains(form) else { return nil }
         return String(form.dropLast())
     }
+
+    /// The words whose final "s" is not an inflection of a door's name, however
+    /// much they look like one. THIS IS ABOUT DEINFLECTION AND NOTHING ELSE:
+    /// door matching is token-exact everywhere in this file, so "anything else"
+    /// and "nothing else" have never named Hinge and are not what this guards.
+    /// The token itself is looked up in a Set — a substring test here would
+    /// find "hinge" inside both of those and is exactly the mistake this file
+    /// has paid for four times over in the cap lexicon.
+    ///
+    /// "everything hinges on it, give me 20 minutes" is the sentence that
+    /// bought the list. With a Hinge door in state, "hinges" deinflected to
+    /// "hinge", `firstDoor` takes the earliest match in the sentence, and rule
+    /// 7 found a door and one number and FUNDED TWENTY MINUTES OF HINGE out of
+    /// an ordinary English verb. The clause guard could not save it: the number
+    /// sits in a doorless breath, which defers to the whole sentence, and the
+    /// whole sentence named exactly one door — the wrong one, and the only one.
+    ///
+    /// A LIST IS THE RIGHT SHAPE HERE, for the reason `negators` is a list: a
+    /// word added can only ever SUBTRACT a door match, and a door match not
+    /// made is a silence that reaches the widener. It cannot invent a grant, so
+    /// the direction it fails in is the safe one. That is the opposite of the
+    /// cap lexicon's whitelists, where an unrecognised word had to decline.
+    ///
+    /// THE TEST FOR MEMBERSHIP is both halves at once: the inflected form must
+    /// have a common ordinary-English reading, AND no natural reading as the
+    /// app. "snaps" fails the second half and is deliberately absent — "show me
+    /// my snaps" is a real way to ask for Snapchat, and blocking it would cost
+    /// a sentence to buy nothing, because nobody's patience snapping is
+    /// followed by a request for minutes. Nobody says "my hinges" either.
+    /// Rarities like "discords" and "amazons" fail the first half; a seat here
+    /// costs the plural of a real door name, and a word with no sentence is not
+    /// worth one.
+    private static let ordinaryWords: Set<String> = ["hinges"]
 
     /// How many doors a clause names, and which. One door named twice — once by
     /// name and once by alias, "cap instagram at 20, ig is eating my day" — is

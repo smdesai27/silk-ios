@@ -59,13 +59,48 @@ struct OnboardingView: View {
         return TimeOfDay(hour: 7)
     }()
 
+    /// The step's own natural height, measured. See `body`.
+    @State private var columnHeight: CGFloat = 0
+
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer().frame(height: 96)
-            content
-                .id(step)
-                .transition(.opacity)
-            Spacer()
+        // The same defence NowView and SettingsView mount, for the same reason:
+        // a step taller than the screen must scale uniformly rather than run off
+        // the bottom where nothing says it exists. Silk has nothing to scroll.
+        //
+        // The catalogue is what made setup need it. `appChips` renders one chip
+        // per entry through `FlowLayout`, whose `sizeThatFits` reads
+        // `proposal.width` and ignores `proposal.height` — it reports its ideal
+        // and cannot be compressed — and the 96pt spacer above is a fixed frame
+        // that does not collapse. Measured at Silk.sans(14) with the chips'
+        // 16pt padding and 10pt spacing inside the 307pt content width: on a
+        // 375×667 iPhone SE, twelve entries wrap to four rows and the step has
+        // 104pt of slack, and seventeen wrap to six rows and it is 4pt short
+        // before a single chip is picked. Picking chips makes it worse, not
+        // better — a bound chip grows by its 15pt app icon and its 6pt gap, so
+        // six bound doors take a seventh row and the step is 90pt short. Even a
+        // 375×812 phone goes 9pt short there.
+        //
+        // WHAT IS MEASURED AND WHAT IS COMPUTED. NowView and SettingsView
+        // hand-count their columns because their rows are uniform 52pt. A chip
+        // row count is a function of text metrics, so it cannot be hand-counted
+        // without restating SwiftUI's own text measurement and drifting from it
+        // at the wrap boundary. The column reports its natural height instead
+        // and the scale is computed from that — one frame at scale 1 before the
+        // first measurement lands, then exact. `scaleEffect` is a render
+        // transform and changes no layout, so the measurement it feeds cannot
+        // move it: there is no loop here.
+        GeometryReader { geo in
+            let usable = geo.size.height - Self.footReserve
+            let scale = min(1, usable / max(1, columnHeight))
+            column
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { columnHeight = $0 }
+                .scaleEffect(scale, anchor: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        // The OK button keeps its seat at the foot rather than riding a Spacer:
+        // a column that scales must not be able to push it off, and the reserve
+        // above is this seat measured.
+        .overlay(alignment: .bottom) {
             advance
                 .padding(.bottom, 60)
         }
@@ -87,6 +122,28 @@ struct OnboardingView: View {
                     onCommit: commitPicking)
             }
         }
+    }
+
+    /// The OK button's own seat, held at the foot: 44pt of button and the 60pt
+    /// beneath it. NowView and SettingsView reserve their chrome the same way.
+    private static let footReserve: CGFloat = 104
+
+    /// The step, top-anchored under its 96pt. Fixed vertically so it reports
+    /// the height it wants rather than the height it is offered — the offer is
+    /// the thing being checked.
+    private var column: some View {
+        VStack(spacing: 0) {
+            // The 96pt seat, held by a clear box rather than a Spacer — under
+            // `fixedSize` a Spacer's ideal height is a question it does not have
+            // to answer the same way twice, and NowView and SettingsView hold
+            // their own seats exactly this way.
+            Color.clear.frame(height: 96)
+            content
+                .id(step)
+                .transition(.opacity)
+        }
+        .frame(maxWidth: .infinity)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func doorKey(of request: PickerRequest) -> String? {
