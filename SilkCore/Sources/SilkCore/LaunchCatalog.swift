@@ -57,7 +57,15 @@ public enum LaunchCatalog {
         .init(display: "Threads", names: ["threads"], scheme: "barcelona://", universalLink: "https://www.threads.net/"),
         .init(display: "Pinterest", names: ["pinterest"], scheme: "pinterest://", universalLink: "https://www.pinterest.com/"),
         .init(display: "Twitch", names: ["twitch"], scheme: "twitch://", universalLink: "https://www.twitch.tv/"),
-        .init(display: "Netflix", names: ["netflix"], scheme: "nflx://", universalLink: "https://www.netflix.com/"),
+        // The link is /browse and not the root on purpose, and Netflix is the
+        // one door in the twelve above that needed it. Its AASA ends each app
+        // entry's components list in {"/": "/?*"} — a catch-all that claims
+        // every path EXCEPT the bare root, because "?" demands a character
+        // after the slash. A bare https://www.netflix.com/ therefore matched
+        // nothing and this fallback could never have fired. /browse is the
+        // app's home grid and clears the exclusions stacked above that
+        // catch-all. The other eleven cover "/" and are left as they are.
+        .init(display: "Netflix", names: ["netflix"], scheme: "nflx://", universalLink: "https://www.netflix.com/browse"),
         .init(display: "LinkedIn", names: ["linkedin"], scheme: "linkedin://", universalLink: "https://www.linkedin.com/"),
 
         // The five the owner chose to widen the setup list with. Grouped and
