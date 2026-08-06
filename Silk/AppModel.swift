@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import FamilyControls
+import ManagedSettings
 import SilkCore
 
 @MainActor
@@ -120,6 +121,7 @@ final class AppModel {
         applyPendingIfDayTurned()
         wall.reconcile()
         refreshWallStanding()
+        refreshDoorIcons()
         startClock()
         #if DEBUG
         // QA: -silkPage 1 opens on Mirror. There is no other way in — the pager
@@ -142,6 +144,7 @@ final class AppModel {
         SharedStore.save(policy: policy)
         SharedStore.save(wallSelection: wallSelection)
         SharedStore.save(doorSelections: doorSelections)
+        refreshDoorIcons(doorSelections)
         wall.reconcile()
         onboarded = true
     }
@@ -821,6 +824,40 @@ final class AppModel {
         seconds < 120 ? "\(seconds) s" : "\(seconds / 60) \(SilkStrings.minutes)"
     }
 
+    /// The app icon behind each door, for the detail card's header — the door's
+    /// one bound application, or nothing.
+    ///
+    /// A **stored** property, and that is the whole design of it. `@Observable`
+    /// tracks storage, and the selections do not live in storage this class owns:
+    /// they live in an App Group blob that nothing observes. A computed accessor
+    /// reading `SharedStore.loadDoorSelections()` would therefore be read once,
+    /// when the card was built, and never re-read — the card would go on showing
+    /// the previous app's icon for as long as it stayed up after a rebind, which
+    /// is the one moment the icon exists to prove anything at all. Refreshed
+    /// wherever the pair (policy, selections) is written: `init`, `completeSetup`,
+    /// `commit` and `commitDoorChange`, which between them are every path a
+    /// binding can arrive or leave by.
+    private(set) var doorIcons: [UUID: ApplicationToken] = [:]
+
+    /// Keyed by door and not by selection, so a selection whose door has gone
+    /// cannot leave an icon behind. Callers that have just written the dictionary
+    /// hand it in; only the caller that genuinely has to — a cold `init`, which
+    /// has written nothing — pays for a decode. Never called from a body pass.
+    private func refreshDoorIcons(_ selections: [UUID: FamilyActivitySelection]? = nil) {
+        let selections = selections ?? SharedStore.loadDoorSelections()
+        doorIcons = policy.doors.reduce(into: [:]) { icons, door in
+            icons[door.id] = selections[door.id]?.applicationTokens.first
+        }
+    }
+
+    /// One door's ceiling, said the way the card must say it — through
+    /// `Caps.settingsValue(cap:)`, the same call `settingsDoors` makes, so the
+    /// card and the row and the wheel cannot drift apart. The spine pins the
+    /// round trip (`CapsTests`); nothing here formats minutes.
+    func settingsCap(for door: Door) -> String {
+        Caps.settingsValue(cap: policy.doorCaps[door.id])
+    }
+
     /// One row per door. Settings is the rules; Now's list is the day. So the
     /// value is the door's own ceiling — or the wheel's No-cap seat when it has
     /// none, because the row must read back what the wheel would show (the same
@@ -1056,29 +1093,57 @@ final class AppModel {
     /// drop it.
     private func commit(reapplying mutation: ((inout GrantLedger) -> Void)? = nil) {
         persist(reapplying: mutation)
-        retireOrphanedSelections()
+        // The one decode this path has always made, now feeding the icons too:
+        // a door lost here (a matured loosening swapping the roster) must not
+        // leave its icon standing in a card raised a moment later.
+        refreshDoorIcons(retireOrphanedSelections())
         wall.reconcile()
         now = .now
     }
 
     /// Written back only when there is something to retire, so a grant on its
-    /// way through re-encodes nothing.
-    private func retireOrphanedSelections() {
+    /// way through re-encodes nothing. Returns what the store now holds — the
+    /// pruned dictionary when it pruned, the loaded one when it did not — so the
+    /// caller's own read of the same blob is the same read.
+    @discardableResult
+    private func retireOrphanedSelections() -> [UUID: FamilyActivitySelection] {
         let selections = SharedStore.loadDoorSelections()
         let owned = policy.owned(selections)
-        guard owned.count != selections.count else { return }
+        guard owned.count != selections.count else { return selections }
         SharedStore.save(doorSelections: owned)
+        return owned
     }
 
-    // MARK: - Editing the doors (Settings' editor overlay)
+    // MARK: - Editing the doors (Settings' two door overlays)
 
-    /// What the editor overlay is showing, if anything. A door row opens the
-    /// menu (Rebind / Remove); the quiet add row opens the catalogue chips.
+    /// Which of the two overlays a doors row raised, if either. A door row opens
+    /// that door's detail card; the quiet add row opens the catalogue chips. The
+    /// mount site switches on this and builds one component or the other — they
+    /// share a stratum and an identifier, not a layout.
     enum DoorEdit: Equatable {
         case menu(Door)
         case add
     }
     var doorEdit: DoorEdit?
+
+    /// The door added moments ago and still waiting for its first app — the
+    /// rollback flag for an add abandoned at the binding sheet, and **nothing to
+    /// do with what is on screen**.
+    ///
+    /// It used to be `doorEdit == .add`, one variable doing two jobs, and the
+    /// second job was invisible from the first. `addDoor` makes the door
+    /// name-only (exactly as setup allows) and raises the system sheet over the
+    /// overlay; if the sheet is cancelled, `abandonDoorBinding` has to take the
+    /// name back, and it decided whether to by asking what the overlay was
+    /// showing. Any change that lowered the overlay before raising the sheet — a
+    /// natural instinct, since the sheet covers it anyway — made that test read
+    /// nil, and a cancelled add would have silently left a name-only door with no
+    /// app behind it: a door that shows a Settings row, appears in Now, parses at
+    /// the bar, launches, and can never be excepted from the wall, because there
+    /// is no token to except. Setup's own binding flow already calls this state
+    /// `provisional`; this is the same idea under the same word, and it is keyed
+    /// by the door's id so a stale flag cannot roll back a different door.
+    @ObservationIgnored private var provisionalDoorID: UUID?
 
     /// Catalogue names not already doors — what the add overlay offers. Every
     /// spoken form counts as taken, so a door answering to "x" holds the
@@ -1242,6 +1307,9 @@ final class AppModel {
         var newPolicy = policy
         newPolicy.doors.append(door)
         commitDoorChange(policy: newPolicy, selections: SharedStore.loadDoorSelections())
+        // Set with the door, not with the overlay: this is what a cancelled
+        // binding rolls back, and it must outlive whatever the screen does.
+        provisionalDoorID = door.id
         activitySelection = FamilyActivitySelection()
         activityPicker = .doorBinding(door)
     }
@@ -1259,6 +1327,7 @@ final class AppModel {
         // to remove it — so a vanished door binds nothing, and any stray
         // selection under its id goes too.
         guard policy.doors.contains(where: { $0.id == door.id }) else {
+            provisionalDoorID = nil
             var selections = SharedStore.loadDoorSelections()
             if selections[door.id] != nil {
                 selections[door.id] = nil
@@ -1271,6 +1340,7 @@ final class AppModel {
                                     categories: activitySelection.categoryTokens.count,
                                     webDomains: activitySelection.webDomainTokens.count) {
         case .bound:
+            provisionalDoorID = nil
             var selections = SharedStore.loadDoorSelections()
             selections[door.id] = activitySelection
             commitDoorChange(policy: policy, selections: selections)
@@ -1283,6 +1353,7 @@ final class AppModel {
             // binding arrives empty and lands on this branch. Keep the door
             // name-only rather than discarding a name that was just answered
             // for — Cancel still takes it back, through cancelActivityPicking.
+            provisionalDoorID = nil
             closeDoorEdit()
             #else
             // On a device the sheet's Done only lights on exactly one app, so
@@ -1306,7 +1377,11 @@ final class AppModel {
         // orphan otherwise. `commit` carries the same rule for the writes that
         // do come through it — a door dropped at the bar, among them.
         SharedStore.save(policy: newPolicy)
-        SharedStore.save(doorSelections: newPolicy.owned(selections))
+        let owned = newPolicy.owned(selections)
+        SharedStore.save(doorSelections: owned)
+        // The icons take exactly what was just saved, so a rebind's new icon is
+        // in hand on the same frame the card redraws — and no second decode.
+        refreshDoorIcons(owned)
         wall.reconcile()
         now = .now
     }
@@ -1421,8 +1496,16 @@ final class AppModel {
     /// A binding that ended without binding. A door added moments ago and
     /// never given an app leaves with the sheet; an existing door keeps the
     /// app it already had.
+    ///
+    /// The test is `provisionalDoorID`, not `doorEdit == .add`. The two agree
+    /// today and the second one is free, which is exactly what made it dangerous:
+    /// it read as a UI question and answered a data one, so any future change to
+    /// when the overlay comes down would have turned a cancelled add into a
+    /// name-only door with no app behind it, silently. See the flag's own note.
     private func abandonDoorBinding(_ door: Door) {
-        if doorEdit == .add {
+        let wasProvisional = provisionalDoorID == door.id
+        provisionalDoorID = nil
+        if wasProvisional {
             var newPolicy = policy
             newPolicy.doors.removeAll { $0.id == door.id }
             // A door added seconds ago has no cap to drop, so this line is

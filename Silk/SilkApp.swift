@@ -225,25 +225,47 @@ struct RootView: View {
                             .zIndex(23)
                         }
 
-                        // The door editor — the same overlay stratum as the
-                        // wheel: raised by a door row or the add row on
-                        // Settings, dismissed by its backdrop.
+                        // The two overlays a Settings doors row can raise — the
+                        // same stratum as the wheel, dismissed by their backdrop.
+                        //
+                        // Two components and not one with a mode, because they
+                        // are two different pieces of furniture: a door row
+                        // raises the door's own card, the add row raises the
+                        // catalogue. The `switch` that used to live inside the
+                        // component lives here instead, where the data already
+                        // is, and each branch is handed only what it needs — so
+                        // neither has to carry `if case .menu` guards over
+                        // closures that could not fire.
+                        //
+                        // The card is a pure value view like SettingsView: it
+                        // takes a name, an icon, a finished cap string and four
+                        // closures. `settingsCap(for:)` composes the string
+                        // through `Caps.settingsValue`, and `doorIcons` is a
+                        // stored property so the icon actually refreshes after a
+                        // rebind — see its note in AppModel.
                         if let edit = model.doorEdit {
-                            DoorEditOverlay(
-                                mode: {
-                                    switch edit {
-                                    case .menu(let door): .menu(doorName: door.name)
-                                    case .add: .add(available: model.addableDoorNames)
-                                    }
-                                }(),
-                                night: night,
-                                onRebind: { if case .menu(let door) = edit { model.rebind(door) } },
-                                onCap: { if case .menu(let door) = edit { model.openCapWheel(for: door) } },
-                                onRemove: { if case .menu(let door) = edit { model.removeDoor(door) } },
-                                onAdd: { model.addDoor(named: $0) },
-                                onClose: { model.closeDoorEdit() })
-                            .transition(.opacity)
-                            .zIndex(22)
+                            switch edit {
+                            case .menu(let door):
+                                DoorDetailCard(
+                                    name: door.name,
+                                    icon: model.doorIcons[door.id],
+                                    cap: model.settingsCap(for: door),
+                                    night: night,
+                                    onCap: { model.openCapWheel(for: door) },
+                                    onRebind: { model.rebind(door) },
+                                    onRemove: { model.removeDoor(door) },
+                                    onClose: { model.closeDoorEdit() })
+                                .transition(.opacity)
+                                .zIndex(22)
+                            case .add:
+                                DoorAddOverlay(
+                                    available: model.addableDoorNames,
+                                    night: night,
+                                    onAdd: { model.addDoor(named: $0) },
+                                    onClose: { model.closeDoorEdit() })
+                                .transition(.opacity)
+                                .zIndex(22)
+                            }
                         }
                     }
                     // The one animation the stage still stamps whole, and the one

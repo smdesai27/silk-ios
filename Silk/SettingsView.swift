@@ -1,4 +1,6 @@
 import SwiftUI
+import FamilyControls
+import ManagedSettings
 import SilkCore
 
 /// Settings: the few global values, plus per-door allowances. The third page.
@@ -237,41 +239,34 @@ private struct SettingsRow: View {
 }
 
 // ============================================================
-// The door editor
+// The two overlays a doors row raises
 // ============================================================
 
-/// Silk's own quiet overlay for editing the doors group — the wheel picker's
-/// idiom in a second costume: the same .97 veil, the same uppercase whisper
-/// of a title, the backdrop as the one exit. The menu offers Rebind and
-/// Remove for a tapped door; the add mode offers the catalogue names not
-/// already doors, in setup's chip costume. The guidance slot under either is
-/// setup's own line, seated here with its own identifier.
-struct DoorEditOverlay: View {
-    enum Mode: Equatable {
-        /// A door row was tapped: its name titles the overlay.
-        case menu(doorName: String)
-        /// The add row was tapped: pick a name from what's still free.
-        case add(available: [String])
-    }
-    var mode: Mode
+/// The veil, the backdrop, the column and the exit both door overlays share.
+///
+/// The veil is byte-identical to the wheel's on purpose, and it is the one thing
+/// here that may not change. Both overlays are drawn on the same stratum, and
+/// `AppModel.openCapWheel` swaps this one for the wheel in a single un-animated
+/// frame precisely because two veils of the same colour at the same alpha make
+/// that swap invisible — cross-fade them and composited coverage dips to .735 at
+/// the midpoint and the page ghosts back through. The veil is the stratum's
+/// floor; what stands on it is the costume, and the costume is what changed.
+///
+/// The identifier rides the BACKDROP and never this ZStack: an identifier on a
+/// container stamps itself onto every descendant and overwrites the child's own,
+/// so `silk.settings.cap`, `silk.settings.rebind`, `silk.settings.remove` and
+/// every `add.chip.…` would answer to the overlay's name instead of their own.
+///
+/// One identifier for two components, deliberately: `silk.settings.editor` names
+/// the stratum a door row or the add row raises, and the walks that wait on it
+/// are waiting for "something came up here", not for which of the two.
+private struct DoorOverlayScaffold<Content: View>: View {
     var night: Bool
-    var onRebind: () -> Void
-    /// Daily cap: the parent takes this editor down and raises the wheel on the
-    /// door — the two never share the screen, so the wheel's own title carries
-    /// the name from here.
-    var onCap: () -> Void
-    var onRemove: () -> Void
-    var onAdd: (String) -> Void
     var onClose: () -> Void
+    @ViewBuilder var content: Content
 
     var body: some View {
         ZStack {
-            // The backdrop is the exit — the whole screen, minus the rows and
-            // chips, which eat their taps as the wheels do.
-            // The overlay's identifier rides the backdrop, never the ZStack:
-            // an identifier on the container stamps itself onto every child
-            // element, and Rebind, Remove and the guidance line would all
-            // answer to the overlay's name instead of their own.
             (night ? WheelPickerOverlay.nightVeil.opacity(0.97) : Silk.paperAlpha(0.97))
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
@@ -280,113 +275,251 @@ struct DoorEditOverlay: View {
                 .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("silk.settings.editor")
 
-            VStack(spacing: 0) {
-                // The picker's own quiet title voice, verbatim.
-                Text(title)
-                    .textCase(.uppercase)
-                    .font(Silk.sans(12))
-                    .tracking(Silk.track(0.12, 12))
-                    .foregroundStyle(night ? Silk.paperAlpha(0.35) : Silk.inkAlpha(0.40))
-                    .padding(.bottom, 34)
-                    .allowsHitTesting(false)
+            // The 280pt overlay column — the width the wheel's selection line
+            // spans. It is the one measurement the two strata still share, so a
+            // card and a wheel raised from the same row occupy the same block of
+            // the screen and the handoff between them moves nothing sideways.
+            content.frame(width: 280)
+        }
+    }
+}
 
-                switch mode {
-                case .menu:
-                    menuRows
-                case .add(let names):
-                    addChips(names)
+/// What a door row raises: the door, stated.
+///
+/// This was `DoorEditOverlay`, and it was the wheel picker's costume worn by
+/// three tappable rows — the same .97 veil, the same uppercase whisper of a
+/// title, the same 280pt column of centred 52pt serif rows. Someone who had just
+/// learned "tap Budget, a wheel spins" met three centred serif rows in that veil
+/// and read them as a wheel that had failed to draw. The wheel's rows are values
+/// you scroll; these are verbs you tap, and nothing in the costume told them
+/// apart. That is the whole of the report.
+///
+/// So the costume comes from the page the card was opened FROM. Settings' own
+/// furniture — 52pt rows, a sans 15 medium name on the left, a serif value riding
+/// the far edge, one hairline at ink .055 — says "still in Settings, looking at
+/// one app" where the picker's costume said "a value is being chosen". And the
+/// card is left-aligned top to bottom where the wheel is centred top to bottom,
+/// which is most of the difference at a glance, before a single word is read.
+///
+/// It also **states before it offers**. The door's name and its bound icon head
+/// the card; the cap row reads the ceiling actually in force; only then, under
+/// the one rule, the two things that change something. Everything is legible
+/// before anything is tapped, which is what was asked for.
+///
+/// No Close and no Done. The backdrop is the exit both overlays have always had,
+/// and a card whose only escape is a button is a card that has to be dismissed
+/// twice.
+struct DoorDetailCard: View {
+    var name: String
+    /// The bound app's icon — **optional by construction**, not by defence.
+    /// `ApplicationToken` is opaque and cannot be minted, so on the simulator
+    /// every door's token is nil and every UI walk ever run sees this card
+    /// without one. A header that only composed with the icon present would be a
+    /// header nothing automated has ever looked at.
+    var icon: ApplicationToken?
+    /// The ceiling in force — "20 min", or "No cap" — already composed through
+    /// `Caps.settingsValue(cap:)` by the mount site, never formatted here. The
+    /// spine pins `settingsValue(cap: 20) == wheelValues[wheelSeat(for: 20)]`
+    /// (CapsTests), and reading back exactly what the wheel would show is the
+    /// entire reason this row exists.
+    var cap: String
+    var night: Bool
+    /// Daily cap: the parent takes this card down and raises the wheel on the
+    /// door in one un-animated frame — the two never share the screen, so the
+    /// wheel's own title carries the door name from here.
+    var onCap: () -> Void
+    var onRebind: () -> Void
+    var onRemove: () -> Void
+    var onClose: () -> Void
+
+    var body: some View {
+        DoorOverlayScaffold(night: night, onClose: onClose) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Apple's own icon for the app actually behind this door, at the
+                // size an icon is recognised rather than merely noticed. Setup's
+                // chip proved the idiom at 15pt (OnboardingView); the card is the
+                // one place there is room to show it properly. Hit-testing off,
+                // like the wheel's title: a tap on it is a tap on the backdrop.
+                if let icon {
+                    Label(icon)
+                        .labelStyle(.iconOnly)
+                        .frame(width: 44, height: 44)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .padding(.bottom, 14)
+                        .allowsHitTesting(false)
+                        // The header speaks the door's name one line down; the
+                        // icon is proof for the eye, as EnsoMark is on the shield.
+                        .accessibilityHidden(true)
                 }
 
-                // The steering that used to live here moved into the picker
-                // sheet, where it stays on screen for as long as Apple's list
-                // does. The editor is back to being only its actions.
+                // The door's name, in the one sans size above a row's — a name,
+                // so sans (canon), and the card's subject, so the largest thing
+                // in it. Never uppercased: the wheel's title whisper is what this
+                // card is being told apart from.
+                Text(name)
+                    .font(Silk.sans(18, weight: .medium))
+                    .tracking(Silk.track(-0.005, 18))
+                    .foregroundStyle(statedInk)
+                    .padding(.bottom, 30)
+                    .allowsHitTesting(false)
+
+                // What the door currently IS …
+                capRow
+
+                // … and, under the one rule, what can be done about it. The rule
+                // divides the statement from the offers; it is not a row
+                // separator, which is why there is exactly one and it does not
+                // repeat between the two actions.
+                Rectangle()
+                    .fill(night ? Silk.paperAlpha(0.05) : Silk.inkAlpha(0.055))
+                    .frame(height: 1)
+
+                actionRow(SilkStrings.rebind, id: "silk.settings.rebind", action: onRebind)
+                actionRow(SilkStrings.remove, id: "silk.settings.remove", action: onRemove)
             }
         }
     }
 
-    private var title: String {
-        switch mode {
-        case .menu(let name): name
-        case .add: SilkStrings.addAnApp
-        }
-    }
-
-    /// Three rows now — 156pt inside the same 280pt frame the wheel's selection
-    /// line spans, which is what the two overlays rhyme on. Only the last row
-    /// drops its rule, so the shift is Change app and Daily cap ruled, Remove
-    /// bare.
+    /// The row this redesign exists for: a `SettingsRow` in everything but its
+    /// ink. 52pt, the label sans 15 medium on the left, the value serif riding
+    /// the far edge, exactly as the page states a rule.
     ///
-    /// The middle row is `dailyCap` and deliberately not `budget`: the overlay's
-    /// title is already the door name, so "TIKTOK / Change app / Budget /
-    /// Remove" reads as "TikTok's budget" — a per-door allowance, which is the
-    /// one thing a cap is not, on a page whose global row already says "Budget".
-    private var menuRows: some View {
-        VStack(spacing: 0) {
-            editorRow(SilkStrings.rebind, id: "silk.settings.rebind",
-                      showsRule: true, action: onRebind)
-            editorRow(SilkStrings.dailyCap, id: "silk.settings.cap",
-                      showsRule: true, action: onCap)
-            editorRow(SilkStrings.remove, id: "silk.settings.remove",
-                      showsRule: false, action: onRemove)
+    /// The page's ramp is inverted here, deliberately. There the name is what you
+    /// scan a column for and the value is the detail, so the name is ink .84 and
+    /// the value ink .50. Here the door is already named at the top of the card
+    /// and the VALUE is the thing that was invisible before — so the value takes
+    /// the card's full voice and the label takes the page's name ink. Serif 15
+    /// rather than the page's 14 for the same reason: level with its label, the
+    /// pair reads as one statement rather than as a row with a footnote.
+    private var capRow: some View {
+        Button(action: onCap) {
+            HStack(spacing: 0) {
+                Text(SilkStrings.dailyCap)
+                    .font(Silk.sans(15, weight: .medium))
+                    .tracking(Silk.track(-0.005, 15))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.36) : Silk.inkAlpha(0.84))
+                // The floor keeps the value off the label if the two ever meet.
+                Spacer(minLength: 8)
+                Text(cap)
+                    .font(Silk.serif(15))
+                    .foregroundStyle(statedInk)
+            }
+            .frame(height: 52)
+            .contentShape(Rectangle())
+            // Both mechanics, in this order, and the identifier last. `combine`
+            // folds the label and the value into ONE element first, so the
+            // identifier rides an element whose label is the row entire ("Daily
+            // cap No cap") — which is what the walk matches on, and which is the
+            // whole point: the value is readable without tapping. Applied before
+            // the fold it would be stamped onto both Texts and the row would
+            // answer to neither. Applied outside the Button it would ride a
+            // wrapper XCUI never sees.
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("silk.settings.cap")
         }
-        .frame(width: 280)
+        .buttonStyle(SilkPressStyle())
     }
 
-    /// The doors idiom at the picker's scale: 52pt, hairline-ruled, and the
-    /// serif because these are sentences Silk offers, not labels.
-    private func editorRow(_ label: String, id: String,
-                           showsRule: Bool, action: @escaping () -> Void) -> some View {
+    /// The two verbs, demoted under the rule. Sans and not the old serif 19:
+    /// Silk's serif is for values and for the sentences Silk speaks, and "Change
+    /// app" is neither — it is a label on a control, which is sans 15 medium
+    /// everywhere else in the app.
+    ///
+    /// Their ink is the app's own secondary-action pair: `inkAlpha(0.45)` by day,
+    /// which setup's "Other apps" and the page's quiet add row both speak at, and
+    /// `paperAlpha(0.40)` at night, which is the handoff's `--silk-paper-40`
+    /// (`.silk-btn-later`, the "Not now" of a proposal). Quieter than the cap row
+    /// in both faces, which is the demotion.
+    private func actionRow(_ label: String, id: String,
+                           action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(Silk.serif(19))
-                .foregroundStyle(night ? Silk.paperAlpha(0.85) : Silk.inkAlpha(0.92))
-                .frame(maxWidth: .infinity)
+                .font(Silk.sans(15, weight: .medium))
+                .tracking(Silk.track(-0.005, 15))
+                .foregroundStyle(night ? Silk.paperAlpha(0.40) : Silk.inkAlpha(0.45))
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: 52)
                 // Inside the label, as setup's chips carry theirs: attached
-                // outside the button it lands on a wrapper that is no
-                // element at all, and XCUI never sees it (Wheel's own note).
+                // outside the button it lands on a wrapper that is no element at
+                // all, and XCUI never sees it.
                 .accessibilityIdentifier(id)
                 .contentShape(Rectangle())
         }
         .buttonStyle(SilkPressStyle())
-        .overlay(alignment: .bottom) {
-            if showsRule {
-                Rectangle()
-                    .fill(night ? Silk.paperAlpha(0.05) : Silk.inkAlpha(0.055))
-                    .frame(height: 1)
-            }
-        }
     }
 
-    /// Setup's chip costume, unbound: outline only — nothing here is selected,
-    /// a tap is a choice that immediately runs the one-app binding.
-    private func addChips(_ names: [String]) -> some View {
-        FlowLayout(spacing: 10) {
-            ForEach(names, id: \.self) { name in
-                Button {
-                    onAdd(name)
-                } label: {
-                    Text(name)
-                        .font(Silk.sans(14))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 9)
-                        // Inside the label, as setup's chips carry theirs —
-                        // outside the button, XCUI never sees it.
-                        .accessibilityIdentifier("add.chip.\(name)")
-                        .overlay(
-                            Capsule().stroke(night ? Silk.paperAlpha(0.14) : Silk.inkAlpha(0.14),
-                                             lineWidth: 1)
-                        )
-                        .foregroundStyle(night ? Silk.paperAlpha(0.72) : Silk.inkAlpha(0.72))
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
+    /// What the card states — the door's name, and the ceiling in force. The
+    /// overlay's full voice (`--silk-paper-85` at night), not the page's: the
+    /// page dims its names to .36 because it is a list under a wordmark on the
+    /// open ground, and this card is the only thing on the screen.
+    private var statedInk: Color {
+        night ? Silk.paperAlpha(0.85) : Silk.inkAlpha(0.92)
+    }
+}
+
+/// What the quiet add row raises: the catalogue names still free.
+///
+/// A second component rather than a second `case`, and the split is the point.
+/// The two modes shared a veil and a title voice and nothing else — and the
+/// shared title voice was the defect: the add mode wore the wheel's uppercase
+/// whisper for exactly the reason the menu did, so redesigning only the menu
+/// would have left half the complaint standing behind the same identifier. Split,
+/// each says what it is in the card's header voice, and neither carries a
+/// `switch` that has to be read before its layout can be.
+struct DoorAddOverlay: View {
+    var available: [String]
+    var night: Bool
+    var onAdd: (String) -> Void
+    var onClose: () -> Void
+
+    var body: some View {
+        DoorOverlayScaffold(night: night, onClose: onClose) {
+            VStack(alignment: .leading, spacing: 0) {
+                // The card's header voice on the card's grid: the two things a
+                // Settings row can raise are the same piece of furniture, and
+                // neither of them is the wheel.
+                Text(SilkStrings.addAnApp)
+                    .font(Silk.sans(18, weight: .medium))
+                    .tracking(Silk.track(-0.005, 18))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.85) : Silk.inkAlpha(0.92))
+                    .padding(.bottom, 30)
+                    .allowsHitTesting(false)
+
+                // Setup's chip costume, unbound: outline only — nothing here is
+                // selected, a tap is a choice that immediately runs the one-app
+                // binding. They flow inside the scaffold's 280 now rather than
+                // against their own margin, so the header's left edge and the
+                // first chip's are the same edge.
+                FlowLayout(spacing: 10) {
+                    ForEach(available, id: \.self) { name in
+                        Button {
+                            onAdd(name)
+                        } label: {
+                            Text(name)
+                                .font(Silk.sans(14))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 9)
+                                // Inside the label, as setup's chips carry theirs
+                                // — outside the button, XCUI never sees it.
+                                .accessibilityIdentifier("add.chip.\(name)")
+                                .overlay(
+                                    Capsule().stroke(night ? Silk.paperAlpha(0.14)
+                                                           : Silk.inkAlpha(0.14),
+                                                     lineWidth: 1)
+                                )
+                                .foregroundStyle(night ? Silk.paperAlpha(0.72)
+                                                       : Silk.inkAlpha(0.72))
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.opacity)
+                    }
                 }
-                .buttonStyle(.plain)
-                .transition(.opacity)
+                .animation(Silk.motion(0.35), value: available)
             }
         }
-        .padding(.horizontal, 34)
-        .animation(Silk.motion(0.35), value: names)
     }
 }
 
@@ -424,6 +557,45 @@ struct DoorEditOverlay: View {
     SettingsRehearsal()
 }
 
+// The card in both faces and in both of the two states the icon has. Neither
+// preview can show a real icon — `ApplicationToken` is opaque and Xcode's canvas
+// has no Screen Time authorization — so `icon: nil` is not a shortcut here, it is
+// the only thing previews and the simulator will ever render. The day card
+// carries a ceiling and the night card carries none, so both halves of
+// `Caps.settingsValue` are walked without a model.
+
+#Preview("Door card — day") {
+    ZStack {
+        Ground(night: false).ignoresSafeArea()
+        DoorDetailCard(name: "Instagram", icon: nil, cap: "20 min", night: false,
+                       onCap: {}, onRebind: {}, onRemove: {}, onClose: {})
+    }
+}
+
+#Preview("Door card — night") {
+    ZStack {
+        Ground(night: true).ignoresSafeArea()
+        DoorDetailCard(name: "TikTok", icon: nil, cap: SilkStrings.noCap, night: true,
+                       onCap: {}, onRebind: {}, onRemove: {}, onClose: {})
+    }
+}
+
+#Preview("Add an app — day") {
+    ZStack {
+        Ground(night: false).ignoresSafeArea()
+        DoorAddOverlay(available: PreviewValues.addable, night: false,
+                       onAdd: { _ in }, onClose: {})
+    }
+}
+
+#Preview("Add an app — night") {
+    ZStack {
+        Ground(night: true).ignoresSafeArea()
+        DoorAddOverlay(available: PreviewValues.addable, night: true,
+                       onAdd: { _ in }, onClose: {})
+    }
+}
+
 /// The handoff's exact card, composed the way the model will compose it. The
 /// window string is spelled in escapes because the gaps are load-bearing and
 /// invisible: ☾, then nbsp + space, and an en dash between the hours — this
@@ -440,6 +612,11 @@ private enum PreviewValues {
                         SettingsDoorItem(name: "TikTok", value: "15 min"),
                         SettingsDoorItem(name: "Clash", value: SilkStrings.noCap),
                         SettingsDoorItem(name: "YouTube", value: SilkStrings.noCap)]
+    /// The whole catalogue minus the four doors above — what the add overlay
+    /// offers a user four apps in, and enough names to see the flow wrap inside
+    /// the 280 column.
+    static let addable = ["X", "Reddit", "Snapchat", "Facebook", "Threads",
+                          "Pinterest", "Twitch", "Netflix", "LinkedIn"]
 }
 
 /// The whole page, rehearsed against the picker: tap a row, spin or tap a

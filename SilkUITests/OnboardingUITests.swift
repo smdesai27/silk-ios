@@ -666,11 +666,11 @@ final class OnboardingUITests: XCTestCase {
         overlay.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.94)).tap()
     }
 
-    /// A door row raises the editor now — Rebind and Remove under the door's
-    /// own name — and Rebind lands setup's one-app guidance in the editor's
-    /// slot. The simulator's family picker is non-functional, so the sheet is
-    /// skipped there; the line is the contract and it must land. The backdrop
-    /// is the exit, exactly as the wheel's is.
+    /// A door row raises the door's detail card — Change app and Remove demoted
+    /// under the door's own name — and Change app raises the same sheet setup
+    /// uses. The simulator's family picker is non-functional, so the binding is
+    /// skipped there; the sheet naming the door is the contract and it must land.
+    /// The backdrop is the exit, exactly as the wheel's is.
     @MainActor
     func testSettingsDoorRowOpensEditorWithRebindGuidance() throws {
         let app = launchFresh()
@@ -680,10 +680,10 @@ final class OnboardingUITests: XCTestCase {
         tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
 
         let editor = element(app, "silk.settings.editor")
-        tap(doorRow, "the Reddit row", raising: editor, "the door editor")
+        tap(doorRow, "the Reddit row", raising: editor, "the door detail card")
         let rebind = app.buttons["silk.settings.rebind"]
-        XCTAssertTrue(rebind.waitForExistence(timeout: Self.appear), "the editor offered no Rebind")
-        XCTAssertTrue(app.buttons["silk.settings.remove"].exists, "the editor offered no Remove")
+        XCTAssertTrue(rebind.waitForExistence(timeout: Self.appear), "the card offered no Change app")
+        XCTAssertTrue(app.buttons["silk.settings.remove"].exists, "the card offered no Remove")
 
         // Change app raises the same sheet setup uses — one idiom, not two.
         let header = element(app, "silk.picker.header")
@@ -737,7 +737,7 @@ final class OnboardingUITests: XCTestCase {
                       "the added door has no Settings row")
 
         // Remove: instant, and the toast carries the way back.
-        tap(instagramRow, "the Instagram row", raising: editor, "the door editor")
+        tap(instagramRow, "the Instagram row", raising: editor, "the door detail card")
         tap(app.buttons["silk.settings.remove"], "Remove")
         XCTAssertTrue(editor.waitForNonExistence(timeout: Self.overlay), "the editor outlived the removal")
         XCTAssertTrue(instagramRow.waitForNonExistence(timeout: Self.overlay), "the removed door kept its row")
@@ -753,41 +753,64 @@ final class OnboardingUITests: XCTestCase {
     // MARK: - Per-app daily caps
     //
     // The Settings wheel is the only surface that sets a cap, so these walks are
-    // the whole feature's front door: what the editor offers, what the wheel
-    // writes, what the row reads back, and — in `…ClampsTheGrantAtTheBar` — that
-    // the ceiling is real by the time the bar is asked for minutes past it.
+    // the whole feature's front door: what the door's card states, what the wheel
+    // writes, what the row and the card read back, and — in
+    // `…ClampsTheGrantAtTheBar` — that the ceiling is real by the time the bar is
+    // asked for minutes past it.
 
-    /// The editor opens the door's own overlay, and the cap row is the middle
-    /// one of three. Between, not merely present: the row order is the reading
-    /// order, and a cap that landed under Remove would read as part of removing
-    /// the door.
+    /// **The card states before it offers.** A door row raises the door's own
+    /// detail card, and the cap row is not merely present on it: it carries the
+    /// ceiling actually in force, readable before anything is tapped, and it
+    /// stands ABOVE the two actions that are demoted under the rule.
+    ///
+    /// This walk replaces `testSettingsDoorEditorOffersTheCapRow`, which pinned
+    /// the opposite order — Change app, then Daily cap, then Remove — on an
+    /// overlay that was the wheel picker's costume worn by three tappable serif
+    /// rows. Both halves of the old assertion are deliberately inverted, so this
+    /// cannot pass on that layout: the cap row now reads its VALUE as well as its
+    /// word (it did not, and could not), and it now sits above Change app rather
+    /// than below it.
+    ///
+    /// `element(…)` rather than `app.buttons[…]` for the cap row, for the reason
+    /// the helper exists: the row folds its label and its value into one element
+    /// with `children: .combine`, and a combined row reads as a button on some
+    /// releases and a plain element on others. Its label is therefore "Daily cap"
+    /// AND the value in one string, which is why the matches are `contains`.
     @MainActor
-    func testSettingsDoorEditorOffersTheCapRow() throws {
+    func testSettingsDoorCardStatesTheCapAboveItsActions() throws {
         let app = launchFresh()
-        completeSetup(app)   // one door: Reddit
+        completeSetup(app)   // one door: Reddit, capped by nothing
 
         let doorRow = element(app, "silk.settings.door.Reddit")
         tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
 
-        let editor = element(app, "silk.settings.editor")
-        tap(doorRow, "the Reddit row", raising: editor, "the door editor")
+        let card = element(app, "silk.settings.editor")
+        tap(doorRow, "the Reddit row", raising: card, "the door detail card")
 
-        let cap = app.buttons["silk.settings.cap"]
-        XCTAssertTrue(cap.waitForExistence(timeout: Self.appear), "the editor offered no Daily cap")
-        expect(cap, label: "Daily cap", "the cap row did not carry its own word")
+        let cap = element(app, "silk.settings.cap")
+        XCTAssertTrue(cap.waitForExistence(timeout: Self.appear), "the card offered no Daily cap")
+        expect(cap, labelContains: "Daily cap", "the cap row did not carry its own word")
+        // The whole of the redesign, in one assertion: a fresh door has no
+        // ceiling, and the card says so where you can read it — the wheel's own
+        // first-seat word, composed through `Caps.settingsValue`.
+        expect(cap, labelContains: "No cap", "the cap row did not read the ceiling in force")
+
         let rebind = app.buttons["silk.settings.rebind"]
         let remove = app.buttons["silk.settings.remove"]
-        XCTAssertTrue(rebind.exists, "the editor offered no Change app")
-        XCTAssertTrue(remove.exists, "the editor offered no Remove")
-        XCTAssertLessThan(rebind.frame.midY, cap.frame.midY,
-                          "the cap row sat above Change app")
-        XCTAssertLessThan(cap.frame.midY, remove.frame.midY,
-                          "the cap row sat below Remove")
+        XCTAssertTrue(rebind.exists, "the card offered no Change app")
+        XCTAssertTrue(remove.exists, "the card offered no Remove")
+        // Wholly above, not merely higher: the rule divides what the card states
+        // from what it offers, so the cap row's bottom edge clears Change app's
+        // top edge with the hairline between them.
+        XCTAssertLessThan(cap.frame.maxY, rebind.frame.minY,
+                          "the cap row did not stand above the demoted actions")
+        XCTAssertLessThan(rebind.frame.midY, remove.frame.midY,
+                          "Remove sat above Change app")
     }
 
-    /// The cap row hands the door to the wheel and takes the editor down on the
+    /// The cap row hands the door to the wheel and takes the card down on the
     /// way. Both matter: the wheel's title is the only thing left saying which
-    /// door is being capped, and an editor left standing would draw its own .97
+    /// door is being capped, and a card left standing would draw its own .97
     /// veil over the wheel and eat every touch aimed at it.
     @MainActor
     func testSettingsCapRowOpensTheWheelWithTheDoorTitle() throws {
@@ -797,10 +820,10 @@ final class OnboardingUITests: XCTestCase {
         let doorRow = element(app, "silk.settings.door.Reddit")
         tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
         let editor = element(app, "silk.settings.editor")
-        tap(doorRow, "the Reddit row", raising: editor, "the door editor")
+        tap(doorRow, "the Reddit row", raising: editor, "the door detail card")
 
         let picker = element(app, "silk.picker")
-        tap(app.buttons["silk.settings.cap"], "Daily cap", raising: picker, "the cap wheel")
+        tap(element(app, "silk.settings.cap"), "Daily cap", raising: picker, "the cap wheel")
 
         // The title is asked for by identifier PREFIX and not by its own
         // `silk.picker.title`, because the overlay's `silk.picker` rides on the
@@ -821,7 +844,7 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(named.waitForExistence(timeout: Self.appear),
                       "the cap wheel did not name the door")
         XCTAssertTrue(editor.waitForNonExistence(timeout: Self.overlay),
-                      "the door editor outlived the cap tap and would cover the wheel")
+                      "the door detail card outlived the cap tap and would cover the wheel")
     }
 
     /// A fresh door has no ceiling, and the row says so in the wheel's own
@@ -849,9 +872,9 @@ final class OnboardingUITests: XCTestCase {
         let doorRow = element(app, "silk.settings.door.Reddit")
         tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
         let editor = element(app, "silk.settings.editor")
-        tap(doorRow, "the Reddit row", raising: editor, "the door editor")
+        tap(doorRow, "the Reddit row", raising: editor, "the door detail card")
         let picker = element(app, "silk.picker")
-        tap(app.buttons["silk.settings.cap"], "Daily cap", raising: picker, "the cap wheel")
+        tap(element(app, "silk.settings.cap"), "Daily cap", raising: picker, "the cap wheel")
 
         // An uncapped door opens on "No cap", the first seat; "20 min" is four
         // seats down the table (5, 10, 15, 20).
@@ -913,9 +936,9 @@ final class OnboardingUITests: XCTestCase {
         let doorRow = element(app, "silk.settings.door.Reddit")
         tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
         let editor = element(app, "silk.settings.editor")
-        tap(doorRow, "the Reddit row", raising: editor, "the door editor")
+        tap(doorRow, "the Reddit row", raising: editor, "the door detail card")
         let picker = element(app, "silk.picker")
-        tap(app.buttons["silk.settings.cap"], "Daily cap", raising: picker, "the cap wheel")
+        tap(element(app, "silk.settings.cap"), "Daily cap", raising: picker, "the cap wheel")
         dragWheel(app, rows: -4)          // No cap → 20 min
         tapPickerBackdrop(app)
         XCTAssertTrue(picker.waitForNonExistence(timeout: Self.overlay), "the cap wheel did not fade out")
@@ -953,9 +976,9 @@ final class OnboardingUITests: XCTestCase {
         let doorRow = element(app, "silk.settings.door.Reddit")
         tap(app.buttons["silk.dot.2"], "the Settings dot", raising: doorRow, "the Reddit row")
         let editor = element(app, "silk.settings.editor")
-        tap(doorRow, "the Reddit row", raising: editor, "the door editor")
+        tap(doorRow, "the Reddit row", raising: editor, "the door detail card")
         let picker = element(app, "silk.picker")
-        tap(app.buttons["silk.settings.cap"], "Daily cap", raising: picker, "the cap wheel")
+        tap(element(app, "silk.settings.cap"), "Daily cap", raising: picker, "the cap wheel")
         dragWheel(app, rows: -4)
         tapPickerBackdrop(app)
         expect(doorRow, labelContains: "20 min", "the cap did not land")
@@ -972,9 +995,16 @@ final class OnboardingUITests: XCTestCase {
         expect(row, labelContains: "20 min", "the cap did not survive a relaunch")
 
         let editorAgain = element(app, "silk.settings.editor")
-        tap(row, "the Reddit row", raising: editorAgain, "the door editor")
+        tap(row, "the Reddit row", raising: editorAgain, "the door detail card")
+        // The card's own round trip, and the quietest place in the suite to take
+        // it: a stored ceiling, no wheel in flight, no toast left standing. The
+        // card composes this string through `Caps.settingsValue(cap:)`, the same
+        // call the row behind it makes, so what the card states here is what the
+        // wheel is about to open on.
+        let cap = element(app, "silk.settings.cap")
+        expect(cap, labelContains: "20 min", "the card did not read the stored cap back")
         let wheel = element(app, "silk.picker")
-        tap(app.buttons["silk.settings.cap"], "Daily cap", raising: wheel, "the cap wheel")
+        tap(cap, "Daily cap", raising: wheel, "the cap wheel")
         tapPickerBackdrop(app)
         XCTAssertTrue(wheel.waitForNonExistence(timeout: Self.overlay), "the cap wheel did not fade out")
 
