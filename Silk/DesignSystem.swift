@@ -64,6 +64,13 @@ enum Silk {
         static let door = 0.5
         static let toast = 0.4
         static let dots = 0.4
+        /// The wall fading in, and back out. Named because the model now owns
+        /// it: the shield's curve is set where the shield is raised, not by a
+        /// container modifier that would hand the same curve to the pager.
+        static let shield = 0.45
+        /// The wheel and the door editor — one stratum, one duration. Same
+        /// reason: `AppModel` raises and lowers them, so it states their curve.
+        static let overlay = 0.4
     }
 
     /// Three haptics, zero sound. Nothing else in the app may vibrate.

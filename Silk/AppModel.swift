@@ -76,6 +76,14 @@ final class AppModel {
     /// which door is being edited after a removal, and this shape cannot.
     enum PickerKind: Equatable { case down, budget, undo, cap(Door) }
 
+    /// A Settings row asked for its wheel. Raised through here and not by
+    /// assignment from the view, for the same reason `raiseShield` exists: the
+    /// overlay's curve belongs to the moment it is raised, not to a container
+    /// modifier on the stage that would lend it to the pager as well.
+    func raisePicker(_ kind: PickerKind) {
+        withAnimation(Silk.motion(Silk.Motion.overlay)) { picker = kind }
+    }
+
     /// The take-it-back window, in seconds. One number bounds both offers:
     /// the undo-bearing toast and the thread's Undo pill. The third Settings
     /// row edits it; 60 is the handoff's shipped value.
@@ -278,39 +286,52 @@ final class AppModel {
     private(set) var shield: ShieldPreview?
     struct ShieldPreview: Equatable { var title: String; var app: String }
 
+    /// The wall fades in and never slams (canon.md), and the curve is set here
+    /// rather than by an `.animation(_:value:)` on the root's stage. That
+    /// modifier is not scoped to the child whose value changed: it stamps
+    /// `transaction.animation` onto every descendant for the update pass, so
+    /// raising the shield handed the same 0.45 to the UIPageViewController-backed
+    /// pager, both GeometryReader-scaled page columns, the bar, the dots and the
+    /// thread on the frame the veil was inserted. Raising an overlay is a thing
+    /// the model does, so the model states what it costs.
+    func raiseShield(for door: Door) {
+        let raised = shieldPreview(for: door)
+        withAnimation(Silk.motion(Silk.Motion.shield)) { shield = raised }
+    }
+
     /// An open door has no wall to show. Everything else does, and what it says
     /// is a time, not an explanation.
     ///
     /// Down hours outrank both: the wall is up for everything, so the headline is
     /// the hour it comes down. (Silk Mockup.dc.html:305-308)
-    func raiseShield(for door: Door) {
+    private func shieldPreview(for door: Door) -> ShieldPreview? {
         if isDownHours {
-            shield = ShieldPreview(title: "☾ \(policy.downHours.end.displayWithMeridiem)",
-                                   app: door.name)
-            return
+            return ShieldPreview(title: "☾ \(policy.downHours.end.displayWithMeridiem)",
+                                 app: door.name)
         }
         switch state(of: door) {
         case .open:
-            shield = nil
+            return nil
         case .rest(let until):
             if let until {
                 // Rule-bound: a stated hour holds the door, and the headline is
                 // that hour — "Until 5:00", the shield's own word, not the
                 // row's lowercase "till". (README.md:189)
                 let t = Validator.timeOfDay(until, calendar: .current).display
-                shield = ShieldPreview(title: "\(SilkStrings.until) \(t)", app: door.name)
-            } else {
-                // Plainly resting: the wall says the name and nothing more —
-                // the same sentence the row is already not saying.
-                shield = ShieldPreview(title: door.name, app: "")
+                return ShieldPreview(title: "\(SilkStrings.until) \(t)", app: door.name)
             }
+            // Plainly resting: the wall says the name and nothing more —
+            // the same sentence the row is already not saying.
+            return ShieldPreview(title: door.name, app: "")
         case .live:
             // Behind the wall with nothing scheduled: the wall says the name.
-            shield = ShieldPreview(title: door.name, app: "")
+            return ShieldPreview(title: door.name, app: "")
         }
     }
 
-    func dismissShield() { shield = nil }
+    func dismissShield() {
+        withAnimation(Silk.motion(Silk.Motion.shield)) { shield = nil }
+    }
 
     /// Seven Silk-day buckets of shielded attempts, oldest first, each split
     /// into (all, late) — late being attempts inside the down-hours window,
@@ -898,7 +919,13 @@ final class AppModel {
     /// wheel has; asking it is the fix an index comparison structurally cannot
     /// be. (Spec §6.2 prescribes the index form and is amended.)
     func commitPicker(_ kind: PickerKind, picks: [Int]?) {
-        defer { picker = nil }
+        // Only the overlay's teardown rides the overlay's curve. Everything
+        // below this line is a policy commit, a wall reconcile and a toast —
+        // wrapping `enact` in the veil's animation would hand the wheel's 0.4s
+        // to the ensō, the doors and the receipt, each of which already states
+        // its own motion. `defer` is what keeps the scope honest: it runs after
+        // the commit, not around it.
+        defer { withAnimation(Silk.motion(Silk.Motion.overlay)) { picker = nil } }
         guard let picks else { return }
         switch kind {
         case .down:
@@ -1072,30 +1099,47 @@ final class AppModel {
     /// mid-removal, and the tap dies quietly.
     func editDoor(named name: String) {
         guard let door = policy.doors.first(where: { $0.name == name }) else { return }
-        doorEdit = .menu(door)
+        withAnimation(Silk.motion(Silk.Motion.overlay)) { doorEdit = .menu(door) }
     }
 
     func beginAddDoor() {
-        doorEdit = .add
+        withAnimation(Silk.motion(Silk.Motion.overlay)) { doorEdit = .add }
     }
 
     /// The backdrop tap — the editor's one exit.
+    ///
+    /// The animation wraps this assignment and nothing else, which matters at
+    /// the two call sites that close the editor as part of a larger commit
+    /// (`removeDoor`, `abandonDoorBinding`): the policy write happens outside
+    /// it, so a door leaving the roster is not dragged along on the veil's curve.
     func closeDoorEdit() {
-        doorEdit = nil
+        withAnimation(Silk.motion(Silk.Motion.overlay)) { doorEdit = nil }
     }
 
-    /// Daily cap: the editor's middle row hands the door to the wheel — and puts
-    /// the editor down first, in that order.
+    /// Daily cap: the editor's middle row hands the door to the wheel. The
+    /// editor goes down and the wheel goes up in one frame, and **neither
+    /// crosses the other** — that is the whole of the `withAnimation(nil)`.
     ///
-    /// Both overlays are drawn on the same stratum and the editor fades out over
-    /// its own 0.4s curve, so leaving it standing would mount the wheel under a
-    /// .97 veil for most of half a second, with the editor's backdrop eating
-    /// every touch aimed at the wheel — including the blind coordinate tap the
-    /// UI walk commits with. The wheel's title carries the door name from here,
-    /// so the editor's has done its job.
+    /// Both overlays are drawn on the same stratum and both wear the same .97
+    /// veil (SettingsView.swift, WheelPicker.swift). Cross-faded, the departing
+    /// veil is `a = 1 − f(t)` and the arriving one `b = f(t)` with `a + b = 1`
+    /// throughout, and `.transition(.opacity)` multiplies each whole overlay —
+    /// so the composited coverage is `1 − (1 − .97a)(1 − .97b)`. That is .97 at
+    /// both ends and **.735 at the midpoint**: for a fifth of a second the
+    /// Settings page underneath returns at better than a quarter strength and
+    /// vanishes again. It is not a perceived flicker, it is an arithmetic one.
+    ///
+    /// A cut has no midpoint. Both veils are the same colour at the same alpha
+    /// and the wheel's title is the door name the editor was already showing
+    /// (`pickerTitle`), so the only thing that visibly changes across the frame
+    /// is the three rows becoming a wheel — which is the handoff, stated once.
+    /// Leaving the editor up instead is the other failure: its backdrop would
+    /// eat every touch aimed at the wheel above it.
     func openCapWheel(for door: Door) {
-        closeDoorEdit()
-        picker = .cap(door)
+        withAnimation(nil) {
+            doorEdit = nil
+            picker = .cap(door)
+        }
     }
 
     /// Change app: the same sheet setup uses, so there is one idiom and not

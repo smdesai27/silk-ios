@@ -84,14 +84,14 @@ struct SettingsView: View {
             // wordmark. (Silk Mockup.dc.html:150)
             VStack(spacing: 0) {
                 SettingsRow(name: SilkStrings.downHours, value: downHours,
-                            night: night, showsRule: true, action: onTapDownHours)
-                    .accessibilityIdentifier("silk.settings.down")
+                            night: night, showsRule: true,
+                            axID: "silk.settings.down", action: onTapDownHours)
                 SettingsRow(name: SilkStrings.budget, value: budget,
-                            night: night, showsRule: true, action: onTapBudget)
-                    .accessibilityIdentifier("silk.settings.budget")
+                            night: night, showsRule: true,
+                            axID: "silk.settings.budget", action: onTapBudget)
                 SettingsRow(name: SilkStrings.undo, value: undo,
-                            night: night, showsRule: false, action: onTapUndo)
-                    .accessibilityIdentifier("silk.settings.undo")
+                            night: night, showsRule: false,
+                            axID: "silk.settings.undo", action: onTapUndo)
             }
             .padding(.horizontal, 46)
             .padding(.top, 64)
@@ -123,8 +123,8 @@ struct SettingsView: View {
                     SettingsRow(name: door.name, value: door.value,
                                 night: night,
                                 showsRule: showsAddRow || door.id != doors.last?.id,
+                                axID: "silk.settings.door.\(door.name)",
                                 action: { onTapDoor(door.name) })
-                        .accessibilityIdentifier("silk.settings.door.\(door.name)")
                         .transition(.opacity)
                 }
                 // The quiet way in for a seventh-minus-one app: a row in the
@@ -133,8 +133,8 @@ struct SettingsView: View {
                 if showsAddRow {
                     SettingsRow(name: SilkStrings.addAnApp, value: "",
                                 night: night, showsRule: false, quiet: true,
+                                axID: "silk.settings.door.add",
                                 action: onAddDoor)
-                        .accessibilityIdentifier("silk.settings.door.add")
                         .transition(.opacity)
                 }
             }
@@ -168,25 +168,56 @@ private struct SettingsRow: View {
     /// The add row's costume: an affordance, not a statement, so its name
     /// sits at the caption's ink rather than a door's.
     var quiet: Bool = false
-    /// nil renders a statement. Every row taps now — the doors group opens
-    /// the editor since the owner asked for post-setup editing (this amends
-    /// the earlier "statements, not controls" canon note deliberately).
-    var action: (() -> Void)?
+    /// The row's name in the accessibility tree. Carried in rather than
+    /// applied from outside, because the row is a `Button` now — see `body`.
+    var axID: String
+    /// Every row taps — the doors group opens the editor since the owner asked
+    /// for post-setup editing (this amends the earlier "statements, not
+    /// controls" canon note deliberately).
+    var action: () -> Void
 
+    /// A `Button`, not a `contentShape` + `onTapGesture`, and the difference is
+    /// felt rather than seen. These rows live inside `TabView(.page)` — a
+    /// UIPageViewController over a UIScrollView — where a SwiftUI tap gesture
+    /// must lose pan arbitration before it can fire. Touch-down therefore
+    /// produced *nothing* for the length of that arbitration, and the overlay
+    /// arriving was the only acknowledgment the row ever gave. Every other
+    /// tappable row in the app is already a `Button` under `SilkPressStyle`
+    /// (Now's doors, the editor's own rows); this one was the exception.
     var body: some View {
-        HStack(spacing: 0) {
-            Text(name)
-                .font(Silk.sans(15, weight: .medium))       // .silk-door__name, default costume
-                .tracking(Silk.track(-0.005, 15))           // --silk-track-tight on --silk-size-body
-                .foregroundStyle(nameInk)
-            // The floor keeps the value off the name when a door has a long
-            // name and the row runs out of room — same clause as DoorRow's dot.
-            Spacer(minLength: 8)
-            Text(value)
-                .font(Silk.serif(14))                       // --silk-size-time; tabular baked in
-                .foregroundStyle(night ? Silk.paperAlpha(0.26) : Silk.inkAlpha(0.50))
+        Button(action: action) {
+            HStack(spacing: 0) {
+                Text(name)
+                    .font(Silk.sans(15, weight: .medium))   // .silk-door__name, default costume
+                    .tracking(Silk.track(-0.005, 15))       // --silk-track-tight on --silk-size-body
+                    .foregroundStyle(nameInk)
+                // The floor keeps the value off the name when a door has a long
+                // name and the row runs out of room — same clause as DoorRow's dot.
+                Spacer(minLength: 8)
+                Text(value)
+                    .font(Silk.serif(14))                   // --silk-size-time; tabular baked in
+                    .foregroundStyle(night ? Silk.paperAlpha(0.26) : Silk.inkAlpha(0.50))
+            }
+            .frame(height: 52)                              // _ds_bundle.css:223
+            .contentShape(Rectangle())
+            // All three inside the label, in this order, and the identifier
+            // last. Two mechanics decide where a name actually lands. An
+            // identifier attached OUTSIDE a Button rides a wrapper that is no
+            // element at all (the editor's own rows carry theirs inside for
+            // exactly this reason) — and one attached to this HStack before it
+            // folds would be stamped onto BOTH Texts, leaving the tree with
+            // copies of the row's name on elements reading "Budget" and
+            // "60 min · day" and the whole row on neither. `combine` folds the
+            // pair into one element first; the identifier then rides that
+            // element, whose label is the row entire, which is what the six
+            // walks match on.
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier(axID)
         }
-        .frame(height: 52)                                  // _ds_bundle.css:223
+        .buttonStyle(SilkPressStyle())
+        // Outside the button, as the editor's rows keep theirs: the press dims
+        // what the row says, never the line that organizes the group.
         .overlay(alignment: .bottom) {
             if showsRule {
                 // ink .055 — the faintest line Silk draws (_ds_bundle.css:224).
@@ -195,10 +226,6 @@ private struct SettingsRow: View {
                     .frame(height: 1)
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture { action?() }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(action == nil ? [] : .isButton)
     }
 
     private var nameInk: Color {

@@ -51,31 +51,125 @@ struct RootView: View {
                         Ground(night: night).ignoresSafeArea()
                         Atmosphere(night: night).ignoresSafeArea()
 
-                        TabView(selection: $model.page) {
-                            NowView().tag(0)
-                            MirrorView().tag(1)
-                            SettingsView(downHours: model.settingsDownHours,
-                                         budget: model.settingsBudget,
-                                         undo: model.settingsUndo,
-                                         doors: model.settingsDoors,
-                                         showsAddRow: model.canAddDoor,
-                                         night: night,
-                                         onTapDownHours: { model.picker = .down },
-                                         onTapBudget: { model.picker = .budget },
-                                         onTapUndo: { model.picker = .undo },
-                                         onTapDoor: { model.editDoor(named: $0) },
-                                         onAddDoor: { model.beginAddDoor() })
-                                .tag(2)
+                        // ── Everything the shield covers ──────────────────
+                        //
+                        // The blur is a subtree modifier, so what it blurs is
+                        // decided by structure and nothing else. It used to ride
+                        // the pager alone, and the wordmark, the thread, the dots
+                        // and the bar were ZStack *siblings* of that pager — so
+                        // they stayed razor-sharp behind a veil that is only .92
+                        // opaque, and the SILK mark read straight through the
+                        // wall. The prototype's `backdrop-filter` sits on an
+                        // element at `inset: 0; z-index: 20` and blurs everything
+                        // painted beneath it (Silk Mockup.dc.html:187), which is
+                        // a stratum, not a sibling. This container is that
+                        // stratum's floor: every layer the overlays cover lives
+                        // inside it, and the three overlays live outside it.
+                        //
+                        // The grounds stay outside deliberately. They are smooth
+                        // gradients — blurring them changes nothing anyone can
+                        // see — and a Gaussian on a full-bleed opaque layer
+                        // samples past its own edge, which would fringe the
+                        // screen's rim with transparency under a .92 veil.
+                        ZStack(alignment: .bottom) {
+                            TabView(selection: $model.page) {
+                                NowView().tag(0)
+                                MirrorView().tag(1)
+                                SettingsView(downHours: model.settingsDownHours,
+                                             budget: model.settingsBudget,
+                                             undo: model.settingsUndo,
+                                             doors: model.settingsDoors,
+                                             showsAddRow: model.canAddDoor,
+                                             night: night,
+                                             onTapDownHours: { model.raisePicker(.down) },
+                                             onTapBudget: { model.raisePicker(.budget) },
+                                             onTapUndo: { model.raisePicker(.undo) },
+                                             onTapDoor: { model.editDoor(named: $0) },
+                                             onAddDoor: { model.beginAddDoor() })
+                                    .tag(2)
+                            }
+                            .tabViewStyle(.page(indexDisplayMode: .never))
+                            .ignoresSafeArea(edges: .top)
+                            // The bar is the only thing meant to move for the keyboard.
+                            // Without this the pages lose ~336pt and Mirror's
+                            // bottom-anchored footnote jumps hundreds of points.
+                            .ignoresSafeArea(.keyboard, edges: .bottom)
+                            // The page yields to the conversation: .05, blur 7,
+                            // hit-dead, on the one curve (Silk Mockup.dc.html:24-25).
+                            .silkStage(dimmed: model.conversation.stageDimmed)
+
+                            // The wordmark, on its own layer: the one thing that never
+                            // yields to the conversation (README.md:203-205). It signs
+                            // Now and Settings and is hidden on Mirror (README.md:58-60),
+                            // crossing on the same curve the pager settles with. The
+                            // pages keep an empty seat where it sits, so their columns
+                            // hold their spacing under it.
+                            //
+                            // It yields to the *shield*, though — a wall you can
+                            // read the wordmark through is not a wall — which is
+                            // why it sits inside this container and outside
+                            // `silkStage`. The two are different refusals.
+                            VStack {
+                                Wordmark(night: night)
+                                    .opacity(model.page == 1 ? 0 : 1)
+                                    .animation(Silk.motion(0.45), value: model.page)
+                                    .padding(.top, 62)
+                                Spacer()
+                            }
+                            .allowsHitTesting(false)
+                            .ignoresSafeArea(edges: .top)
+                            .ignoresSafeArea(.keyboard, edges: .bottom)
+
+                            // Tap-out: the stage is hit-dead while dimmed, so an
+                            // invisible catcher under the thread picks up the tap and
+                            // blurs. Blur is the one teardown path — the model clears
+                            // the thread on it. The tap is a chosen leave, so it also
+                            // closes the refocus grace the return key gets below.
+                            if barFocused {
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        submittedAt = .distantPast
+                                        barFocused = false
+                                    }
+                                    .ignoresSafeArea()
+                            }
+
+                            // The thread, over the dimmed stage, under the shield and
+                            // the toast.
+                            ConversationThread(model: model.conversation, night: night)
+
+                            // Bar and dots, measured from the glass independently — the
+                            // CSS positions them absolutely from the same edge (bar
+                            // bottom 44, dots bottom 24: _ds_bundle.css:270, 309), and
+                            // stacking them put the bar at 83 and the dots at 43.5
+                            // because PageDots is a 44pt tap target around a 5pt dot.
+                            // `.container` and not `.all` — the keyboard must still
+                            // lift the bar when the bar is what you are using; the
+                            // GeometryReader therefore measures glass-to-glass, or
+                            // glass-to-keyboard when one is up, which is exactly the
+                            // space the bar's rise is computed against.
+                            GeometryReader { geo in
+                                ZStack(alignment: .bottom) {
+                                    PageDots(count: 3, index: $model.page, night: night)
+                                        .silkStage(dimmed: model.conversation.stageDimmed)
+                                        .padding(.bottom, 24 - (44 - 5) / 2)
+                                    CommandBar(text: $input,
+                                               night: night,
+                                               onSubmit: submit,
+                                               hasTurns: model.conversation.hasTurns,
+                                               rise: CommandBar.riseDistance(in: geo.size.height),
+                                               focus: $barFocused)
+                                        .padding(.horizontal, 28)
+                                        .padding(.bottom, 44)
+                                }
+                                // The frame is what reaches the glass — `ignoresSafeArea`
+                                // only widens the region a view *may* use, and a view
+                                // sized to its content stays where the safe area put it.
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                            }
+                            .ignoresSafeArea(.container, edges: .bottom)
                         }
-                        .tabViewStyle(.page(indexDisplayMode: .never))
-                        .ignoresSafeArea(edges: .top)
-                        // The bar is the only thing meant to move for the keyboard.
-                        // Without this the pages lose ~336pt and Mirror's
-                        // bottom-anchored footnote jumps hundreds of points.
-                        .ignoresSafeArea(.keyboard, edges: .bottom)
-                        // The page yields to the conversation: .05, blur 7,
-                        // hit-dead, on the one curve (Silk Mockup.dc.html:24-25).
-                        .silkStage(dimmed: model.conversation.stageDimmed)
                         // The shield's backdrop-filter: blur(20px) over a ground at
                         // .92/.94 (README.md:181-183). SwiftUI has no backdrop
                         // filter, but the grounds are opaque, so blurring the stage
@@ -88,72 +182,17 @@ struct RootView: View {
                         .blur(radius: model.shield == nil ? 0 : 20)
                         .animation(nil, value: model.shield)
 
-                        // The wordmark, on its own layer: the one thing that never
-                        // yields to the conversation (README.md:203-205). It signs
-                        // Now and Settings and is hidden on Mirror (README.md:58-60),
-                        // crossing on the same curve the pager settles with. The
-                        // pages keep an empty seat where it sits, so their columns
-                        // hold their spacing under it.
-                        VStack {
-                            Wordmark(night: night)
-                                .opacity(model.page == 1 ? 0 : 1)
-                                .animation(Silk.motion(0.45), value: model.page)
-                                .padding(.top, 62)
-                            Spacer()
-                        }
-                        .allowsHitTesting(false)
-                        .ignoresSafeArea(edges: .top)
-                        .ignoresSafeArea(.keyboard, edges: .bottom)
-
-                        // Tap-out: the stage is hit-dead while dimmed, so an
-                        // invisible catcher under the thread picks up the tap and
-                        // blurs. Blur is the one teardown path — the model clears
-                        // the thread on it. The tap is a chosen leave, so it also
-                        // closes the refocus grace the return key gets below.
-                        if barFocused {
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    submittedAt = .distantPast
-                                    barFocused = false
-                                }
-                                .ignoresSafeArea()
-                        }
-
-                        // The thread, over the dimmed stage, under the shield and
-                        // the toast.
-                        ConversationThread(model: model.conversation, night: night)
-
-                        // Bar and dots, measured from the glass independently — the
-                        // CSS positions them absolutely from the same edge (bar
-                        // bottom 44, dots bottom 24: _ds_bundle.css:270, 309), and
-                        // stacking them put the bar at 83 and the dots at 43.5
-                        // because PageDots is a 44pt tap target around a 5pt dot.
-                        // `.container` and not `.all` — the keyboard must still
-                        // lift the bar when the bar is what you are using; the
-                        // GeometryReader therefore measures glass-to-glass, or
-                        // glass-to-keyboard when one is up, which is exactly the
-                        // space the bar's rise is computed against.
-                        GeometryReader { geo in
-                            ZStack(alignment: .bottom) {
-                                PageDots(count: 3, index: $model.page, night: night)
-                                    .silkStage(dimmed: model.conversation.stageDimmed)
-                                    .padding(.bottom, 24 - (44 - 5) / 2)
-                                CommandBar(text: $input,
-                                           night: night,
-                                           onSubmit: submit,
-                                           hasTurns: model.conversation.hasTurns,
-                                           rise: CommandBar.riseDistance(in: geo.size.height),
-                                           focus: $barFocused)
-                                    .padding(.horizontal, 28)
-                                    .padding(.bottom, 44)
-                            }
-                            // The frame is what reaches the glass — `ignoresSafeArea`
-                            // only widens the region a view *may* use, and a view
-                            // sized to its content stays where the safe area put it.
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        }
-                        .ignoresSafeArea(.container, edges: .bottom)
+                        // ── The overlay stratum ───────────────────────────
+                        //
+                        // Above the blur and outside it, so the three overlays
+                        // are never blurred by the wall they may stand over.
+                        // Their curves are set where they are raised and lowered
+                        // — in `AppModel` — and not by an `.animation(_:value:)`
+                        // on this stack: that modifier is not scoped to the child
+                        // whose value changed, so an overlay's insertion handed
+                        // its curve to the pager, both page columns, the bar, the
+                        // dots and the thread on the frame the veil went up. That
+                        // was the flicker.
 
                         // The wall a door would meet, raised by tapping its row.
                         // Above the pager, the thread and the bar; below the toast.
@@ -172,12 +211,10 @@ struct RootView: View {
                         //
                         // That used to be harmless because the two could not
                         // coexist. The cap row deletes that invariant: it raises
-                        // this wheel from inside the editor, and although
-                        // `openCapWheel` takes the editor down first, the editor
-                        // leaves on its own 0.4s curve — so for most of half a
-                        // second the wheel would be mounted under a .97 veil,
-                        // invisible and uncommittable, with the departing
-                        // editor's backdrop eating every touch aimed at it.
+                        // this wheel from inside the editor. `openCapWheel` now
+                        // swaps them in one un-animated frame — see its own note
+                        // for why a cross-fade between two .97 veils is the one
+                        // thing this handoff may not do.
                         if let kind = model.picker {
                             WheelPickerOverlay(title: model.pickerTitle(for: kind),
                                                columns: model.pickerColumns(for: kind),
@@ -209,9 +246,11 @@ struct RootView: View {
                             .zIndex(22)
                         }
                     }
-                    .animation(Silk.motion(0.45), value: model.shield)
-                    .animation(Silk.motion(0.4), value: model.picker != nil)
-                    .animation(Silk.motion(0.4), value: model.doorEdit != nil)
+                    // The one animation the stage still stamps whole, and the one
+                    // that must be: the day↔night wash is atmosphere, so every
+                    // layer crosses together on the 0.8s (canon.md, sanctioned
+                    // exceptions). The three overlay curves that used to stand
+                    // here moved to their mutation sites in `AppModel`.
                     .animation(Silk.motion(Silk.Motion.crossing), value: night)
                     // The onboarded tree's ONE picker sheet: it serves both the
                     // wall re-arm (Now's row) and a door binding (Settings'
