@@ -95,7 +95,7 @@ struct WaitOverlay: View {
                 Text(app)
                     .font(Silk.sans(13.5))
                     .tracking(Silk.track(-0.005, 13.5))
-                    .foregroundStyle(night ? Silk.paperAlpha(0.40) : Silk.inkAlpha(0.50))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.62) : Silk.inkAlpha(0.70))
             }
             // One spoken element, and it is the app's name — the same word she
             // typed. The mark hides itself (EnsoPath.swift), as it does on Now:
