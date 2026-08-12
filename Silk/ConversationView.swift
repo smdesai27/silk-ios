@@ -235,12 +235,13 @@ private struct TurnCell: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // .ex-you — 13px sans, +.01em, ink-40 day / paper-32 night
-            // (Silk Mockup.dc.html:50, 54).
+            // .ex-you — 13px sans, +.01em (Silk Mockup.dc.html:50, 54). The
+            // mockup's ink-40 / paper-32 are the ramp's old floor and land at
+            // 2.42:1 and 2.66:1; this is their AA-floored image (Silk.swift).
             Text(turn.you)
                 .font(Silk.sans(13))
                 .tracking(Silk.track(0.01, 13))
-                .foregroundStyle(night ? Silk.paperAlpha(0.32) : Silk.inkAlpha(0.40))
+                .foregroundStyle(night ? Silk.paperAlpha(0.59) : Silk.inkAlpha(0.65))
                 .opacity(dim)
                 .allowsHitTesting(false)
 
@@ -264,8 +265,10 @@ private struct TurnCell: View {
                 .allowsHitTesting(false)
                 .accessibilityIdentifier("silk.turn.reply")
 
-            // .ex-undo — a hairline pill, 13px, ink-52 / paper-40, border
-            // ink-14 / paper-16 (Silk Mockup.dc.html:53, 56). The prototype
+            // .ex-undo — a hairline pill, 13px, border ink-14 / paper-16 (Silk
+            // Mockup.dc.html:53, 56). The label's ink-52 / paper-40 are lifted
+            // to the AA floor; the border is not text and keeps its token.
+            // The prototype
             // preventDefault()s its mousedown so pressing it cannot blur the
             // input and tear the thread down (README.md:229-230). SwiftUI
             // buttons never steal first responder, so the equivalent here is
@@ -275,7 +278,7 @@ private struct TurnCell: View {
                 Button(action: onUndo) {
                     Text(SilkStrings.undo)
                         .font(Silk.sans(13))
-                        .foregroundStyle(night ? Silk.paperAlpha(0.40) : Silk.inkAlpha(0.52))
+                        .foregroundStyle(night ? Silk.paperAlpha(0.62) : Silk.inkAlpha(0.71))
                         .padding(.vertical, 8)           // padding: 8px 20px
                         .padding(.horizontal, 20)
                         .background(

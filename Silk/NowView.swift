@@ -123,7 +123,7 @@ struct NowView: View {
                 Text(SilkStrings.minLeftToday)
                     .font(Silk.sans(12.5))
                     .tracking(Silk.track(0.015, 12.5))
-                    .foregroundStyle(night ? Silk.paperAlpha(0.44) : Silk.inkAlpha(0.52))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.64) : Silk.inkAlpha(0.71))
                     // Already spoken above, as the numeral's value.
                     .accessibilityHidden(true)
             }
@@ -143,7 +143,7 @@ struct NowView: View {
                 Text(SilkStrings.blockingOff)
                     .font(Silk.sans(15))
                     .tracking(Silk.track(-0.005, 15))
-                    .foregroundStyle(night ? Silk.paperAlpha(0.36) : Silk.inkAlpha(0.70))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.61) : Silk.inkAlpha(0.78))
                 Spacer()
                 Button {
                     model.raiseWall()
@@ -151,7 +151,7 @@ struct NowView: View {
                     Text(SilkStrings.turnItOn)
                         .font(Silk.serif(12.5))
                         .tracking(Silk.track(0.015, 12.5))
-                        .foregroundStyle(night ? Silk.paperAlpha(0.44) : Silk.inkAlpha(0.45))
+                        .foregroundStyle(night ? Silk.paperAlpha(0.64) : Silk.inkAlpha(0.67))
                         .frame(height: 44)
                         .contentShape(Rectangle())
                 }
@@ -178,7 +178,7 @@ struct NowView: View {
                 Text(SilkStrings.tomorrow)
                     .font(Silk.sans(15))
                     .tracking(Silk.track(-0.005, 15))
-                    .foregroundStyle(night ? Silk.paperAlpha(0.36) : Silk.inkAlpha(0.70))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.61) : Silk.inkAlpha(0.78))
                 // Name what actually moved. A loosening can be a shorter night
                 // or a door's own ceiling as readily as a bigger budget, and
                 // printing the budget then advertised the one thing unchanged.
@@ -195,7 +195,7 @@ struct NowView: View {
                 Text(summary)
                     .font(Silk.serif(14))
                     .lineLimit(1)
-                    .foregroundStyle(night ? Silk.paperAlpha(0.26) : Silk.inkAlpha(0.50))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.56) : Silk.inkAlpha(0.70))
                 Spacer()
                 Button {
                     model.keyTapped()
@@ -203,7 +203,7 @@ struct NowView: View {
                     Text(SilkStrings.applyNow)
                         .font(Silk.serif(12.5))
                         .tracking(Silk.track(0.015, 12.5))
-                        .foregroundStyle(night ? Silk.paperAlpha(0.44) : Silk.inkAlpha(0.45))
+                        .foregroundStyle(night ? Silk.paperAlpha(0.64) : Silk.inkAlpha(0.67))
                         .frame(height: 44)
                         .contentShape(Rectangle())
                 }

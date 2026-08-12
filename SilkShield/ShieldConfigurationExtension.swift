@@ -30,10 +30,26 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     /// the button visible only as prominent glass's blue rim.
     private var dayGround: UIColor { linen }
 
-    // The ink and paper ramps, by the names tokens/color.css gives them.
-    private var inkMark: UIColor { ink.withAlphaComponent(0.60) }        // --silk-ink-60,   "shield mark"
-    private var inkCaption: UIColor { ink.withAlphaComponent(0.50) }     // --silk-ink-50
-    private var paperMark: UIColor { paper.withAlphaComponent(0.40) }    // --silk-paper-40, "night mark"
+    // The ink and paper ramps. The two MARK values are still the tokens
+    // tokens/color.css names; the two CAPTION values are the AA-floored ramp
+    // Silk/DesignSystem.swift now states, and they diverge from the token
+    // sheet on purpose — see the ramp note there.
+    //
+    // Mark and caption were one constant each until the ramp audit, and the
+    // split is the finding: the icon is a graphic and answers to WCAG 1.4.11
+    // (3:1), the subtitle is prose and answers to 1.4.3 (4.5:1). Sharing a
+    // value meant the subtitle inherited the icon's floor and shipped under it.
+    //
+    // These are judged against the RENDERED wall, not the ground handed over —
+    // title, subtitle and icon are all subviews of the effect view's
+    // contentView, so like the button's fill they sit ABOVE the material and
+    // read against what it renders (docs/design/screentime-ui.md): #FAF8F5 by
+    // day, #2F2F29 at night. That is also why the day floor here (α ≈ 0.613)
+    // is not the app's (α ≈ 0.618) — the material lifts its wall.
+    private var inkMark: UIColor { ink.withAlphaComponent(0.60) }        // --silk-ink-60,   "shield mark" — 4.32:1 on #FAF8F5
+    private var inkCaption: UIColor { ink.withAlphaComponent(0.70) }     // was .50 → 3.21:1, under AA. 5.94:1
+    private var paperMark: UIColor { paper.withAlphaComponent(0.40) }    // --silk-paper-40, "night mark" — 3.28:1 on #2F2F29
+    private var paperCaption: UIColor { paper.withAlphaComponent(0.62) } // was paperMark → 3.28:1, under AA. 5.45:1
     private var paperTitle: UIColor { paper.withAlphaComponent(0.90) }   // no token; _ds_bundle.css:465 spends it raw
     private var paperButton: UIColor { paper.withAlphaComponent(0.80) }  // --silk-paper-80, "night shield button"
 
@@ -147,7 +163,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
             backgroundColor: lacquer,
             icon: nightEnso,
             title: .init(text: SilkStrings.brand, color: paperTitle),
-            subtitle: .init(text: subtitle, color: paperMark),
+            subtitle: .init(text: subtitle, color: paperCaption),
             primaryButtonLabel: .init(text: SilkStrings.ok, color: paperButton),
             // --silk-paper-16 — the token the mockup spends on this button's
             // border — laid down against the ground because the fill cannot

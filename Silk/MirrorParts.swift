@@ -106,7 +106,7 @@ struct ShieldOverlay: View {
                 if !app.isEmpty {
                     Text(app)
                         .font(Silk.sans(13.5))
-                        .foregroundStyle(night ? Silk.paperAlpha(0.40) : Silk.inkAlpha(0.50))
+                        .foregroundStyle(night ? Silk.paperAlpha(0.62) : Silk.inkAlpha(0.70))
                 }
                 Button(action: onDismiss) {
                     Text(SilkStrings.ok)

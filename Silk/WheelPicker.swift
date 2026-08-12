@@ -130,15 +130,17 @@ struct WheelPickerOverlay: View {
                 .accessibilityIdentifier("silk.picker.backdrop")
 
             VStack(spacing: 0) {
-                // 12px, .12em, uppercase, ink-40 — the quietest voice on the
-                // screen names what is being edited and then stays out of the
-                // way. Hit-testing off, so a tap on the word is a tap on the
-                // backdrop, as it is in the DOM. (Silk Mockup.dc.html:167, 369)
+                // 12px, .12em, uppercase — the quietest voice on the screen
+                // names what is being edited and then stays out of the way.
+                // The sheet's ink-40 is the ramp's old floor (2.42:1); this is
+                // the AA floor, still the ramp's quietest step. Hit-testing
+                // off, so a tap on the word is a tap on the backdrop, as it is
+                // in the DOM. (Silk Mockup.dc.html:167, 369)
                 Text(title)
                     .textCase(.uppercase)
                     .font(Silk.sans(12))
                     .tracking(Silk.track(0.12, 12))
-                    .foregroundStyle(night ? Silk.paperAlpha(0.35) : Silk.inkAlpha(0.40))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.60) : Silk.inkAlpha(0.65))
                     .padding(.bottom, 34)
                     .allowsHitTesting(false)
                     .accessibilityIdentifier("silk.picker.title")
@@ -355,6 +357,17 @@ private struct Wheel: View {
 
     /// Night dims to rgba(246,243,236,.26) — the handoff's night-mode audit
     /// names this value directly (README.md:278). Day is ink-35.
+    ///
+    /// Left on the sheet's values by the ramp audit, and not because they pass.
+    /// The rows are serif 24, which is WCAG "large" and answers to 3:1 rather
+    /// than 4.5:1 — and these miss even that: ink-35 is 2.13:1 on paper and
+    /// paper-26 is 2.22:1 on the night ground. Clearing 3:1 wants ink ≈ .48 and
+    /// paper ≈ .37. It was not changed here because the unselected rows are the
+    /// one place in the app where dimness is the mechanism rather than the
+    /// hierarchy — they are the values you have NOT chosen, and the wheel says
+    /// which one is live by how far the others recede. Raising them is a
+    /// legitimate call, but it is a design decision about the picker and not
+    /// the ramp fix, so it is named here rather than made quietly.
     private var dimInk: Color { night ? Silk.paperAlpha(0.26) : Silk.inkAlpha(0.35) }
 }
 

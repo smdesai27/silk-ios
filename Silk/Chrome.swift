@@ -115,6 +115,15 @@ struct Wordmark: View {
                 .frame(width: 13, height: 13)            // _ds_bundle.css:100
             // The product's mark, not something Silk says — it costs nothing
             // against the string budget.
+            //
+            // And for the same reason it keeps its tokens while the rest of the
+            // text ramp was lifted to the AA floor: WCAG 1.4.3 exempts a
+            // logotype, and this is one — the lockup is the brand, not prose.
+            // The exemption is worth taking rather than waiving, because the
+            // 1pt nudge above is derived from THIS pair of alphas: the centroid
+            // sits left because the mark is drawn at .68 against the text's
+            // .62, and darkening the text alone would move it without moving
+            // the correction that answers to it.
             Text("SILK")
                 .font(Silk.sans(11, weight: .medium))
                 .tracking(Self.track)
@@ -161,7 +170,7 @@ struct DoorRow: View {
             // the name would shuffle every time a door opened.
             Text(timeText)
                 .font(Silk.serif(14))                    // --silk-size-time; tabular is baked in
-                .foregroundStyle(night ? Silk.paperAlpha(0.26) : Silk.inkAlpha(0.50))
+                .foregroundStyle(night ? Silk.paperAlpha(0.56) : Silk.inkAlpha(0.70))
             // `margin-left: auto` on the dot (_ds_bundle.css:242). The floor is
             // not from the CSS — it keeps the dot off the time when a door has
             // a long name and the row runs out of room.
@@ -197,11 +206,11 @@ struct DoorRow: View {
         guard !night else {
             // Under lacquer every name dims alike. An open door keeps its
             // pop in the dot, never in the type.
-            return state == .rest ? Silk.paperAlpha(0.24) : Silk.paperAlpha(0.36)
+            return state == .rest ? Silk.paperAlpha(0.55) : Silk.paperAlpha(0.61)
         }
         switch state {
         case .live: return Silk.inkAlpha(0.84)
-        case .rest: return Silk.inkAlpha(0.44)
+        case .rest: return Silk.inkAlpha(0.66)
         case .open: return Silk.inkAlpha(0.90)
         }
     }

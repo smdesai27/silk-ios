@@ -50,7 +50,7 @@ struct MirrorView: View {
                 Text(dayName)
                     .font(Silk.sans(12))
                     .tracking(Silk.track(0.015, 12))
-                    .foregroundStyle(night ? Silk.paperAlpha(0.44) : Silk.inkAlpha(0.52))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.64) : Silk.inkAlpha(0.71))
                     // Already spoken above, as the numeral's value.
                     .accessibilityHidden(true)
             }
@@ -65,7 +65,7 @@ struct MirrorView: View {
             Text(SilkStrings.week)
                 .font(Silk.sans(12))
                 .tracking(Silk.track(0.04, 12))
-                .foregroundStyle(night ? Silk.paperAlpha(0.32) : Silk.inkAlpha(0.48))
+                .foregroundStyle(night ? Silk.paperAlpha(0.59) : Silk.inkAlpha(0.69))
                 .padding(.bottom, 16)
             WeekBand(closedScores: model.closedWeekScores, night: night)
         }
@@ -81,6 +81,6 @@ struct MirrorView: View {
         Text("\(Image(systemName: "key")) \(model.keyLog)")
             .font(Silk.serif(12.5))
             .tracking(Silk.track(0.02, 12.5))
-            .foregroundStyle(night ? Silk.paperAlpha(0.26) : Silk.inkAlpha(0.45))
+            .foregroundStyle(night ? Silk.paperAlpha(0.56) : Silk.inkAlpha(0.67))
     }
 }

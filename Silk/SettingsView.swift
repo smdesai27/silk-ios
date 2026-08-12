@@ -99,12 +99,13 @@ struct SettingsView: View {
             .padding(.top, 64)
 
             // Mirror's .silk-chart__title, borrowed whole: sans 12, .04em,
-            // ink-48 by day and paper-32 at night, margins 44/46/14.
+            // margins 44/46/14, and the same ink as Mirror's own "Week" —
+            // ink-48 / paper-32 in the sheet, at the AA floor here.
             // (ds-bundle/_ds_bundle.css:377-382; Silk Mockup.dc.html:48, :155)
             Text(SilkStrings.apps)
                 .font(Silk.sans(12))
                 .tracking(Silk.track(0.04, 12))
-                .foregroundStyle(night ? Silk.paperAlpha(0.32) : Silk.inkAlpha(0.48))
+                .foregroundStyle(night ? Silk.paperAlpha(0.59) : Silk.inkAlpha(0.69))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 44)
                 .padding(.horizontal, 46)
@@ -198,7 +199,7 @@ private struct SettingsRow: View {
                 Spacer(minLength: 8)
                 Text(value)
                     .font(Silk.serif(14))                   // --silk-size-time; tabular baked in
-                    .foregroundStyle(night ? Silk.paperAlpha(0.26) : Silk.inkAlpha(0.50))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.56) : Silk.inkAlpha(0.70))
             }
             .frame(height: 52)                              // _ds_bundle.css:223
             .contentShape(Rectangle())
@@ -232,9 +233,9 @@ private struct SettingsRow: View {
 
     private var nameInk: Color {
         if quiet {
-            return night ? Silk.paperAlpha(0.28) : Silk.inkAlpha(0.45)
+            return night ? Silk.paperAlpha(0.57) : Silk.inkAlpha(0.67)
         }
-        return night ? Silk.paperAlpha(0.36) : Silk.inkAlpha(0.84)
+        return night ? Silk.paperAlpha(0.61) : Silk.inkAlpha(0.84)
     }
 }
 
@@ -413,8 +414,8 @@ struct DoorDetailCard: View {
     /// the far edge, exactly as the page states a rule.
     ///
     /// The page's ramp is inverted here, deliberately. There the name is what you
-    /// scan a column for and the value is the detail, so the name is ink .84 and
-    /// the value ink .50. Here the door is already named at the top of the card
+    /// scan a column for and the value is the detail, so the name is the ramp's
+    /// body step and the value its quiet one. Here the door is already named at the top of the card
     /// and the VALUE is the thing that was invisible before — so the value takes
     /// the card's full voice and the label takes the page's name ink. Serif 15
     /// rather than the page's 14 for the same reason: level with its label, the
@@ -425,7 +426,7 @@ struct DoorDetailCard: View {
                 Text(SilkStrings.dailyCap)
                     .font(Silk.sans(15, weight: .medium))
                     .tracking(Silk.track(-0.005, 15))
-                    .foregroundStyle(night ? Silk.paperAlpha(0.36) : Silk.inkAlpha(0.84))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.61) : Silk.inkAlpha(0.84))
                 // The floor keeps the value off the label if the two ever meet.
                 Spacer(minLength: 8)
                 Text(cap)
@@ -469,11 +470,11 @@ struct DoorDetailCard: View {
                 Text(SilkStrings.tomorrow)
                     .font(Silk.sans(15, weight: .medium))
                     .tracking(Silk.track(-0.005, 15))
-                    .foregroundStyle(night ? Silk.paperAlpha(0.36) : Silk.inkAlpha(0.70))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.61) : Silk.inkAlpha(0.78))
                 Text(value)
                     .font(Silk.serif(15))
                     .lineLimit(1)
-                    .foregroundStyle(night ? Silk.paperAlpha(0.26) : Silk.inkAlpha(0.50))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.56) : Silk.inkAlpha(0.70))
             }
             // Folded first, so the identifier rides an element whose label is
             // the statement entire ("Tomorrow: no cap") — and folded on this
@@ -488,7 +489,7 @@ struct DoorDetailCard: View {
                 Text(SilkStrings.applyNow)
                     .font(Silk.serif(12.5))
                     .tracking(Silk.track(0.015, 12.5))
-                    .foregroundStyle(night ? Silk.paperAlpha(0.44) : Silk.inkAlpha(0.45))
+                    .foregroundStyle(night ? Silk.paperAlpha(0.64) : Silk.inkAlpha(0.67))
                     .frame(height: 44)
                     .contentShape(Rectangle())
             }
@@ -504,18 +505,19 @@ struct DoorDetailCard: View {
     /// app" is neither — it is a label on a control, which is sans 15 medium
     /// everywhere else in the app.
     ///
-    /// Their ink is the app's own secondary-action pair: `inkAlpha(0.45)` by day,
-    /// which setup's "Other apps" and the page's quiet add row both speak at, and
-    /// `paperAlpha(0.40)` at night, which is the handoff's `--silk-paper-40`
-    /// (`.silk-btn-later`, the "Not now" of a proposal). Quieter than the cap row
-    /// in both faces, which is the demotion.
+    /// Their ink is the app's own secondary-action pair — the ramp's quiet-action
+    /// step, which setup's "Other apps" and the page's quiet add row both speak at
+    /// (the sheet's `--silk-ink-45` / `--silk-paper-40`, `.silk-btn-later`, the
+    /// "Not now" of a proposal, lifted to the AA floor). Quieter than the cap row
+    /// in both faces, which is the demotion — and it stays quieter after the lift,
+    /// because the whole ramp moved together rather than the floor alone.
     private func actionRow(_ label: String, id: String,
                            action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
                 .font(Silk.sans(15, weight: .medium))
                 .tracking(Silk.track(-0.005, 15))
-                .foregroundStyle(night ? Silk.paperAlpha(0.40) : Silk.inkAlpha(0.45))
+                .foregroundStyle(night ? Silk.paperAlpha(0.62) : Silk.inkAlpha(0.67))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: 52)
                 // Inside the label, as setup's chips carry theirs: attached
@@ -586,8 +588,8 @@ struct DoorAddOverlay: View {
                                                            : Silk.inkAlpha(0.14),
                                                      lineWidth: 1)
                                 )
-                                .foregroundStyle(night ? Silk.paperAlpha(0.72)
-                                                       : Silk.inkAlpha(0.72))
+                                .foregroundStyle(night ? Silk.paperAlpha(0.76)
+                                                       : Silk.inkAlpha(0.79))
                                 .frame(minHeight: 44)
                                 .contentShape(Rectangle())
                         }

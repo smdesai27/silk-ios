@@ -172,7 +172,7 @@ struct OnboardingView: View {
                 VStack(spacing: 10) {
                     Text(SilkStrings.lockedOvernight)
                         .font(Silk.sans(12.5))
-                        .foregroundStyle(Silk.inkAlpha(0.52))
+                        .foregroundStyle(Silk.inkAlpha(0.71))
                     aperture
                 }
             }
@@ -191,7 +191,7 @@ struct OnboardingView: View {
         Text(text)
             .font(Silk.serif(15))
             .monospacedDigit()
-            .foregroundStyle(Silk.inkAlpha(0.58))
+            .foregroundStyle(Silk.inkAlpha(0.73))
     }
 
     // MARK: - Apps (step 2)
@@ -213,7 +213,7 @@ struct OnboardingView: View {
             } label: {
                 Text(SilkStrings.otherApps)
                     .font(Silk.sans(14))
-                    .foregroundStyle(Silk.inkAlpha(0.45))
+                    .foregroundStyle(Silk.inkAlpha(0.67))
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
             }
@@ -276,7 +276,7 @@ struct OnboardingView: View {
             .overlay(
                 Capsule().stroke(Silk.inkAlpha(selected ? 0 : 0.14), lineWidth: 1)
             )
-            .foregroundStyle(selected ? Silk.paper : Silk.inkAlpha(0.72))
+            .foregroundStyle(selected ? Silk.paper : Silk.inkAlpha(0.79))
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }

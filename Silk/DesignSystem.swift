@@ -26,6 +26,50 @@ enum Silk {
     static let scoreRing = Color(red: 0.235, green: 0.310, blue: 0.361).opacity(0.92)
     static let scoreRingNight = Color(red: 0.620, green: 0.718, blue: 0.780).opacity(0.82)
 
+    /// The ramps. **Text has a floor: ink .65 by day, paper .55 at night.**
+    ///
+    /// The sheet's ramp was authored by eye and the bottom half of it does not
+    /// reach WCAG AA (4.5:1) for text under 24pt. Composited and measured, the
+    /// day ramp crosses 4.5:1 at α ≈ .618 — so every step from `--silk-ink-40`
+    /// through `--silk-ink-60` was failing, and the three Mirror carries were
+    /// the clearest: footnote .45 → 2.76:1, "Week" .48 → 3.00:1, the hero's day
+    /// name .52 → 3.36:1. Night was worse than the token sheet implies, because
+    /// paper is not laid on `lacquer` on any real screen: `Ground(night:)` draws
+    /// a #262B32 → #1A1C20 radial and `Moonwash` puts duskBlue .09 over its
+    /// centre, exactly where the hero sits. Against lacquer the night floor
+    /// would be α ≈ .472; against the ground Silk actually draws it is .509,
+    /// and under the moonwash .533.
+    ///
+    /// Hence the floors above, which clear the worst ground each face has:
+    /// ink .65 → 4.98:1 on flat paper, 4.87:1 under `Dapple`, 4.79:1 on linen;
+    /// paper .55 → 5.69:1 on lacquer, 4.99:1 on the ground, 4.68:1 under the
+    /// moonwash.
+    ///
+    /// The whole text ramp was shifted, not just the failing floor, and that is
+    /// the load-bearing part. Lifting only what failed would have collided the
+    /// steps against the floor — Now's pending row states its label at ink-70
+    /// and its value at ink-50, and floor-clamping alone puts both at .65 and
+    /// makes one row out of two. So each face is remapped monotonically onto
+    /// [floor, body], leaving everything at ink .84 / paper .80 and above where
+    /// it was:
+    ///
+    ///     day    .40→.65  .44→.66  .45→.67  .48→.69  .50→.70  .52→.71
+    ///            .55→.72  .58→.73  .60→.74  .62→.75  .70→.78  .72→.79  .80→.82
+    ///     night  .24→.55  .26→.56  .28→.57  .32→.59  .35→.60  .36→.61
+    ///            .40→.62  .42→.63  .44→.64  .50→.67  .72→.76
+    ///
+    /// Order survives; the *spread* necessarily does not. A ramp with a 4.5:1
+    /// floor and a 15:1 ceiling cannot hold the gaps a ramp with a 2.4:1 floor
+    /// had — Mirror's footnote and hero label were 2.76:1 and 3.36:1 (a 22%
+    /// step) and are now 5.48:1 and 5.98:1 (9%). Alpha carries less of the
+    /// hierarchy than it did, so size, weight and tracking carry more. That is
+    /// a real change to the design's voice and it was made deliberately;
+    /// docs/design/canon.md records it as a divergence from the token sheet.
+    ///
+    /// **These figures apply to text only.** Hairlines, door rules, dots,
+    /// rings, capsule fills, gradients and the ensō mark are not text: WCAG
+    /// 1.4.3 does not reach them, `--silk-ink-055` is still "the faintest line
+    /// Silk draws", and every non-text call site keeps its token value.
     static func inkAlpha(_ a: Double) -> Color { ink.opacity(a) }
     static func paperAlpha(_ a: Double) -> Color { paper.opacity(a) }
 

@@ -67,10 +67,10 @@ struct AppPickerSheet: View {
                 .foregroundStyle(Silk.inkAlpha(0.94))
             Text(say)
                 .font(Silk.sans(13.5))
-                .foregroundStyle(Silk.inkAlpha(0.58))
+                .foregroundStyle(Silk.inkAlpha(0.73))
             Text(why)
                 .font(Silk.sans(12))
-                .foregroundStyle(Silk.inkAlpha(0.40))
+                .foregroundStyle(Silk.inkAlpha(0.65))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 24)
@@ -103,7 +103,7 @@ struct AppPickerSheet: View {
             status
             Button(SilkStrings.cancel, action: onCancel)
                 .font(Silk.sans(14))
-                .foregroundStyle(Silk.inkAlpha(0.50))
+                .foregroundStyle(Silk.inkAlpha(0.70))
                 .buttonStyle(.plain)
                 .frame(minHeight: 44)
                 .accessibilityIdentifier("silk.picker.cancel")
@@ -140,7 +140,7 @@ struct AppPickerSheet: View {
                 // going dead beside it is the louder signal anyway.
                 Text(statusText)
                     .font(Silk.sans(12.5, weight: needsAnswer ? .medium : .regular))
-                    .foregroundStyle(Silk.inkAlpha(needsAnswer ? 0.80 : 0.55))
+                    .foregroundStyle(Silk.inkAlpha(needsAnswer ? 0.82 : 0.72))
                     .multilineTextAlignment(.leading)
             }
         }
@@ -330,7 +330,7 @@ private struct SoleAppLabelStyle: LabelStyle {
                 .clipShape(RoundedRectangle(cornerRadius: 5))
             configuration.title
                 .font(Silk.sans(12.5))
-                .foregroundStyle(Silk.inkAlpha(0.70))
+                .foregroundStyle(Silk.inkAlpha(0.79))
         }
     }
 }
