@@ -2852,34 +2852,15 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     /// ratios-over-stopwatches reasoning at length; this is the same argument
     /// applied to the gate that taught it.)
     @Test func hugeInputStaysCheapAndSilent() {
-        let clock = ContinuousClock()
-        // The bound is on the BEST of three runs. A wall clock charges the
-        // parser for every neighbour on the machine; a real regression slows all
-        // three runs, a busy neighbour only some.
-        func bestOfThree(_ parse: () -> Void) -> Duration {
-            (0..<3).map { _ in clock.measure(parse) }.min()!
-        }
-        /// The two arms of the scaling ratio, measured alternately rather than one
-        /// block after the other. Two sequential best-of-three blocks let a load
-        /// spike cover one arm and miss the other, which moves the ratio by the
-        /// whole size of the spike — see `WaitPerformanceTests.fastestPair`, where
-        /// that failure was measured rather than supposed.
-        func fastestPair(_ first: () -> Void, _ second: () -> Void) -> (Duration, Duration) {
-            var bestFirst: Duration?
-            var bestSecond: Duration?
-            for _ in 0..<3 {
-                let a = clock.measure(first)
-                let b = clock.measure(second)
-                bestFirst = bestFirst.map { Swift.min($0, a) } ?? a
-                bestSecond = bestSecond.map { Swift.min($0, b) } ?? b
-            }
-            return (bestFirst ?? .zero, bestSecond ?? .zero)
-        }
+        // `bestOfThree` and `fastestPair` live in `PerformanceMeasurement.swift`
+        // now — this test used to carry its own nested copies, and a third suite
+        // needing the same two instruments is what moved them. The bound is on
+        // the BEST of three runs: a wall clock charges the parser for every
+        // neighbour on the machine; a real regression slows all three runs, a
+        // busy neighbour only some. Three rounds rather than the shared default
+        // of seven because each arm here parses ten thousand words.
         func noise(words: Int) -> String {
             Array(repeating: "lorem ipsum dolor sit amet", count: words / 5).joined(separator: " ")
-        }
-        func seconds(_ d: Duration) -> Double {
-            Double(d.components.seconds) + Double(d.components.attoseconds) * 1e-18
         }
 
         let tenThousand = noise(words: 10_000)
@@ -2901,7 +2882,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // would produce.
         let capped = tenThousand + " cap tiktok at 20 a day"
         let thousandCapped = noise(words: 1_000) + " cap tiktok at 20 a day"
-        let (cappedElapsed, smallElapsed) = fastestPair({
+        let (cappedElapsed, smallElapsed) = fastestPair(rounds: 3, {
             #expect(DeterministicParser.parse(capped, state: makeState())
                     == .command(.setDoorCap(door: tiktok, minutes: 20)))
         }, {
@@ -2911,7 +2892,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         #expect(cappedElapsed < .seconds(5),
                 "parser catastrophically slow on 10k words ending in a cap: \(cappedElapsed)")
 
-        let scaling = seconds(cappedElapsed) / max(seconds(smallElapsed), .leastNormalMagnitude)
+        let scaling = ratio(cappedElapsed, to: smallElapsed)
         #expect(scaling < 25,
                 """
                 ten times the words cost \(String(format: "%.1f", scaling))× the work — the \

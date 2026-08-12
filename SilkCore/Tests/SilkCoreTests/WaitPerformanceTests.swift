@@ -94,94 +94,21 @@ private let silksShare = frame / 10
 /// 120 Hz for one second — the unit the mark is actually drawn in.
 private let framesPerSecond = 120
 
-/// Best of three, then the per-operation cost. For a single measurement with no
-/// counterpart — the absolute bounds. Ratios must use `fastestPair` below.
-private func bestOfThree(_ body: () -> Void) -> Duration {
-    fastest(rounds: 3, body)
-}
-
-/// The quickest `body` ever managed, over `rounds` attempts.
-///
-/// **Short windows and many rounds, rather than long windows and few**, and the
-/// difference decides whether an absolute bound is usable on a busy machine at
-/// all. A minimum is an estimator of the *uncontended* cost, and it only works if
-/// at least one attempt actually ran uncontended. The chance of that falls with
-/// the length of the window: on a machine at load 390 — 49× oversubscribed, which
-/// this one reaches — a 69 ms window is never clean, and the per-frame bound
-/// measured 943 µs against a healthy 80 µs and failed three times in twenty. The
-/// same total work cut into fifteen 7 ms windows finds a quiet slice and reports
-/// the true figure.
-///
-/// It is not a trick to make a red test green. The number being estimated is the
-/// same number; what changes is whether the estimator can see it through the
-/// noise. A real regression slows every window, however short.
-private func fastest(rounds: Int, _ body: () -> Void) -> Duration {
-    let clock = ContinuousClock()
-    var best: Duration?
-    for _ in 0..<rounds {
-        let run = clock.measure(body)
-        best = best.map { Swift.min($0, run) } ?? run
-    }
-    return best ?? .zero
-}
-
-/// Two things measured **alternately**, and the best each of them saw.
-///
-/// This exists because the first version of this file did the obvious thing —
-/// `bestOfThree(a)` then `bestOfThree(b)`, and divided — and the obvious thing
-/// does not work. A ratio only cancels contention if both arms are contended
-/// equally, and two sequential best-of-three blocks are not: a load spike lasting
-/// a few hundred milliseconds covers all three of one arm's runs and none of the
-/// other's, and the ratio moves by the whole size of the spike. It is not a
-/// theoretical concern. Under fourteen spinning processes on eight cores, **three
-/// of ten runs went red** on bounds the healthy code sits at 1.0 against: the
-/// history ratio reached 2.18 and 2.15, the price ratio 2.74.
-///
-/// Interleaving fixes the mechanism rather than papering over it. Each round
-/// measures both arms back to back, microseconds apart, so a spike lands on both
-/// or neither; and taking each arm's minimum across the rounds means one quiet
-/// round anywhere in the sequence is enough for both. Seven rounds rather than
-/// three for the same reason — more chances at a quiet one.
-///
-/// The bounds were widened alongside this, to 4 where they were 2. Both changes
-/// point the same way and neither costs sensitivity: the mistakes these ratios
-/// exist to catch measure in the thousands and at 30.3, so the bound has orders of
-/// magnitude of empty space to sit in and no reason to sit near the noise floor.
-///
-/// **What interleaving does not fix, and what was removed because of it.** A ratio
-/// still needs a denominator that differs from its numerator by the thing under
-/// test. Two of the four ratios this file originally carried did not have that —
-/// pricing 1 minute against pricing 20,000 (identical instructions), and a frame
-/// against the clock read that is most of the frame — and they went on flaking at
-/// 5.23 and 9.12 after interleaving, because the problem was never scheduling. Both
-/// are gone: the price is an absolute bound now, and the frame keeps only its
-/// tenth-of-a-frame backstop. Interleaving buys robustness for a ratio that has
-/// signal; it cannot manufacture signal that is not there.
-private func fastestPair(rounds: Int = 7,
-                         _ first: () -> Void,
-                         _ second: () -> Void) -> (first: Duration, second: Duration) {
-    let clock = ContinuousClock()
-    var bestFirst: Duration?
-    var bestSecond: Duration?
-    for _ in 0..<rounds {
-        let a = clock.measure(first)
-        let b = clock.measure(second)
-        bestFirst = bestFirst.map { Swift.min($0, a) } ?? a
-        bestSecond = bestSecond.map { Swift.min($0, b) } ?? b
-    }
-    return (bestFirst ?? .zero, bestSecond ?? .zero)
-}
-
-private func seconds(_ d: Duration) -> Double {
-    Double(d.components.seconds) + Double(d.components.attoseconds) * 1e-18
-}
-
-/// The ratio of two measurements from the same run. Unitless on purpose.
-private func ratio(_ a: Duration, to b: Duration) -> Double {
-    seconds(a) / max(seconds(b), .leastNormalMagnitude)
-}
+// `fastest`, `bestOfThree`, `fastestPair`, `seconds` and `ratio` used to live
+// here as `private` functions, and the reasoning above is where they came from.
+// They now live in `PerformanceMeasurement.swift`, because `ClauseIndexCost`
+// needed the same two instruments for the same reason and a third copy of an
+// idea this file paid to learn is a third place for a fix to miss. The doc
+// comments moved with them; this file's own history — the widened bounds, the
+// two ratios that were removed for having no signal under them — is still stated
+// at each test below.
 
 /// What a ratio is held to. Healthy is ~1.0 in every case below.
+///
+/// Widened from 2 when the arms were interleaved, and neither change costs
+/// sensitivity: the mistakes these ratios exist to catch measure in the thousands
+/// and at 30.3, so the bound has orders of magnitude of empty space to sit in and
+/// no reason to sit near the noise floor.
 private let ratioBound = 4.0
 
 @Suite struct WaitCostsNothingToAsk {

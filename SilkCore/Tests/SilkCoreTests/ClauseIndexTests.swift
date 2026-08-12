@@ -482,36 +482,137 @@ private func clauseStrings(_ text: String) -> [[String]] {
 
 @Suite struct ClauseIndexCost {
 
+    /// Ten thousand words in one breath cost what the same ten thousand words cost
+    /// in ten. Which is what linear MEANS, and what the name has been claiming.
+    ///
+    /// **This test was a stopwatch, and the stopwatch was measuring the machine.**
+    /// It timed one 10k-word string, once, against `< 1 second`, and on 2026-08-12
+    /// it failed one run in six on an otherwise idle laptop — 1.032 s against a
+    /// bound of 1 s, with nothing whatever wrong with the index and the same suite
+    /// green five runs either side. Because `.githooks/pre-push` runs
+    /// `scripts/ci.sh spine`, that one-in-six landed on unrelated pushes as a retry
+    /// loop, which is the exact tax `StressTests.hugeInputStaysCheapAndSilent` was
+    /// rewritten to stop paying.
+    ///
+    /// The name was the tell. `aHugeInputStaysLinear` asserted nothing about
+    /// linearity: one input size against a fixed wall clock cannot see a slope,
+    /// only an intercept, and the intercept it sees belongs as much to whatever
+    /// else the machine was doing. A ratio between two sizes is a claim about the
+    /// code; a wall clock is a claim about the hardware.
+    ///
+    /// **Why the arms are the same size, which is not the obvious design.** The
+    /// obvious one — time 10k, time 1k, assert the ratio is nearer 10 than 100 —
+    /// was built first and measured, and it flakes for a reason worth writing down.
+    /// `fastestPair` estimates each arm's *uncontended* cost by taking a minimum
+    /// over rounds, and a minimum only works if some round ran clean. The 10k arm's
+    /// window is ten times longer, so it is ten times less likely to find a quiet
+    /// slice — the two arms are contended UNEQUALLY even when interleaved, and the
+    /// bias is one-directional: the numerator inflates and the denominator does
+    /// not. Measured: across 25 quiet runs the naive ratio sat inside 9.4–10.7, and
+    /// across eleven runs on a heavily loaded machine it ranged **10.3 to 23.3**
+    /// against a bound of 25. It would have flaked again, on a bound that looked
+    /// like it had 2.5× of room.
+    ///
+    /// So both arms do the same total work in the same-length window: ten thousand
+    /// words as ONE string, against ten thousand words as TEN strings. A linear
+    /// index does identical work either way and the healthy ratio is **1.0**; a
+    /// quadratic one does ten times more on the long string, because ten times the
+    /// length is a hundred times the work spread over a tenth as many calls. The
+    /// signal is preserved and the estimator bias is gone, because now a quiet
+    /// slice is exactly as easy to find on both sides.
+    ///
+    /// **The numbers.** Debug, Apple silicon, best of seven. Healthy sits at
+    /// **1.0**: over 25 consecutive runs on a quiet machine the ratio stayed inside
+    /// **0.92–1.17**, and over 20 runs at a load average of 16–24 on eight cores —
+    /// which stretched the long arm from 130 ms to 570 ms, four times slower — it
+    /// stayed inside **0.91–1.16**. Forty-five runs, no failures, and the arms
+    /// moved together every time. The bound is **3**.
+    ///
+    /// Mutation-tested rather than assumed. `bounds` rebuilt by a scan over `ids`
+    /// at every clause open — the shape of a plausible "derive the bounds instead
+    /// of tracking them" edit, identical answers, genuinely O(n²) — measures
+    /// **9.21** and fails on the first run. Note which assertion caught it: the
+    /// quadratic build took **4.63 s** and walked *under* the five-second backstop.
+    /// The ratio is the instrument here; the backstop is a courtesy.
+    ///
+    /// So the bound sits at 3, between a healthy 1.0 and a broken 9.2 with a
+    /// factor of three either side, and its exact value is doing no work — which
+    /// is the property that makes it safe on hardware nobody has seen yet. What it
+    /// can and cannot see, stated honestly: at 3 it fires once the quadratic term
+    /// reaches about three times the linear one at ten thousand words. A quadratic
+    /// scan small enough to hide under that at this size is not hiding at a
+    /// hundred thousand, and nothing in this repo would notice it at ten.
+    ///
+    /// The absolute bound is kept, coarsened to five seconds, and demoted to what
+    /// a wall clock can honestly do: catch a catastrophe. Against a measured
+    /// 130–210 ms it has 25–38× of headroom quiet, and still 7× against the worst
+    /// seen at load average 24 — where the old one-second bound had 12× on paper
+    /// and reddened anyway.
+    ///
+    /// **The constant is still worth knowing** before a rule starts building
+    /// indexes, and this is the only place it is written down. Measured on the
+    /// 82k-character string below: `tokenize` alone **5.2 ms**, the same string
+    /// with its separators stripped — one clause, one `tokenize` call — **42 ms**,
+    /// and the real thing with its 4001 clauses **151 ms**. So the index costs ~29×
+    /// the tokenizer, and the ~109 ms between the last two figures is ~27 µs per
+    /// clause, spent because `ClauseIndex` calls `tokenize` once per piece and
+    /// `tokenize` rebuilds its `CharacterSet` on every call. Hoisting that set is a
+    /// pure value and would remove most of it — but it is an edit to `tokenize`,
+    /// and there is no workload to measure it against until a rule actually builds
+    /// an index. It belongs to the PR that does. Note what the ratio does *not*
+    /// say: that 27 µs could become 270 µs without moving it at all. A ratio pins
+    /// the slope; only the person who reads these figures pins the intercept.
     @Test func aHugeInputStaysLinear() {
-        // Same shape as hugeInputStaysCheapAndSilent, which pins the parse cost.
-        //
-        // MEASURED, because a number in a comment in this file is load-bearing
-        // and the first draft of this one was wrong by 9x. On this machine, the
-        // 82k-character string below: `tokenize` 2.9 ms, `ClauseIndex` 80 ms.
-        // Scaling is clean linear — 80 / 162 / 326 / 655 ms at 1x / 2x / 4x / 8x
-        // — so the quadratic fear the bound guards against is unfounded, and the
-        // ~12x headroom under a second is what the bound is really for.
-        //
-        // The 28x constant against `tokenize` is attributable and worth knowing
-        // before a rule starts building indexes: the same string with NO
-        // separators (one clause, one `tokenize` call) costs 24 ms, so the other
-        // 56 ms is ~14 microseconds per clause, spent because `ClauseIndex`
-        // calls `tokenize` once per piece and `tokenize` rebuilds its
-        // `CharacterSet` on every call. Hoisting that set is a pure value and
-        // would remove most of it — but it is an edit to `tokenize`, which this
-        // PR promises not to touch, and there is no workload to measure it
-        // against until a rule actually builds an index. It belongs to the PR
-        // that does.
-        let noise = Array(repeating: "lorem ipsum, dolor sit amet. consectetur",
-                          count: 2000).joined(separator: " ")
-        let clock = ContinuousClock()
-        let elapsed = clock.measure {
-            let idx = NumberParser.ClauseIndex(noise)
-            #expect(idx.tokens.count == NumberParser.tokenize(noise).count)
-            // A comma and a full stop in each of the 2000 repeats.
-            #expect(idx.clauseCount == 4001)
+        // Six words and two separators per repeat, so the two arms are the same
+        // words, the same punctuation and the same clauses-per-word. The only
+        // difference is where the string ends.
+        func noise(repeats: Int) -> String {
+            Array(repeating: "lorem ipsum, dolor sit amet. consectetur",
+                  count: repeats).joined(separator: " ")
         }
-        #expect(elapsed < .seconds(1), "clause index too slow on 10k words: \(elapsed)")
+        let inOneBreath = noise(repeats: 2000)
+        // Ten separately built strings rather than one string read ten times: the
+        // long arm walks 82k characters of cold memory, and a single short string
+        // read ten times would sit in cache and win the comparison on the strength
+        // of that alone. Ten allocations touch the same total bytes.
+        let inTenBreaths = (0..<10).map { _ in noise(repeats: 200) }
+
+        // What the index ANSWERS, asserted outside the measurement. It used to be
+        // inside it, which charged the clause index for a whole extra `tokenize`
+        // pass over 82k characters and for Swift Testing's own bookkeeping — a
+        // measurement of the index plus the test harness, held to a bound written
+        // as though it were the index alone.
+        let long = NumberParser.ClauseIndex(inOneBreath)
+        #expect(long.tokens.count == NumberParser.tokenize(inOneBreath).count)
+        // A comma and a full stop in each repeat.
+        #expect(long.clauseCount == 4001)
+        #expect(inTenBreaths.allSatisfy { NumberParser.ClauseIndex($0).clauseCount == 401 })
+        // The two arms really are the same amount of work — asserted, because it
+        // is the whole premise of the ratio below and a change to `noise` could
+        // quietly break it.
+        #expect(inTenBreaths.reduce(0) { $0 + NumberParser.ClauseIndex($1).tokens.count }
+                == long.tokens.count)
+
+        var sink = 0
+        let (asOneString, asTenStrings) = fastestPair({
+            sink &+= NumberParser.ClauseIndex(inOneBreath).clauseCount
+        }, {
+            for piece in inTenBreaths {
+                sink &+= NumberParser.ClauseIndex(piece).clauseCount
+            }
+        })
+        #expect(sink > 0)   // the compiler may not delete the work
+
+        #expect(asOneString < .seconds(5),
+                "clause index catastrophically slow on 10k words: \(asOneString)")
+
+        let scaling = ratio(asOneString, to: asTenStrings)
+        #expect(scaling < 3,
+                """
+                ten thousand words in one string cost \(String(format: "%.2f", scaling))× what \
+                the same ten thousand cost in ten (\(asOneString) against \(asTenStrings)) — \
+                the clause index is no longer linear in the length of its input
+                """)
     }
 
     @Test func theDashLookaroundDoesNotGoQuadratic() {
@@ -522,11 +623,17 @@ private func clauseStrings(_ text: String) -> [[String]] {
         // reads, and no two candidates share either. Measured on the worst two
         // shapes — a dash every seven characters, and one dash behind a 40k
         // whitespace gap — 83 ms and 14 ms.
-        let clock = ContinuousClock()
+        //
+        // Best of three against a coarse backstop, for the reason stated at
+        // length on `aHugeInputStaysLinear`: this was a single un-repeated
+        // measurement against a bound 12× above it, which is the shape that
+        // reddened one push in six. Five seconds is where a wall clock can still
+        // say something honest — the quadratic version of either shape is tens of
+        // seconds and this catches it, while a busy afternoon no longer does.
         let dashes = String(repeating: "aaaa - ", count: 5000)
-        #expect(clock.measure { _ = NumberParser.ClauseIndex(dashes) } < .seconds(1))
+        #expect(bestOfThree { _ = NumberParser.ClauseIndex(dashes) } < .seconds(5))
         let longGap = "a" + String(repeating: " ", count: 40_000) + "- b"
-        #expect(clock.measure { _ = NumberParser.ClauseIndex(longGap) } < .seconds(1))
+        #expect(bestOfThree { _ = NumberParser.ClauseIndex(longGap) } < .seconds(5))
     }
 
     @Test func theParserDoesNotPayForWhatItDoesNotAsk() {
@@ -538,11 +645,15 @@ private func clauseStrings(_ text: String) -> [[String]] {
                                 downHours: DownHours(start: TimeOfDay(hour: 22),
                                                      end: TimeOfDay(hour: 7)),
                                 doors: [Door(name: "TikTok")])
+        // Best of three against the same coarse five-second backstop the rest of
+        // this suite now uses. This one is the sibling of
+        // `hugeInputStaysCheapAndSilent`, which measured 1.15 s, 2.11 s and 4.45 s
+        // on a loaded machine with nothing wrong with the parser — a one-second
+        // bound on a 10k-word parse is a bound on the runner.
         let noise = Array(repeating: "lorem ipsum dolor sit amet", count: 2000).joined(separator: " ")
-        let clock = ContinuousClock()
-        let elapsed = clock.measure {
+        let elapsed = bestOfThree {
             #expect(DeterministicParser.parse(noise, state: state) == .silence)
         }
-        #expect(elapsed < .seconds(1), "parser too slow on 10k words: \(elapsed)")
+        #expect(elapsed < .seconds(5), "parser catastrophically slow on 10k words: \(elapsed)")
     }
 }
