@@ -96,7 +96,27 @@ final class OnboardingUITests: XCTestCase {
     private static let launchArguments: [String] = {
         let hour = Calendar.current.component(.hour, from: .now)
         let start = (hour + 6) % 24
-        return ["-silkReset", "YES", "-silkDownStart", "\(start)", "-silkDownEnd", "\((start + 1) % 24)"]
+        return ["-silkReset", "YES", "-silkDownStart", "\(start)", "-silkDownEnd", "\((start + 1) % 24)",
+                // Every grant now stands behind a wait priced off the minutes
+                // asked for, which would put a 40-minute clamp test twelve
+                // seconds from its own assertion and price a dozen walks off a
+                // product curve none of them are about. Pinned short and
+                // deliberately not to zero, so the veil is real wherever it
+                // appears rather than switched off for the convenience of the
+                // suite.
+                //
+                // How much that actually covers, counted rather than assumed: a
+                // veil rises on a *grant*, and of the nine sentences the walks
+                // above line 1387 type, four are grants (:425, :531, :911,
+                // :1051). So four older walks raise and land a veil incidentally
+                // — worth having, because it means a regression in the rise
+                // breaks tests that are not about the wait. The **pause** is
+                // walked only by the two departure tests below; the sole other
+                // `press(.home)` in this file is in `stop(_:)`'s teardown. An
+                // earlier version of this comment claimed the overlay "rises,
+                // pauses and lands in every walk below", which overstated the
+                // net by five times.
+                "-silkWait", "0.6"]
     }()
 
     /// The Screen Time consent alert is SpringBoard's, not ours, and on iOS 26
@@ -1362,4 +1382,301 @@ final class OnboardingUITests: XCTestCase {
         expect(doorRow, labelContains: "25 min",
                "a wheel that was only looked at tightened the ceiling to its nearest seat")
     }
+
+    // MARK: - The wait (docs/design/wait.md)
+
+    /// The shape of the whole feature, walked once: a granted ask does not
+    /// open the app, it raises the wait; the ledger is not touched while the
+    /// wait stands; and the ink landing is what lands the grant.
+    ///
+    /// The balance assertion in the middle is the load-bearing one. Under the
+    /// other ordering — record the grant, then wait — the ensō would already
+    /// read 30 here, and so would the wall: `Wall.reconcile` derives the open
+    /// doors from the ledger, so a recorded grant IS an unshielded app, and
+    /// the wait would be a screen you walk around by pressing Home.
+    @MainActor
+    func testTheWaitStandsBeforeTheGrantAndTheGrantLandsWhenItEnds() throws {
+        let app = launchFresh(["-silkWait", "3"])
+        let bar = completeSetup(app)
+
+        say(bar, "reddit for ten\n")
+
+        let wait = element(app, "silk.wait")
+        XCTAssertTrue(wait.waitForExistence(timeout: Self.answer),
+                      "the wait did not rise over a granted ask")
+        // Nothing has been spent. The hero still reads the whole budget, and it
+        // must keep reading it for as long as the veil is up — this is the
+        // record-after ordering (docs/design/wait.md §5) caught in the act.
+        //
+        // A note for whoever reads this next, because two attempts were spent
+        // on it: the veil IS hardened against VoiceOver — `.isModal` on the
+        // overlay plus `.accessibilityHidden` on the stratum the blur scopes —
+        // and **neither is observable from here**. XCUITest queries the raw
+        // element tree and honours neither modality nor, through the
+        // UIKit-backed pager, the hidden flag. So this walk cannot assert the
+        // a11y fix, and an assertion that tried would only be testing XCUITest.
+        // What it can prove about the veil is that touches do not pass through
+        // it and the keyboard is down, which
+        // `testASecondAskCannotLandBehindAStandingWait` does.
+        XCTAssertTrue(app.staticTexts["40"].exists,
+                      "the balance moved before the wait was paid")
+
+        XCTAssertTrue(wait.waitForNonExistence(timeout: Self.answer),
+                      "the wait never came down")
+        let readBack = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Reddit is open for 10")
+        ).firstMatch
+        XCTAssertTrue(readBack.waitForExistence(timeout: Self.answer),
+                      "the wait ended without answering the turn it was holding")
+        XCTAssertTrue(app.staticTexts["30"].waitForExistence(timeout: Self.appear),
+                      "the grant did not land when the ink did")
+    }
+
+    /// The rule the feature exists for: the wait only passes while Silk is on
+    /// screen. Leaving does not reset it and does not finish it — it stops.
+    ///
+    /// The proof is a wait longer than the trip: eight seconds of watching
+    /// owed, then Silk is put down for roughly twelve. If the wait ran on a
+    /// wall clock it would be long over and Reddit long open by the time she
+    /// comes back; instead the veil is still standing, with the ink where she
+    /// left it, and only then does it finish.
+    @MainActor
+    func testAWaitDoesNotPassWhileSilkIsOffScreen() throws {
+        let app = launchFresh(["-silkWait", "8"])
+        let bar = completeSetup(app)
+
+        say(bar, "reddit for ten\n")
+        let wait = element(app, "silk.wait")
+        XCTAssertTrue(wait.waitForExistence(timeout: Self.answer),
+                      "the wait did not rise over a granted ask")
+
+        XCUIDevice.shared.press(.home)
+        XCTAssertTrue(app.wait(for: .runningBackground, timeout: Self.appear)
+                        || app.wait(for: .runningBackgroundSuspended, timeout: Self.appear),
+                      "Silk never left the foreground")
+        // Longer than the whole wait, so a wall-clock timer would be done and
+        // the app would be open behind us.
+        Thread.sleep(forTimeInterval: 12)
+
+        app.activate()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: Self.launch),
+                      "Silk did not come back")
+        XCTAssertTrue(wait.waitForExistence(timeout: Self.appear),
+                      "the wait finished while nobody was looking at it")
+
+        // And from there it goes on from where it stopped rather than starting
+        // over: what is left is the balance of eight seconds, not eight more.
+        XCTAssertTrue(wait.waitForNonExistence(timeout: Self.answer),
+                      "the wait did not resume when she came back")
+        XCTAssertTrue(app.staticTexts["30"].waitForExistence(timeout: Self.answer),
+                      "the resumed wait never landed its grant")
+    }
+
+    /// An ask too small to draw a wait is answered exactly as it was before
+    /// this feature existed — the veil never rises, because a wait shorter
+    /// than the veil's own fade is a flash and not a price.
+    @MainActor
+    func testAnAskTooSmallToDrawAWaitOpensAsItAlwaysDid() throws {
+        // Under Wait.tooShortToDraw (0.4s), which is Silk.Motion.overlay.
+        let app = launchFresh(["-silkWait", "0.2"])
+        let bar = completeSetup(app)
+
+        say(bar, "reddit for ten\n")
+        let readBack = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Reddit is open for 10")
+        ).firstMatch
+        XCTAssertTrue(readBack.waitForExistence(timeout: Self.answer),
+                      "the grant read-back did not appear")
+        XCTAssertFalse(element(app, "silk.wait").exists,
+                       "a wait too short to draw was drawn anyway")
+        XCTAssertTrue(app.staticTexts["30"].waitForExistence(timeout: Self.appear),
+                      "the grant did not debit")
+    }
+
+    /// The keyboard is the one thing the veil cannot cover — it is its own
+    /// window and draws over every overlay Silk owns. A wait raised under a
+    /// live keyboard would put a full QWERTY on a screen designed as three
+    /// elements and no words, and every touch in the bottom third would land
+    /// in a text field nobody can see.
+    @MainActor
+    func testTheWaitTakesTheKeyboardDownWithIt() throws {
+        let app = launchFresh(["-silkWait", "3"])
+        let bar = completeSetup(app)
+
+        say(bar, "reddit for ten\n")
+        XCTAssertTrue(element(app, "silk.wait").waitForExistence(timeout: Self.answer),
+                      "the wait did not rise over a granted ask")
+        XCTAssertTrue(wait(for: app.keyboards.firstMatch, "exists == false", timeout: Self.overlay),
+                      "the keyboard stayed up behind the wait")
+    }
+
+    /// Walk away and never come back: the ask goes, and it costs nothing.
+    ///
+    /// This is the assertion that pins **record-after**, which is the whole
+    /// transaction argument in `docs/design/wait.md` §5. If the grant were
+    /// recorded when the sentence landed — as it was before this feature — the
+    /// minutes would be gone here, the wall would be down behind Reddit, and
+    /// two DeviceActivity schedules would be armed for a door she never opened.
+    /// Instead the state is byte-identical to the state before she typed.
+    ///
+    /// The last line is the one nothing else catches: the minute clock is
+    /// cancelled for the duration of every wait, and only `clearWait` puts it
+    /// back. A staleness drop that forgot to would freeze the whole app's clock
+    /// silently and for good — the hero would stop turning over at midnight and
+    /// no grant would ever expire on screen again. A status ask answering
+    /// proves the model is still alive on the far side of the drop.
+    @MainActor
+    func testAnAbandonedWaitSpendsNothingAndPutsTheClockBack() throws {
+        // A long wait she cannot finish by accident, and a staleness window
+        // short enough to walk. Two minutes is the shipped value.
+        let app = launchFresh(["-silkWait", "30", "-silkStale", "3"])
+        let bar = completeSetup(app)
+
+        say(bar, "reddit for ten\n")
+        let wait = element(app, "silk.wait")
+        XCTAssertTrue(wait.waitForExistence(timeout: Self.answer),
+                      "the wait did not rise over a granted ask")
+
+        XCUIDevice.shared.press(.home)
+        XCTAssertTrue(app.wait(for: .runningBackground, timeout: Self.appear)
+                        || app.wait(for: .runningBackgroundSuspended, timeout: Self.appear),
+                      "Silk never left the foreground")
+        Thread.sleep(forTimeInterval: 6)          // past the pinned window
+
+        app.activate()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: Self.launch),
+                      "Silk did not come back")
+
+        // The veil is gone, and it took the ask with it.
+        XCTAssertTrue(wait.waitForNonExistence(timeout: Self.overlay),
+                      "a wait abandoned past its window was still standing")
+        XCTAssertTrue(app.staticTexts["40"].waitForExistence(timeout: Self.appear),
+                      "an abandoned wait spent minutes")
+        XCTAssertFalse(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Reddit is open")
+        ).firstMatch.exists, "an abandoned wait opened the door anyway")
+        // No orphaned "…" left standing where the answer would have gone.
+        XCTAssertFalse(app.staticTexts["…"].exists,
+                       "the dropped ask left the thread still thinking")
+
+        // And the model is still running: the clock came back with the veil.
+        say(bar, "how many left\n")
+        XCTAssertTrue(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "40")
+        ).firstMatch.waitForExistence(timeout: Self.answer),
+                      "the bar went dead after a wait was dropped")
+    }
+
+    /// Two waits cannot be watched at once. The bar stays live while a slow
+    /// model parse is in flight, so a second sentence can reach the grant path
+    /// with a veil already standing — and before the guard, it silently
+    /// replaced the first wait, stranding that turn at "…" for good and
+    /// swapping the door name under a mark already being drawn.
+    ///
+    /// Driven here through the one seam a walk has: a wait long enough to still
+    /// be standing, and a send attempted against it. The veil eats touches and
+    /// the keyboard is down, so this proves the closed door rather than the
+    /// guard behind it — which is the property that actually matters.
+    @MainActor
+    func testASecondAskCannotLandBehindAStandingWait() throws {
+        let app = launchFresh(["-silkWait", "20"])
+        let bar = completeSetup(app)
+
+        say(bar, "reddit for ten\n")
+        // Named `veil`, not `wait`: a local of that name shadows this class's
+        // own `wait(for:_:timeout:)` helper, and the compiler reports it as
+        // "cannot call value of non-function type 'XCUIElement'".
+        let veil = element(app, "silk.wait")
+        XCTAssertTrue(veil.waitForExistence(timeout: Self.answer),
+                      "the wait did not rise over a granted ask")
+
+        // The bar is unreachable while the veil stands — not merely covered.
+        XCTAssertFalse(bar.isHittable,
+                       "the bar was still reachable behind the wait")
+        XCTAssertTrue(wait(for: app.keyboards.firstMatch, "exists == false", timeout: Self.overlay),
+                      "the keyboard was up, so a second sentence could be typed")
+
+        // A touch where the bar sits lands on the veil and changes nothing.
+        veil.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.92)).tap()
+        XCTAssertTrue(element(app, "silk.wait").exists,
+                      "a tap through the veil dismissed the wait")
+        XCTAssertFalse(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Reddit is open")
+        ).firstMatch.exists, "a tap through the veil landed the grant early")
+
+        // And the tap did not quietly tear the conversation down behind the
+        // veil. This is the falsifiable half: the catcher under the veil sets
+        // `conversation.focused = false`, which clears the thread — and a
+        // cleared thread means the turn the wait is holding no longer exists,
+        // so `landWait`'s reply is addressed to an id that is gone and is
+        // swallowed. Delete the veil's tap eater and the read-back below never
+        // arrives, while every other assertion in this walk still passes.
+        //
+        // The timeout has to clear the pinned wait itself, not just the usual
+        // beat: this walk holds the veil for twenty seconds on purpose so the
+        // taps above land against a standing one, and `Self.answer` is fifteen.
+        // Waiting less than the thing being waited for is a test that fails on
+        // its own arithmetic — which is exactly what it did the first time.
+        let restOfTheWait = Self.answer + 20
+        XCTAssertTrue(veil.waitForNonExistence(timeout: restOfTheWait),
+                      "the wait never came down")
+        XCTAssertTrue(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Reddit is open for 10")
+        ).firstMatch.waitForExistence(timeout: Self.answer),
+                      "a tap behind the veil took the thread, and the answer with it")
+    }
+
+    /// The way back survives the wait.
+    ///
+    /// `SilkTests` owns the arithmetic of this — that Undo after a wait puts
+    /// the minutes back and closes the door. What it cannot own is the screen
+    /// the veil leaves behind, and that screen is not the one
+    /// `testTypedTightenOffersUndoAndRestores` taps its pill on: there the bar
+    /// still holds focus and the keyboard is up. Here the wait took the
+    /// keyboard down, `barFocused` is false, and the thread is still focused
+    /// deliberately — so the stage is dimmed and the tap-out catcher is
+    /// standing with nothing having dismissed it.
+    ///
+    /// A pill drawn one layer under that catcher would be un-tappable, and a
+    /// near-miss on it tears the whole thread down instead. That is the failure
+    /// this walk exists to catch, and it needs a real finger.
+    @MainActor
+    func testTheGrantAWaitLandedStillOffersTheWayBack() throws {
+        let app = launchFresh(["-silkWait", "3"])
+        let bar = completeSetup(app)
+
+        say(bar, "reddit for ten\n")
+        let veil = element(app, "silk.wait")
+        XCTAssertTrue(veil.waitForExistence(timeout: Self.answer),
+                      "the wait did not rise over a granted ask")
+        XCTAssertTrue(veil.waitForNonExistence(timeout: Self.answer),
+                      "the wait never came down")
+
+        XCTAssertTrue(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Reddit is open for 10")
+        ).firstMatch.waitForExistence(timeout: Self.answer),
+                      "the wait ended without answering the turn it was holding")
+        XCTAssertTrue(app.staticTexts["30"].waitForExistence(timeout: Self.appear),
+                      "the grant did not land when the ink did")
+
+        // The pill, on a turn asked before the veil and answered after it. The
+        // 60 seconds start here — at the landing, not at the sentence — which
+        // is what record-after buys undo.
+        let undoPill = app.buttons["silk.turn.undo"]
+        XCTAssertTrue(undoPill.waitForExistence(timeout: Self.appear),
+                      "a grant landed by a wait offered no way back")
+        tap(undoPill, "the thread's Undo",
+            raising: app.staticTexts[SilkStringsMirror.putBack], "the Undo reply")
+
+        XCTAssertTrue(app.staticTexts["40"].waitForExistence(timeout: Self.appear),
+                      "Undo after a wait did not put the minutes back")
+    }
+}
+
+/// The two sentences this file matches by value. The test bundle does not link
+/// SilkCore, so they are written out rather than imported — and written out
+/// once, here, rather than inline at the call site where a typo would read as
+/// a product bug.
+private enum SilkStringsMirror {
+    static let putBack = "Put back."
 }

@@ -103,6 +103,17 @@ final class ConversationModel {
         turns[i].undo = undo
     }
 
+    /// A turn whose answer is never coming: the wait it was holding went stale
+    /// while she was elsewhere, and the ask went with it.
+    ///
+    /// Not a refusal — nothing refused it — and not silence either. An
+    /// unresolved "…" left standing is the app claiming to still be thinking
+    /// about a sentence it has already forgotten, and it would sit there until
+    /// the next blur. The sentence goes the way an unsent one does.
+    func drop(_ id: Turn.ID) {
+        turns.removeAll { $0.id == id }
+    }
+
     /// The way back closes on the clock, not only on a tap: the Undo setting
     /// is the window, and when it shuts the pill goes without a word. The
     /// reply stands — only the offer is withdrawn. A turn already undone

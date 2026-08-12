@@ -1,13 +1,26 @@
 #!/usr/bin/env bash
 #
-# Both suites, locally — the same two commands .github/workflows/ci.yml runs on
+# All three suites, locally — the same commands .github/workflows/ci.yml runs on
 # a runner. CI is the authority; this is how you get the same answer without
 # waiting on a round trip, and how .githooks/pre-push catches the cheap
 # failures before they leave the machine.
 #
-#   scripts/ci.sh              both suites (~6 min)
-#   scripts/ci.sh spine        SilkCore only (about three seconds, no simulator)
+#   scripts/ci.sh              all three (~7 min)
+#   scripts/ci.sh spine        SilkCore only (~15 s, no simulator)
+#   scripts/ci.sh unit         SilkTests only — the app's own logic (~1 min)
 #   scripts/ci.sh ui           SilkUITests only (~5 min)
+#
+# Three and not two since the wait arrived. The spine proves the arithmetic, the
+# walks prove the product, and neither could reach `AppModel`'s state machine:
+# raise, pause, resume, land, drop is a few hundred lines whose branches have no
+# pixel and whose windows are minutes long. SilkTests is hosted by the app, so it
+# reaches them in milliseconds. Ordered by what a failure costs to learn.
+#
+# The spine's "three seconds" became fifteen when the wait's frame-budget bounds
+# arrived: a timing test has to run its loops enough times for a clock to see
+# them. That is the price of the only assertions in the repo that can fail on
+# "buttery smooth" — see docs/design/wait.md §3.3 for what they hold and, just as
+# importantly, what they cannot.
 #
 # If you change what runs here, change .github/workflows/ci.yml to match.
 
@@ -36,6 +49,40 @@ run_spine() {
     echo "SilkCore: pass"
   else
     failed+=("SilkCore")
+  fi
+}
+
+run_unit() {
+  rule "SilkTests — xcodebuild test (~1 min)"
+  mkdir -p "$DERIVED"
+  local log="$DERIVED/xcodebuild-unit.log"
+  rm -rf "$DERIVED/SilkTests.xcresult"
+
+  # Same DerivedData as the walks on purpose: they share a build of the app, so
+  # running this first costs the build once and hands the walks a warm one.
+  set +e
+  xcodebuild test \
+    -project Silk.xcodeproj \
+    -scheme Silk \
+    -destination "$DESTINATION" \
+    -only-testing:SilkTests \
+    -derivedDataPath "$DERIVED" \
+    -resultBundlePath "$DERIVED/SilkTests.xcresult" \
+    CODE_SIGNING_ALLOWED=NO \
+    >"$log" 2>&1
+  local status=$?
+  set -e
+
+  # swift-testing reports through its own lines, not XCTest's "Test Case" ones,
+  # so both shapes are pulled out or a passing run looks empty.
+  grep -E "^✔ Test run|^✘|error:|\*\* TEST" "$log" || true
+
+  if [ $status -eq 0 ]; then
+    echo "SilkTests: pass"
+  else
+    failed+=("SilkTests")
+    echo "log:           $log"
+    echo "result bundle: $DERIVED/SilkTests.xcresult"
   fi
 }
 
@@ -77,19 +124,26 @@ run_ui() {
 
 case "$what" in
   spine) run_spine ;;
+  unit)  run_unit ;;
   ui)    run_ui ;;
   all)
-    # The spine answers in about three seconds and the simulator takes five
-    # minutes. If the spine is already red the push is already refused, so
-    # don't spend the five minutes to learn it twice.
+    # Cheapest answer first, every time. The spine is three seconds, the unit
+    # suite about a minute (most of it the app build the walks need anyway),
+    # the walks five. A red one already refuses the push, so nothing below it
+    # is worth paying for.
     run_spine
-    if [ ${#failed[@]} -eq 0 ]; then
-      run_ui
+    if [ ${#failed[@]} -ne 0 ]; then
+      echo "skipping SilkTests and SilkUITests — the spine is red"
     else
-      echo "skipping SilkUITests — the spine is red"
+      run_unit
+      if [ ${#failed[@]} -eq 0 ]; then
+        run_ui
+      else
+        echo "skipping SilkUITests — the unit suite is red"
+      fi
     fi
     ;;
-  *)     echo "usage: scripts/ci.sh [all|spine|ui]" >&2; exit 2 ;;
+  *)     echo "usage: scripts/ci.sh [all|spine|unit|ui]" >&2; exit 2 ;;
 esac
 
 rule "Result"

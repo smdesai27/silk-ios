@@ -135,7 +135,10 @@ final class AppModel {
         #endif
     }
 
-    deinit { clock?.cancel() }
+    deinit {
+        clock?.cancel()
+        waitTask?.cancel()
+    }
 
     /// The end of setup — permission, apps, limits — persisted in one motion,
     /// the wall raised, and never asked again. `wallSelection` is the extras:
@@ -457,6 +460,13 @@ final class AppModel {
         // pool another writer has already drawn down. From this sync to the
         // mutation arms there is no suspension point: validation and apply
         // read the same ledger.
+        //
+        // A grant is the one verdict that may not land on this pass, and
+        // `landWait` states the rule this comment is the other half of: the
+        // wait is time, so its verdict is stale by construction and the whole
+        // sync-then-validate-then-apply run is done a second time on the far
+        // side of it. Not an exception to the no-suspension-point discipline —
+        // that discipline applied twice.
         syncLedgerIfStale()
         let verdict = Validator.validate(outcome, utterance: utterance,
                                          state: policy, ledger: ledger, now: .now)
@@ -475,9 +485,302 @@ final class AppModel {
                 for: id)
             return
         }
+        // A grant does not land here. Its price is seconds of watching, and
+        // nothing is debited, unshielded or armed until they are paid — so the
+        // verdict is put down and the wait is raised over it. `raiseWait`
+        // answers false for an ask too small to draw one, and that ask lands
+        // below exactly as every ask did before this feature existed.
+        // Two waits cannot be watched at once, and this is reachable: `handle`
+        // is async, the bar stays live through a slow model parse, and a second
+        // sentence sent before the first raised its veil arrives here with one
+        // already standing. Overwriting it would strand the first turn at "…"
+        // for good and swap the door name under a mark already being drawn.
+        //
+        // The second ask is dropped rather than landed. Falling through to
+        // `apply` below would be the worse half of the same bug — a grant
+        // debited and a door opened behind a veil, with nobody watching the
+        // wait that was supposed to pay for it.
+        if case .grant = verdict, waiting != nil {
+            conversation.drop(id)
+            return
+        }
+
+        if case .grant(let door, let minutes, _) = verdict,
+           raiseWait(door: door, minutes: minutes, outcome: outcome,
+                     utterance: utterance, answering: id) {
+            return
+        }
+
         let (reply, undo) = apply(verdict)
         conversation.land(reply, undo: undo, for: id)
         if undo != nil { scheduleUndoExpiry(for: id) }
+    }
+
+    // MARK: - The wait (docs/design/wait.md)
+
+    /// The wait on screen: the clock, and the ask it is holding.
+    ///
+    /// One value and not four properties, for the reason `PickerKind.cap(Door)`
+    /// carries its door in the case rather than in a parallel `var capDoor` —
+    /// a wait and the door it will open must not be able to disagree about
+    /// which door that is, and this shape cannot.
+    struct Waiting: Equatable {
+        var wait: Wait
+        var door: Door
+        /// The parse this wait is holding, kept whole so the second validation
+        /// is the first one run again rather than one reassembled from its
+        /// output.
+        ///
+        /// This is load bearing, and it cost a UI walk to learn. The Validator
+        /// runs a **number-provenance check** — `NumberParser.allNumbers(in:
+        /// utterance).contains(minutes)`, Validator.swift:149 — so the minutes
+        /// it is asked for must be words the user actually said. But the
+        /// minutes a `.grant` verdict carries are the **clamped** ones: ask for
+        /// sixty against a budget of forty and the verdict says 40, which
+        /// appears nowhere in "give me sixty minutes of reddit". Re-validating
+        /// from the verdict therefore failed provenance and returned `.silence`
+        /// — so every clamped ask in the app answered "Didn't get that." after
+        /// the wait it had just been made to watch. Holding the outcome makes
+        /// the second pass identical to the first by construction, and the
+        /// clamp is re-applied where it belongs: against the balance as it
+        /// stands when the ink lands.
+        var outcome: ParseOutcome
+        /// Kept verbatim for the same reason. The Validator takes the utterance
+        /// for provenance, and re-deriving one here ("Instagram 20") would hand
+        /// it a sentence the user never said.
+        var utterance: String
+        /// The turn in the thread this wait will answer when the ink lands.
+        var turn: ConversationModel.Turn.ID
+    }
+
+    private(set) var waiting: Waiting?
+
+    /// The one timer in the feature, and it does not draw anything: it sleeps
+    /// out the watching still owed and lands the grant. The *surface* redraws
+    /// itself from a pure function of the clock, so this task can be cancelled
+    /// and re-armed on every pause and resume without a frame knowing.
+    @ObservationIgnored private var waitTask: Task<Void, Never>?
+
+    /// Seconds of watching an ask costs. The curve lives in the spine, where it
+    /// is tested; this is only the debug seam over it.
+    static func waitLength(forMinutes minutes: Int) -> TimeInterval {
+        #if DEBUG
+        // QA: -silkWait 0.6 pins the wait so a UI walk is not priced off the
+        // product curve, and -silkWait 0 turns the feature off entirely. Same
+        // shape as -silkNight and -silkPage, and debug-only for the same
+        // reason: a launch argument that shortens a self-control price has no
+        // business existing in a shipped build.
+        if let pinned = UserDefaults.standard.string(forKey: "silkWait").flatMap(Double.init) {
+            return max(0, pinned)
+        }
+        #endif
+        return Wait.length(forMinutes: minutes)
+    }
+
+    /// How long a parked wait survives being ignored. The rule lives in the
+    /// spine; this is only the debug seam over it, so a walk can prove the
+    /// abandonment path without standing still for two minutes.
+    static var waitStaleAfter: TimeInterval {
+        #if DEBUG
+        if let pinned = UserDefaults.standard.string(forKey: "silkStale").flatMap(Double.init) {
+            return max(0, pinned)
+        }
+        #endif
+        return Wait.staleAfter
+    }
+
+    /// Raise the wait over a granted ask. False when there is no wait to draw,
+    /// which is the caller's signal to land the grant the old way.
+    private func raiseWait(door: Door, minutes: Int, outcome: ParseOutcome,
+                           utterance: String,
+                           answering turn: ConversationModel.Turn.ID) -> Bool {
+        // Priced off the minutes she will actually be GIVEN, not the ones she
+        // said: an over-ask of sixty against a balance of forty buys forty, and
+        // charging the wait for sixty would charge for minutes that do not
+        // exist. The spoken number survives inside `outcome`, which is what the
+        // second validation needs — see `Waiting.outcome`.
+        let length = Self.waitLength(forMinutes: minutes)
+        guard Wait.isWorthDrawing(length) else { return false }
+
+        var wait = Wait(doorID: door.id, minutes: minutes, length: length)
+        // Watching starts here — but only if there is actually someone here.
+        //
+        // This does NOT run on the frame the sentence was sent. `handle` is
+        // async and suspends twice before it reaches this line: once on the
+        // model parse, which can take seconds, and once on the deliberate
+        // 480 ms beat. Swiping home inside that window backgrounds Silk while
+        // the wait is still unborn, so `pauseWait` finds `waiting == nil` and
+        // does nothing, and a watching span opened here would then run for the
+        // whole time she is away — `ContinuousClock` counts through process
+        // suspension by design. She comes back an hour later, the veil flashes,
+        // and the door opens on zero seconds watched. That is the exact bypass
+        // the attention gate exists to refuse, and `pausedAt` staying nil means
+        // staleness would not have caught it either.
+        //
+        // So a wait born in the background is born PARKED: watched, then
+        // immediately looked away from, which banks nothing and stamps
+        // `pausedAt` so the two-minute window governs it from the start.
+        wait.watch(from: Monotonic.reading)
+        if UIApplication.shared.applicationState == .background {
+            wait.lookAway(at: Monotonic.reading, wallClock: .now)
+        }
+
+        // The minute clock stands down for the duration. Its wake syncs the
+        // ledger, reconciles the wall (four App Group decodes and a
+        // cross-process ManagedSettings write) and runs two day-turn sweeps,
+        // all on the MainActor — a multi-frame hitch dropped into the one
+        // screen in Silk that is nothing but motion. The one thing behind the
+        // veil that still reads `now` is the day/night face, which cannot cross
+        // inside twenty seconds without having been about to cross anyway, and
+        // the cost of standing the clock down is that a grant expiring during
+        // these seconds closes up to twenty seconds late. The re-lock schedules
+        // are what actually close it, and `RelockWindow` already states the
+        // rule this leans on: late, never never.
+        clock?.cancel()
+
+        withAnimation(Silk.motion(Silk.Motion.overlay)) {
+            waiting = Waiting(wait: wait, door: door, outcome: outcome,
+                              utterance: utterance, turn: turn)
+        }
+        armWaitLanding()
+        return true
+    }
+
+    /// Sleep out the watching still owed, then land. Re-armed from scratch on
+    /// every resume, because the amount owed is only knowable then.
+    private func armWaitLanding() {
+        waitTask?.cancel()
+        waitTask = nil
+        guard let wait = waiting?.wait, wait.isWatching else { return }
+        let owed = max(0, wait.length - wait.watched(at: Monotonic.reading))
+        waitTask = Task { [weak self] in
+            // The same clock the surface draws on and the same one `Wait`
+            // measures with — `Task.sleep(for:)` is ContinuousClock — so the
+            // ink and the landing cannot drift apart.
+            try? await Task.sleep(for: .seconds(owed))
+            guard !Task.isCancelled else { return }
+            self?.landWait()
+        }
+    }
+
+    /// She left. The ink stops where it is, and the landing is disarmed with
+    /// it: a task left sleeping would open the door while Silk was in the
+    /// background, which is the one thing the attention gate exists to forbid.
+    func pauseWait() {
+        waitTask?.cancel()
+        waitTask = nil
+        guard var w = waiting?.wait, w.isWatching else { return }
+        w.lookAway(at: Monotonic.reading, wallClock: .now)
+        waiting?.wait = w
+    }
+
+    /// An ask whose answer is never coming: the turn goes, and so does the dim
+    /// it was being read over.
+    ///
+    /// Dropping the turn alone was not enough, and the state it left was the
+    /// worst-looking screen in the feature. The stage dims on
+    /// `conversation.focused`, the wait deliberately suppresses the blur that
+    /// would clear it (the turn is still in flight, and the reply has to have
+    /// somewhere to land), and `barFocused` is already false — so nothing was
+    /// left that could turn the dim off. She came back to a blurred, five-
+    /// percent-opacity page with an empty thread over it: recoverable in one
+    /// tap, and indistinguishable from a broken app until she made it.
+    private func dropAsk(_ turn: ConversationModel.Turn.ID) {
+        conversation.drop(turn)
+        // Clears the thread and lifts the stage in one move — there is nothing
+        // left in it to preserve.
+        conversation.focused = false
+    }
+
+    /// She is back. A wait she left long enough ago is gone; the rest resume
+    /// from exactly where they stopped.
+    func resumeWait() {
+        guard let waiting else { return }
+        if waiting.wait.isStale(at: .now, after: Self.waitStaleAfter) {
+            dropAsk(waiting.turn)
+            clearWait()
+            return
+        }
+        var w = waiting.wait
+        w.watch(from: Monotonic.reading)
+        self.waiting?.wait = w
+        armWaitLanding()
+    }
+
+    /// Lower the veil and put the clock back up. Nothing else: every path that
+    /// ends a wait decides for itself what to say, because they do not agree.
+    private func clearWait() {
+        waitTask?.cancel()
+        waitTask = nil
+        withAnimation(Silk.motion(Silk.Motion.overlay)) { waiting = nil }
+        startClock()
+    }
+
+    /// The ink landed. Ask the second question and act on its answer.
+    ///
+    /// The verdict computed before the wait is stale by construction — a wait
+    /// is time, and a budget, a day boundary and the down-hours edge are all
+    /// made of time. So the whole run is done again: sync, validate, apply.
+    /// She can be answered differently than she would have been six seconds
+    /// ago, and that is the edge holding at the last possible moment rather
+    /// than the first. Under the other ordering she would be holding a live
+    /// grant that outlived the aperture closing, which is the fail-open shape
+    /// rule 4 forbids.
+    private func landWait() {
+        guard let waiting else { return }
+        // Never from the background. The sleep's continuation and the scene
+        // phase change are two separate jobs on this actor, so a departure at
+        // the last instant can let the landing win the race — and the landing
+        // debits minutes, drops the wall and calls `UIApplication.open` from an
+        // app on its way out. Park it instead and let her return finish it: the
+        // door opens on a frame she is present for or it does not open.
+        guard UIApplication.shared.applicationState != .background else {
+            pauseWait()
+            return
+        }
+        // The clock is the authority, never the task: `Task.sleep` promises no
+        // more than "at least this long", and a wait that has been paused and
+        // resumed has been re-armed off a recomputed remainder more than once.
+        // Re-arm rather than return — returning with the veil up and nothing
+        // running to bring it down is the one failure this screen may not have.
+        // (`armWaitLanding` no-ops on a parked wait, which is correct: the
+        // resume re-arms it.)
+        guard waiting.wait.isOver(at: Monotonic.reading) else {
+            armWaitLanding()
+            return
+        }
+        clearWait()
+
+        // The door could have been removed from Settings in the seconds she
+        // watched — the veil covers Settings, but a Shortcut cannot be covered.
+        // Checked here rather than left to the Validator, which would answer a
+        // deleted door with "Didn't get that." — true of the sentence, and a
+        // lie about what happened.
+        guard policy.doors.contains(where: { $0.id == waiting.door.id }) else {
+            dropAsk(waiting.turn)
+            return
+        }
+
+        syncLedgerIfStale()
+        now = .now
+        // The parse she made, validated again — not a command rebuilt from the
+        // first verdict. `Waiting.outcome` states what that cost to learn.
+        let verdict = Validator.validate(waiting.outcome, utterance: waiting.utterance,
+                                         state: policy, ledger: ledger, now: .now)
+
+        // Down hours can have begun while she watched, and they answer
+        // everything with the hour they end — the same branch `handle` runs,
+        // for the same reason, on the far side of the wait.
+        if isDownHours, verdict.deferredByDownHours {
+            conversation.land(
+                refuse("\(SilkStrings.downHoursOpens) \(policy.downHours.end.displayWithMeridiem)."),
+                for: waiting.turn)
+            return
+        }
+
+        let (reply, undo) = apply(verdict)
+        conversation.land(reply, undo: undo, for: waiting.turn)
+        if undo != nil { scheduleUndoExpiry(for: waiting.turn) }
     }
 
     /// A landed offer is withdrawn when the undo window shuts. The pill goes
@@ -1454,6 +1757,12 @@ final class AppModel {
     /// It is also the only moment revocation can be seen: Settings sends no
     /// callback when Silk is toggled off there.
     func foregrounded() {
+        // First, before anything below runs. A wait resumed after the sync and
+        // the reconcile would have those milliseconds fall outside its watching
+        // span — she was looking at Silk for them, and they are hers. Taking
+        // the reading first also puts the frame the eye reads as "it started
+        // again" after the hitch rather than inside it.
+        resumeWait()
         weekAttemptsCache = nil
         keyLogCache = nil
         // The suspension is where external writes accumulate — a Shortcuts

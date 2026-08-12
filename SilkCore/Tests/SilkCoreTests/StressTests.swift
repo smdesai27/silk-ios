@@ -2826,33 +2826,97 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         }
     }
 
+    /// The parser does not blow up on an input nobody meant to send.
+    ///
+    /// **Rewritten from a pure stopwatch, and the reason is worth keeping.** The
+    /// original asserted `< 1 second` on the best of three runs, and it reddened
+    /// on a loaded machine — measured failing at 1.15 s, 2.11 s and 4.45 s on
+    /// three separate runs of this branch, and on untouched `main` too, with
+    /// nothing wrong with the parser and a load average of 34 on eight cores.
+    /// A best-of-three does filter a single unlucky preemption; it does nothing
+    /// at all when the machine is oversubscribed for the whole run, which is the
+    /// normal condition of a shared CI runner. The test's own comment already
+    /// named the failure mode — *"a flake that cries wolf teaches everyone to
+    /// ignore the cry"* — and then fell into it.
+    ///
+    /// So the sharp assertion is now the **shape**, which is what "stays cheap"
+    /// was always trying to say: ten times the words must not cost anything like
+    /// a hundred times the work. That is a ratio between two measurements taken
+    /// in one run on one machine, so contention lands on both and cancels, and
+    /// unlike the stopwatch it actually distinguishes the regression that matters
+    /// — a quadratic scan over the token stream — from a busy afternoon. The
+    /// absolute bound is kept as a coarse backstop and moved to five seconds,
+    /// where it catches a catastrophe and nothing else.
+    ///
+    /// (`SilkCore/Tests/SilkCoreTests/WaitPerformanceTests.swift` states this
+    /// ratios-over-stopwatches reasoning at length; this is the same argument
+    /// applied to the gate that taught it.)
     @Test func hugeInputStaysCheapAndSilent() {
-        let noise = Array(repeating: "lorem ipsum dolor sit amet", count: 2000).joined(separator: " ")
         let clock = ContinuousClock()
         // The bound is on the BEST of three runs. A wall clock charges the
-        // parser for every neighbour on the machine, so under a full parallel
-        // suite a single-run bound fails on contention alone — and a flake
-        // that cries wolf teaches everyone to ignore the cry. A real
-        // regression slows all three runs; a busy neighbour only some.
+        // parser for every neighbour on the machine; a real regression slows all
+        // three runs, a busy neighbour only some.
         func bestOfThree(_ parse: () -> Void) -> Duration {
             (0..<3).map { _ in clock.measure(parse) }.min()!
         }
-        let elapsed = bestOfThree {
-            #expect(DeterministicParser.parse(noise, state: makeState()) == .silence)
+        /// The two arms of the scaling ratio, measured alternately rather than one
+        /// block after the other. Two sequential best-of-three blocks let a load
+        /// spike cover one arm and miss the other, which moves the ratio by the
+        /// whole size of the spike — see `WaitPerformanceTests.fastestPair`, where
+        /// that failure was measured rather than supposed.
+        func fastestPair(_ first: () -> Void, _ second: () -> Void) -> (Duration, Duration) {
+            var bestFirst: Duration?
+            var bestSecond: Duration?
+            for _ in 0..<3 {
+                let a = clock.measure(first)
+                let b = clock.measure(second)
+                bestFirst = bestFirst.map { Swift.min($0, a) } ?? a
+                bestSecond = bestSecond.map { Swift.min($0, b) } ?? b
+            }
+            return (bestFirst ?? .zero, bestSecond ?? .zero)
         }
-        #expect(elapsed < .seconds(1), "parser too slow on 10k words: \(elapsed)")
+        func noise(words: Int) -> String {
+            Array(repeating: "lorem ipsum dolor sit amet", count: words / 5).joined(separator: " ")
+        }
+        func seconds(_ d: Duration) -> Double {
+            Double(d.components.seconds) + Double(d.components.attoseconds) * 1e-18
+        }
+
+        let tenThousand = noise(words: 10_000)
+        let elapsed = bestOfThree {
+            #expect(DeterministicParser.parse(tenThousand, state: makeState()) == .silence)
+        }
+        #expect(elapsed < .seconds(5), "parser catastrophically slow on 10k words: \(elapsed)")
+
         // The noise above carries no door, so it never builds a clause index and
         // never reaches a cap rule — a bound that cannot see the expensive path
         // is a bound on the wrong thing. This second case ends in a real cap
         // sentence, so the index is built over all ten thousand words and the
         // whole ladder runs before the answer comes back.
-        let capped = noise + " cap tiktok at 20 a day"
-        let cappedElapsed = bestOfThree {
+        // And the shape. A thousand words through the same expensive path, so
+        // the only difference between the two measurements is the length of the
+        // input. Linear would put this at 10 and the parser measures **9.7** —
+        // it is linear. The bound is 25, which leaves room for the constant costs
+        // that do not scale and still sits far below the 100 a quadratic scan
+        // would produce.
+        let capped = tenThousand + " cap tiktok at 20 a day"
+        let thousandCapped = noise(words: 1_000) + " cap tiktok at 20 a day"
+        let (cappedElapsed, smallElapsed) = fastestPair({
             #expect(DeterministicParser.parse(capped, state: makeState())
                     == .command(.setDoorCap(door: tiktok, minutes: 20)))
-        }
-        #expect(cappedElapsed < .seconds(1),
-                "parser too slow on 10k words ending in a cap: \(cappedElapsed)")
+        }, {
+            #expect(DeterministicParser.parse(thousandCapped, state: makeState())
+                    == .command(.setDoorCap(door: tiktok, minutes: 20)))
+        })
+        #expect(cappedElapsed < .seconds(5),
+                "parser catastrophically slow on 10k words ending in a cap: \(cappedElapsed)")
+
+        let scaling = seconds(cappedElapsed) / max(seconds(smallElapsed), .leastNormalMagnitude)
+        #expect(scaling < 25,
+                """
+                ten times the words cost \(String(format: "%.1f", scaling))× the work — the \
+                parser is no longer close to linear in its input
+                """)
     }
 }
 

@@ -156,6 +156,22 @@ struct EnsoView: View {
     var fraction: Double
     var color: Color = Silk.leaf
 
+    /// How a change in `fraction` is crossed.
+    ///
+    /// The budget *steps*: it sits at one true value, a grant lands, and it
+    /// sits at the next. Crossing that step on the one Silk curve is what the
+    /// canonical behavior reference specifies by name, and it is the default
+    /// here for every surface that shows a budget.
+    ///
+    /// `nil` is for the one caller that is not showing a stepped value — the
+    /// wait, where the mark is being *drawn*, frame by frame, by a hand. A
+    /// 0.45s tween applied to a number that already moves every frame does not
+    /// produce a curve; it produces a smear, because each frame starts a new
+    /// interpolation the next frame interrupts. So the wait draws every frame
+    /// itself and passes nil, which is not an opt-out from the curve but a
+    /// statement that there is no transition here to curve.
+    var motion: Animation? = Silk.motion(0.45)
+
     /// enso-symbols.svg #enso-full: five paths, widths 2.2 → 4.6, dasharrays
     /// 100 / 80 / 58 / 34 / 16 against pathLength 100. The widest is the
     /// shortest — that inversion is the taper.
@@ -201,7 +217,7 @@ struct EnsoView: View {
         }
         .aspectRatio(1, contentMode: .fit)
         // One curve for the whole system. Once, forward — never a filling ring.
-        .animation(Silk.motion(0.45), value: fraction)
+        .animation(motion, value: fraction)
         // The stroke is scenery; the numeral it circles carries the state.
         // VoiceOver reads the budget, never the brush.
         .accessibilityHidden(true)

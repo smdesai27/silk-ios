@@ -109,6 +109,30 @@ targets:
           NSExtensionPointIdentifier: com.apple.ManagedSettings.shield-action-service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShieldActionExtension
 
+  # The app's own logic, without a simulator walk to reach it.
+  #
+  # Everything in `Silk/` used to be testable only by driving the UI: a walk
+  # costs 30–60 seconds, cannot reach a branch that has no pixel, and cannot
+  # wait out a two-minute window. `AppModel`'s wait state machine — raise,
+  # pause, resume, land, drop — is a few hundred lines of exactly that shape,
+  # and this target is how it is checked in milliseconds instead.
+  #
+  # Hosted by the app rather than a plain logic bundle, because `AppModel`
+  # reads the App Group on the way up and `SharedStore` resolves nothing
+  # without the entitlement the host carries.
+  SilkTests:
+    type: bundle.unit-test
+    platform: iOS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Silk.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Silk
+        BUNDLE_LOADER: $(TEST_HOST)
+    sources: [SilkTests]
+    dependencies:
+      - target: Silk
+      - package: SilkCore
+
   SilkUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -127,4 +151,6 @@ schemes:
       config: Debug
     test:
       config: Debug
-      targets: [SilkUITests]
+      # Unit tests first: they answer in seconds and cover the branches a walk
+      # cannot reach, so a red one should not cost five minutes to discover.
+      targets: [SilkTests, SilkUITests]

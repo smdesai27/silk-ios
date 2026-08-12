@@ -18,6 +18,25 @@ struct SilkApp: App {
                     if phase == .active {
                         model.foregrounded()
                     }
+                    // The attention gate, and the whole of it: a wait advances
+                    // while Silk is on screen and stops when it is not.
+                    //
+                    // `.background` and deliberately not `.inactive`. Silk is
+                    // still visible through most of what makes a scene
+                    // inactive — a notification banner, a Control Center pull,
+                    // a screenshot, a permission alert, the flicker every
+                    // launch passes through — and freezing the ink while she is
+                    // looking straight at it is indistinguishable from a hang.
+                    // A real departure passes through `.inactive` into
+                    // `.background` within a few hundred milliseconds, so the
+                    // seconds this concedes are sub-noise, and they are
+                    // conceded in the direction that cannot read as broken.
+                    //
+                    // Locking the phone reaches `.background` too, so a wait
+                    // does not run on in a pocket.
+                    if phase == .background {
+                        model.pauseWait()
+                    }
                 }
         }
     }
@@ -125,12 +144,26 @@ struct RootView: View {
                             // blurs. Blur is the one teardown path — the model clears
                             // the thread on it. The tap is a chosen leave, so it also
                             // closes the refocus grace the return key gets below.
-                            if barFocused {
+                            //
+                            // Mounted on the dim and not on the bar's focus, because
+                            // the two came apart when the wait arrived: a wait takes
+                            // the keyboard down and the thread deliberately stands
+                            // (the turn it will answer is still in flight), so a
+                            // conversation can now outlive the focus that started it.
+                            // Keyed on `barFocused` this catcher went with the
+                            // keyboard, and the answer to a wait — a read-back, or a
+                            // refusal that became true while she watched — was left
+                            // over a dimmed stage with nothing that would dismiss it.
+                            // The model's shadow is written here too, for the same
+                            // reason: with the bar already blurred, `onChange` below
+                            // has nothing to fire on.
+                            if barFocused || model.conversation.stageDimmed {
                                 Color.clear
                                     .contentShape(Rectangle())
                                     .onTapGesture {
                                         submittedAt = .distantPast
                                         barFocused = false
+                                        model.conversation.focused = false
                                     }
                                     .ignoresSafeArea()
                             }
@@ -181,6 +214,23 @@ struct RootView: View {
                         // frame, and the veil's own fade is what the eye reads.
                         .blur(radius: model.shield == nil ? 0 : 20)
                         .animation(nil, value: model.shield)
+                        // The wait's other wall, and the one nobody sees.
+                        //
+                        // `.accessibilityAddTraits(.isModal)` on the overlay is
+                        // what VoiceOver is documented to honour, and it is
+                        // still set there — but it did not actually take
+                        // siblings out of the tree here, and a UI walk caught
+                        // it: with the veil standing, the hero numeral was
+                        // still queryable, which means the bar was too. A
+                        // VoiceOver user could swipe past the wait, focus the
+                        // bar and raise the system keyboard — the one window
+                        // the veil cannot cover.
+                        //
+                        // So the stratum is hidden outright, on the same
+                        // container the blur is scoped to, which is by
+                        // construction everything the veil covers and nothing
+                        // it does not.
+                        .accessibilityHidden(model.waiting != nil)
 
                         // ── The overlay stratum ───────────────────────────
                         //
@@ -215,6 +265,21 @@ struct RootView: View {
                         // swaps them in one un-animated frame — see its own note
                         // for why a cross-fade between two .97 veils is the one
                         // thing this handoff may not do.
+                        // The wait, over everything. It is the last of the wall
+                        // rather than a fourth kind of overlay, and it stands
+                        // above the shield for the same reason the shield
+                        // stands above the pager: nothing underneath it is
+                        // reachable while it is up, including the wheel and the
+                        // door editor, neither of which can be raised from
+                        // behind it anyway. Its curve is set where it is raised
+                        // — `AppModel.raiseWait` — as every overlay's is.
+                        if let waiting = model.waiting {
+                            WaitOverlay(wait: waiting.wait,
+                                        app: waiting.door.name,
+                                        night: night)
+                                .zIndex(30)
+                        }
+
                         if let kind = model.picker {
                             WheelPickerOverlay(title: model.pickerTitle(for: kind),
                                                columns: model.pickerColumns(for: kind),
@@ -309,7 +374,29 @@ struct RootView: View {
                         barFocused = true
                         return
                     }
+                    // A wait took the keyboard down; that is not her leaving.
+                    // The turn the wait will answer is still in flight, and
+                    // tearing the thread down here would delete the turn the
+                    // grant readback is addressed to — `land` would find no id
+                    // and swallow the receipt silently.
+                    if !focused, model.waiting != nil { return }
                     model.conversation.focused = focused
+                }
+                // The one thing the veil cannot cover. The system keyboard is
+                // its own window and draws over every overlay Silk owns, so a
+                // wait raised under a live keyboard would ship a full QWERTY on
+                // a screen whose whole design is three elements and no words —
+                // and every touch in the bottom third would land in a text
+                // field nobody can see.
+                //
+                // `submittedAt` is cleared with it: the refocus grace above
+                // exists to survive the return key's own resignation, and it
+                // must not fight a resignation Silk asked for.
+                .onChange(of: model.waiting != nil) { _, waiting in
+                    if waiting {
+                        submittedAt = .distantPast
+                        barFocused = false
+                    }
                 }
                 .transition(.opacity)
             } else {

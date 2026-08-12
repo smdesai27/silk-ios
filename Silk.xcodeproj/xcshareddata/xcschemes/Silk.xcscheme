@@ -44,6 +44,17 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "62F761F8A098434DBAFDF455"
+               BuildableName = "SilkTests.xctest"
+               BlueprintName = "SilkTests"
+               ReferencedContainer = "container:Silk.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "B750C267C9929F1ED2A70D72"
                BuildableName = "SilkUITests.xctest"
                BlueprintName = "SilkUITests"

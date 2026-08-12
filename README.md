@@ -12,12 +12,13 @@ See [`docs/design/per-app-caps.md`](docs/design/per-app-caps.md).
 
 | Path | What it is |
 |---|---|
-| `SilkCore/` | The spine as a pure-Swift package: parser, number tokenizer, clause index, validator, polarity engine, grant ledger, per-app ceilings, the launch catalogue's data. `swift test` runs on macOS — 372 tests across 49 suites (including three generations of fuzz corpora and a seeded 20k-input fuzzer, see `docs/qa/`), no simulator needed. |
+| `SilkCore/` | The spine as a pure-Swift package: parser, number tokenizer, clause index, validator, polarity engine, grant ledger, per-app ceilings, the wait's clock and price, the launch catalogue's data. `swift test` runs on macOS — 433 tests across 64 suites (three generations of fuzz corpora, a seeded 20k-input fuzzer, see `docs/qa/`, and the wait's frame-budget bounds), no simulator needed. |
 | `Silk/` | The app: Now, Mirror + Settings, the bar and its conversation, the compile pipeline, wall controller, the launch catalogue's one `UIApplication` call, the `Spend` App Intent, the on-device model widener. |
 | `Shared/` | The App Group bridge (`SharedStore`) and the single wall (`Wall.reconcile()`), shared with all three extensions. |
 | `SilkMonitor/` · `SilkShield/` · `SilkShieldAction/` | The Screen Time extensions: re-lock layers, the statement-only shield, the one OK button. |
 | `project.yml` | XcodeGen spec — regenerate `Silk.xcodeproj` with `xcodegen generate`. |
-| `scripts/ci.sh` · `.githooks/` | Both suites, and the pre-push hook that runs them. See **Tests**. |
+| `SilkTests/` | The app's own logic, hosted by the app so it reaches `AppModel` without a simulator walk: the wait's state machine, its ledger transaction, undo on the far side of it, and the frame budget the mark's geometry and the landing are held to. |
+| `scripts/ci.sh` · `.githooks/` | All three suites, and the pre-push hook that runs the cheap one. See **Tests**. |
 | `docs/market/` | The research this design rests on. Start with `docs/market/README.md`. |
 | `silk-ds/` · `ds-bundle/` | The design language: warm paper, ink, the ensō, and a deliberately small vocabulary. |
 
@@ -33,8 +34,9 @@ xcodebuild -project Silk.xcodeproj -scheme Silk \
 ## Tests
 
 ```bash
-scripts/ci.sh                    # both suites, ~6 min
+scripts/ci.sh                    # all three suites, ~7 min
 scripts/ci.sh spine              # SilkCore only, seconds, no simulator
+scripts/ci.sh unit               # SilkTests only — the app's logic, ~1 min
 scripts/ci.sh ui                 # SilkUITests only, ~5 min
 ```
 
@@ -72,7 +74,12 @@ the **FamilyControls (Distribution)** entitlement for all four (see
 
 ## The rules the code enforces
 
-1. **Spend by asking.** Within budget a grant is granted, the balance read back, the app opened.
+1. **Spend by asking.** Within budget a grant is granted, the balance read back, the app opened —
+   after a wait priced in seconds of watching, which passes only while Silk is on screen and stops
+   the moment it is not. Nothing is debited, unshielded or armed until the wait is paid, so leaving
+   costs nothing and the wall never comes down early. See
+   [`docs/design/wait.md`](docs/design/wait.md), which states the canon objection before it answers
+   it.
 2. **Edges never yield.** Budget gone, a door's own ceiling spent, or down hours means no. Refusals
    are four words and a time, and they name the door when the door is what ran out — "0 left today."
    beside a hero reading 30 is a lie.
