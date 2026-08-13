@@ -24,8 +24,17 @@ extension LaunchCatalog {
     /// whose link is nil has no second try on purpose — see the entry's own
     /// note in the spine for why writing one down would be a claim the domain's
     /// AASA does not support.
+    #if DEBUG
+    /// How many times `open` was asked this process. The Spend intent must
+    /// leave this at zero: Siri unshields, it does not launch (finding 4).
+    nonisolated(unsafe) static var testOpenCount = 0
+    #endif
+
     @MainActor
     static func open(doorName: String) {
+        #if DEBUG
+        testOpenCount += 1
+        #endif
         guard let entry = entry(named: doorName) else { return }
 
         if let scheme = entry.scheme, let url = URL(string: scheme) {

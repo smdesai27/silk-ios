@@ -210,8 +210,9 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
     }
 
     @Test func displayItselfIsUntouched() {
-        // AppModel.swift:102 and SpendIntent.swift:38 speak sentences that carry
-        // the context themselves; a meridiem there would be noise.
+        // The row and the closed-door sentence carry the context themselves;
+        // a meridiem there would be noise. The intent's down-hours refusal
+        // does not — see `TimeOfDayMeridiemTests`.
         #expect(TimeOfDay(hour: 7).display == "7:00")
         #expect(TimeOfDay(hour: 22).display == "10:00")
     }

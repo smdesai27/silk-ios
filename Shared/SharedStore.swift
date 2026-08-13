@@ -147,6 +147,23 @@ public enum SharedStore {
         return stamp
     }
 
+    /// A mutation that must not clobber a write that landed since `knownStamp`
+    /// was read. `base` is the ledger the caller has been working on. If the
+    /// stamp still matches, that copy is mutated and saved. If it moved,
+    /// `base` is stale and a wholesale save of it would erase the other
+    /// writer's row — so the store is re-read and the mutation lands on top
+    /// of what stands. The same protocol `AppModel.persist` honours; this is
+    /// the form a one-shot writer (the Spend intent's grant-record leg) can
+    /// call without holding an in-memory stamp of its own across a turn.
+    @discardableResult
+    public static func save(ledger base: GrantLedger,
+                            knownStamp: String?,
+                            applying mutation: (inout GrantLedger) -> Void) -> String {
+        var ledger = (ledgerStamp() == knownStamp) ? base : loadLedger()
+        mutation(&ledger)
+        return save(ledger: ledger)
+    }
+
     // MARK: - Pending loosening (applies at next day start, or on key tap)
 
     public static func loadPendingLoosening() -> PolicyState? {

@@ -7,6 +7,11 @@ import SilkCore
 /// callable from outside can raise the budget, move the night window, add a
 /// door, or extend a live grant. A condition can start a grant; only a number
 /// can end one. (docs/market/open-language.md)
+///
+/// Title, description, parameter titles and the phrase are App Intent metadata
+/// — they sit outside `SilkStrings` because they are the system's chrome, not
+/// a sentence Silk speaks. Every word this intent *says* is composed in
+/// `SpendDialog`.
 struct SpendIntent: AppIntent {
     static let title: LocalizedStringResource = "Spend"
     static let description = IntentDescription(
@@ -19,6 +24,20 @@ struct SpendIntent: AppIntent {
     @Parameter(title: "Minutes", inclusiveRange: (1, 300))
     var minutes: Int
 
+    #if DEBUG
+    /// The dialog `perform` last spoke. `IntentResult` will not hand the
+    /// string back, so tests that assert the spoken sentence read this —
+    /// set from the same value that goes into `.result(dialog:)`, so the
+    /// two cannot diverge. Test-only; `nonisolated(unsafe)` because
+    /// `perform` writes it off the main actor and the suite reads it on.
+    nonisolated(unsafe) static var lastDialog = ""
+
+    /// Fired on the grant-record leg, after validate and before the stamped
+    /// save. The interleave test writes here so the race is forced rather
+    /// than hoped for: the window is otherwise a few microseconds of CPU.
+    nonisolated(unsafe) static var beforeGrantSave: (() -> Void)?
+    #endif
+
     /// Idempotency: a repeat invocation inside the same grant window re-reads
     /// the balance instead of debiting again. `.result(opensIntent:)` is
     /// developer-reported to double-invoke under Siri; a double debit would be
@@ -26,10 +45,11 @@ struct SpendIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         guard let policy = SharedStore.loadPolicy(),
               let door = policy.door(named: doorName) else {
-            return .result(dialog: "")   // unknown door: silence, not an error
+            return answer(SpendDialog.silence)   // unknown door: silence, not an error
         }
 
         var ledger = SharedStore.loadLedger()
+        var stamp = SharedStore.ledgerStamp()
         let now = Date()
 
         // The day-turn sweep lives in the app's clock, and a background-only
@@ -40,13 +60,13 @@ struct SpendIntent: AppIntent {
         compacted.compact(dayStart: DayBoundary.dayStart(now: now, downHours: policy.downHours))
         if compacted != ledger {
             ledger = compacted
-            SharedStore.save(ledger: ledger)
+            stamp = SharedStore.save(ledger: ledger)
         }
 
         // Idempotent: an active grant on this door is simply restated.
         if let active = ledger.grants.first(where: { $0.doorID == door.id && $0.isActive(at: now) }) {
-            let time = Validator.timeOfDay(active.expiresAt, calendar: .current).display
-            return .result(dialog: "\(door.name) · \(SilkStrings.till.lowercased()) \(time)")
+            let time = Validator.timeOfDay(active.expiresAt, calendar: .current)
+            return answer(SpendDialog.restated(door: door.name, until: time))
         }
 
         // The same validator as the bar: the budget binds here too.
@@ -75,9 +95,19 @@ struct SpendIntent: AppIntent {
             // ledger a beat before the grant reached it and re-shield a door
             // the dialog has just called open, on the one path with nothing
             // left to correct it.
+            //
+            // The save itself is stamp-compared: a main-actor write that
+            // landed between the load above and this line — the user closing
+            // a door at the bar — must survive. A wholesale put of `ledger`
+            // would erase it. Reload-merge when the stamp moved; save as-is
+            // when it did not. (SharedStore.save(ledger:knownStamp:applying:))
             let grant = Grant(door: door, minutes: granted, issuedAt: now, expiresAt: relockAt)
-            ledger.record(grant)
-            SharedStore.save(ledger: ledger)
+            #if DEBUG
+            Self.beforeGrantSave?()
+            #endif
+            SharedStore.save(ledger: ledger, knownStamp: stamp, applying: {
+                $0.record(grant)
+            })
 
             let (armed, wallIsDown) = await MainActor.run { () -> (Bool, Bool) in
                 let wall = WallController()
@@ -113,40 +143,47 @@ struct SpendIntent: AppIntent {
                 // about schedules, draws it whole. Silk owns no true sentence
                 // for a schedule that would not take, so the door stays shut in
                 // the same silence an unknown door gets.
-                if wallIsDown { return .result(dialog: "\(SilkStrings.blockingOff)") }
-                return .result(dialog: "")
+                if wallIsDown { return answer(SpendDialog.blockingOff) }
+                return answer(SpendDialog.silence)
             }
 
             Wall.reconcile(now: now)
-            let time = Validator.timeOfDay(relockAt, calendar: .current).display
-            return .result(dialog: "\(door.name) · \(granted) · \(SilkStrings.till.lowercased()) \(time)")
+            let time = Validator.timeOfDay(relockAt, calendar: .current)
+            return answer(SpendDialog.granted(door: door.name, minutes: granted, until: time))
         case .refuseDownHours(let until):
-            return .result(dialog: "\(SilkStrings.till) \(until.display).")
+            return answer(SpendDialog.downHours(until: until))
         case .refuseNothingLeft:
-            return .result(dialog: "0 \(SilkStrings.leftToday)")
+            return answer(SpendDialog.nothingLeft)
         case .refuseDoorClosed(let door, let until):
             // The reason this switch stopped ending in `default:`. A capped-out
             // or hand-closed door answered from a Shortcuts automation with an
             // empty dialog is indistinguishable from success, in the one context
             // with no screen and no thread to correct it. Exhaustive from here
             // on, so the next Verdict is a compile error on this path too.
-            let time = Validator.timeOfDay(until, calendar: .current).display
-            return .result(dialog: "\(door.name) \(SilkStrings.closedUntil) \(time).")
+            let time = Validator.timeOfDay(until, calendar: .current)
+            return answer(SpendDialog.doorClosed(door: door.name, until: time))
         case .restated(let door, let until):
             // Unreachable today: the idempotency guard above already restates
             // any active grant on this door before the Validator is called, so
             // this arm never runs. Written out rather than swept into the
             // catch-all below because if that guard is ever narrowed, the answer
             // here must still be the deadline and not an empty dialog.
-            let time = Validator.timeOfDay(until, calendar: .current).display
-            return .result(dialog: "\(door.name) · \(SilkStrings.till.lowercased()) \(time)")
+            let time = Validator.timeOfDay(until, calendar: .current)
+            return answer(SpendDialog.restated(door: door.name, until: time))
         case .silence, .refuseSayHowManyMinutes, .refuseSayAmOrPm, .refuseDoorNeedsApp,
              .ruleChange, .close, .closeAll, .status, .downHours:
             // Nothing this intent can produce: it validates one `.spend` and
             // nothing else. Silence rather than a guessed sentence, exactly as
             // an unknown door gets.
-            return .result(dialog: "")
+            return answer(SpendDialog.silence)
         }
+    }
+
+    private func answer(_ spoken: String) -> some IntentResult & ProvidesDialog {
+        #if DEBUG
+        Self.lastDialog = spoken
+        #endif
+        return .result(dialog: "\(spoken)")
     }
 }
 

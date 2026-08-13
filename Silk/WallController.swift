@@ -11,6 +11,11 @@ import os
 final class WallController {
     private let center = DeviceActivityCenter()
 
+    #if DEBUG
+    /// See `arm(door:until:)` — nil is the honest simulator rollback.
+    static var testForceArmed: Bool?
+    #endif
+
     // MARK: - Authorization
 
     func requestAuthorization() async -> Bool {
@@ -129,6 +134,14 @@ final class WallController {
     /// asked for out loud is a product decision and waits for its own change.
     @discardableResult
     func arm(door: Door, until relockAt: Date) -> Bool {
+        #if DEBUG
+        // Simulator `startMonitoring` throws without Screen Time authorization,
+        // so the honest path always rolls the grant back. Tests that need the
+        // grant-record to stand — a write seen at wait-landing, the success
+        // dialog, the no-launch pin — force the answer; everyone else leaves
+        // this nil and the simulator keeps taking the rollback.
+        if let forced = Self.testForceArmed { return forced }
+        #endif
         // One clock read for both ends and the threshold. The ledger keeps the
         // true expiry; every move RelockWindow makes is late, never early.
         let now = Date.now

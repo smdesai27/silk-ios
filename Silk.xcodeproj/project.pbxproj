@@ -28,6 +28,7 @@
 		741F2244585AFC0424039231 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D7DA55B6A7DFC87D922C181E /* PrivacyInfo.xcprivacy */; };
 		78526713FFB37649F392BD7E /* WaitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF62B7901CB5C69D478E1A69 /* WaitView.swift */; };
 		7F5EAEB1710BBA6C6EE3EED3 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3350D55FC9E5CD602108266F /* SilkCore */; };
+		7F785A486DF97251D6C757EC /* SpendIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3511FBC450CBBFB5B4C398D /* SpendIntentTests.swift */; };
 		8054F82CF4808DED821F7663 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D7DA55B6A7DFC87D922C181E /* PrivacyInfo.xcprivacy */; };
 		887AC1C3DE1DB42BED5A67AA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 704D0FDD76C4A32996253007 /* AppModel.swift */; };
 		909C10E2DD8695AC737E92FE /* ShieldConfigurationExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7314275C7464407E4787F3B /* ShieldConfigurationExtension.swift */; };
@@ -148,6 +149,7 @@
 		BE8AE616C5B452F9B71C9309 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		BFCEE19215144BAFC002220E /* SilkCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SilkCore; path = SilkCore; sourceTree = SOURCE_ROOT; };
 		C100E4F5C7D591C01AECFACB /* SilkShieldAction.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SilkShieldAction.entitlements; sourceTree = "<group>"; };
+		C3511FBC450CBBFB5B4C398D /* SpendIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendIntentTests.swift; sourceTree = "<group>"; };
 		C417C7CA0E5D215A9487363E /* SpendIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendIntent.swift; sourceTree = "<group>"; };
 		C52C47C7B53ABF04D0E30D6B /* WaitFramePerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitFramePerformanceTests.swift; sourceTree = "<group>"; };
 		C840695F3CB1140C74898A68 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -239,6 +241,7 @@
 		45752C9C7EF9C758A2F188D6 /* SilkTests */ = {
 			isa = PBXGroup;
 			children = (
+				C3511FBC450CBBFB5B4C398D /* SpendIntentTests.swift */,
 				C52C47C7B53ABF04D0E30D6B /* WaitFramePerformanceTests.swift */,
 				6D0F6128C43C9EDDB8228BBD /* WaitIntentTests.swift */,
 				B35D385C97ED1F1EE085C7D1 /* WaitLifecycleTests.swift */,
@@ -606,6 +609,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7F785A486DF97251D6C757EC /* SpendIntentTests.swift in Sources */,
 				CC127156F7044C3E89B85579 /* WaitFramePerformanceTests.swift in Sources */,
 				D7D1536658277CF6D6031983 /* WaitIntentTests.swift in Sources */,
 				C1E4838873A7FCB28339D571 /* WaitLifecycleTests.swift in Sources */,
