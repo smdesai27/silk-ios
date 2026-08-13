@@ -127,7 +127,12 @@ struct WheelPickerOverlay: View {
                 // Identifier last: it must ride the element the label creates.
                 .accessibilityLabel(Text(SilkStrings.ok))
                 .accessibilityAddTraits(.isButton)
-                .accessibilityIdentifier("silk.picker.backdrop")
+                // Same placement as DoorOverlayScaffold: the identifier rides
+                // the backdrop, not the ZStack. A container identifier stamps
+                // itself onto every descendant and overwrites silk.picker.title
+                // / silk.picker.wheel.N. The walks wait on `silk.picker` for
+                // "the overlay is up"; the full-screen veil is that fact.
+                .accessibilityIdentifier("silk.picker")
 
             VStack(spacing: 0) {
                 // 12px, .12em, uppercase — the quietest voice on the screen
@@ -162,7 +167,6 @@ struct WheelPickerOverlay: View {
         // whatever hand. Watching the gestures would have to enumerate them, and
         // the fourth one added would be the one that forgot.
         .onChange(of: selections) { touched = true }
-        .accessibilityIdentifier("silk.picker")
     }
 
     /// Two 1pt hairlines at ink-14, 280 wide, centred on the middle row. The

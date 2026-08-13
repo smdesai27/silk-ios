@@ -361,30 +361,57 @@ final class OnboardingUITests: XCTestCase {
     ///
     /// The overlay fades in on its own curve and a coordinate tap is aimed at a
     /// frame, not an element, so a tap made mid-fade is aimed at the Settings
-    /// row underneath. The wait for hittability is a settle rather than a gate:
-    /// the container may never report itself hittable, and the tap is made
-    /// either way, exactly as it was before.
+    /// row underneath. Settle on the wheel becoming tappable, not on the veil:
+    /// `silk.picker` is a full-screen button whose centre sits under the wheels,
+    /// and asking whether it is hittable can fail the test outright
+    /// ("Activation point invalid") rather than return false. That is the
+    /// failure `testACapSetOverARunningGrantDoesNotClaimTheDoorIsShut` hit
+    /// after a drag, at the wait on this overlay.
     @MainActor
     private func tapPickerBackdrop(_ app: XCUIApplication) {
         let overlay = element(app, "silk.picker")
-        _ = wait(for: overlay, "exists == true AND isHittable == true", timeout: 1.5)
+        settlePicker(app, overlay)
         overlay.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.94)).tap()
     }
 
     /// Steps a wheel by whole rows. The wheel folds into one adjustable
-    /// element and its identifiers don't surface to XCUI, so the drag goes
-    /// through the overlay's frame: the single wheel sits centred, ~25pt below
-    /// the overlay's middle (title + its 34pt seat above). A slow 52pt-per-row
-    /// drag with a settling hold snaps exactly `rows` seats — positive drags
-    /// the column down (earlier values).
+    /// element, so the drag goes through the overlay's frame: the single wheel
+    /// sits centred, ~25pt below the overlay's middle (title + its 34pt seat
+    /// above). A slow 52pt-per-row drag with a settling hold snaps exactly
+    /// `rows` seats — positive drags the column down (earlier values).
     @MainActor
     private func dragWheel(_ app: XCUIApplication, rows: Int) {
         let overlay = element(app, "silk.picker")
-        _ = wait(for: overlay, "exists == true AND isHittable == true", timeout: 1.5)
+        settlePicker(app, overlay)
         let start = overlay.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.53))
         let end = start.withOffset(CGVector(dx: 0, dy: CGFloat(rows) * 52))
         start.press(forDuration: 0.1, thenDragTo: end,
                     withVelocity: .slow, thenHoldForDuration: 0.4)
+    }
+
+    /// Wait until the picker is a thing a coordinate can be aimed at. Never
+    /// asks whether the veil itself is hittable — see `tapPickerBackdrop`.
+    @MainActor
+    private func settlePicker(_ app: XCUIApplication, _ overlay: XCUIElement) {
+        _ = overlay.waitForExistence(timeout: Self.appear)
+        let wheel = app.descendants(matching: .any)
+            .matching(identifier: "silk.picker.wheel.0")
+            .firstMatch
+        // Short existence check first: if the identifier never surfaces, a
+        // full `appear` wait would stall every drag and backdrop tap.
+        if wheel.waitForExistence(timeout: 2),
+           wait(for: wheel, "exists == true AND isHittable == true", timeout: Self.appear) {
+            return
+        }
+        // Weakest settle that does not query the backdrop's hit point: a
+        // full-screen frame has arrived. Polled rather than slept; returns
+        // the instant the frame is large enough to aim at.
+        let deadline = Date.now.addingTimeInterval(Self.appear)
+        repeat {
+            let frame = overlay.frame
+            if overlay.exists && frame.width > 100 && frame.height > 100 { return }
+            RunLoop.current.run(until: Date.now.addingTimeInterval(0.05))
+        } while Date.now < deadline
     }
 
     @MainActor
@@ -678,11 +705,19 @@ final class OnboardingUITests: XCTestCase {
 
     /// The editor's backdrop is the exit; like the wheel's, its element does
     /// not surface reliably, so tap through the overlay itself, low, where
-    /// only the backdrop listens.
+    /// only the backdrop listens. Existence and a usable frame, not
+    /// hittability: the veil is a full-screen button whose centre is covered,
+    /// and querying `isHittable` on that shape can fail the test outright.
     @MainActor
     private func tapEditorBackdrop(_ app: XCUIApplication) {
         let overlay = element(app, "silk.settings.editor")
-        _ = wait(for: overlay, "exists == true AND isHittable == true", timeout: 1.5)
+        _ = overlay.waitForExistence(timeout: Self.appear)
+        let deadline = Date.now.addingTimeInterval(Self.appear)
+        repeat {
+            let frame = overlay.frame
+            if overlay.exists && frame.width > 100 && frame.height > 100 { break }
+            RunLoop.current.run(until: Date.now.addingTimeInterval(0.05))
+        } while Date.now < deadline
         overlay.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.94)).tap()
     }
 
@@ -845,14 +880,13 @@ final class OnboardingUITests: XCTestCase {
         let picker = element(app, "silk.picker")
         tap(element(app, "silk.settings.cap"), "Daily cap", raising: picker, "the cap wheel")
 
-        // The title is asked for by identifier PREFIX and not by its own
-        // `silk.picker.title`, because the overlay's `silk.picker` rides on the
-        // ZStack and an identifier on a container stamps itself onto every
-        // element inside it — the child's own identifier is overwritten, not
-        // added to. Measured, not assumed: with the wheel up, the tree carries
-        // four elements all identified `silk.picker` — the backdrop Button
-        // (label "OK"), this StaticText (label "Reddit"), the wheel (value "No
-        // cap") and the selection frame. The label is what separates them.
+        // The title is asked for by identifier PREFIX and not by a bare name
+        // match. `silk.picker` now rides the backdrop (as the editor's
+        // identifier does) so children keep `silk.picker.title` / `.wheel.N`;
+        // the prefix still matches both, and the label is what separates the
+        // title from the Settings door row behind the veil, which also reads
+        // "Reddit". Kept as a prefix rather than `silk.picker.title` alone so
+        // a stamp regression cannot silently hollow this walk out.
         //
         // It must be the prefix match rather than a bare `staticTexts[…]` on the
         // name: the Settings door row behind the veil is still in the tree and
