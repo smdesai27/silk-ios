@@ -143,3 +143,35 @@ jobs:
             SilkUITests.xcresult
           if-no-files-found: ignore
           retention-days: 7
+
+  # Everything above pins Debug — the shared scheme does, and neither test
+  # invocation passes -configuration. Without this job the Release-only settings
+  # are first exercised by an App Store archive, which is the worst place to
+  # learn one is wrong: CODE_SIGN_IDENTITY = Apple Distribution, the Release-only
+  # -file-prefix-map, wholemodule -O, and every `#if DEBUG` block, which compiles
+  # *out* here and nowhere else.
+  #
+  # Build, not test: the suites already ran under Debug. The only question is
+  # whether Release still compiles and links. No simulator, no signing.
+  release:
+    name: Release build
+    runs-on: macos-26
+    # Same short-circuit and same reason as `simulator`: a red walk already
+    # refuses the PR, and this cannot change that answer.
+    needs: simulator
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Toolchain
+        run: xcodebuild -version
+
+      - name: xcodebuild build — Release
+        run: |
+          xcodebuild build \
+            -project Silk.xcodeproj \
+            -scheme Silk \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath DerivedData/release \
+            CODE_SIGNING_ALLOWED=NO

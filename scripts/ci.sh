@@ -5,10 +5,11 @@
 # waiting on a round trip, and how .githooks/pre-push catches the cheap
 # failures before they leave the machine.
 #
-#   scripts/ci.sh              all three (~7 min)
+#   scripts/ci.sh              all three suites + the Release build (~11 min)
 #   scripts/ci.sh spine        SilkCore only (~15 s, no simulator)
 #   scripts/ci.sh unit         SilkTests only — the app's own logic (~1 min)
 #   scripts/ci.sh ui           SilkUITests only (~5 min)
+#   scripts/ci.sh release      Release compiles at all (~4 min, no simulator)
 #
 # Three and not two since the wait arrived. The spine proves the arithmetic, the
 # walks prove the product, and neither could reach `AppModel`'s state machine:
@@ -122,10 +123,48 @@ run_ui() {
   fi
 }
 
+run_release() {
+  rule "Release build — xcodebuild build (~4 min)"
+  mkdir -p "$DERIVED"
+  local log="$DERIVED/xcodebuild-release.log"
+
+  # The only thing in this repo that compiles Release. The scheme pins Debug for
+  # build, test, run and analyze, and neither test invocation above passes
+  # -configuration — so without this, the Release-only settings are first
+  # exercised by an App Store archive, which is the worst possible place to
+  # learn one is wrong. Specifically unguarded otherwise: CODE_SIGN_IDENTITY =
+  # Apple Distribution, the Release-only -file-prefix-map, wholemodule -O, and
+  # every `#if DEBUG` block — which compile *out* here and nowhere else.
+  #
+  # Build, not test: the suites already ran under Debug. The question this asks
+  # is only whether Release still compiles and links.
+  set +e
+  xcodebuild build \
+    -project Silk.xcodeproj \
+    -scheme Silk \
+    -configuration Release \
+    -destination 'generic/platform=iOS' \
+    -derivedDataPath "$DERIVED" \
+    CODE_SIGNING_ALLOWED=NO \
+    >"$log" 2>&1
+  local status=$?
+  set -e
+
+  grep -E "error:|\*\* BUILD" "$log" || true
+
+  if [ $status -eq 0 ]; then
+    echo "Release build: pass"
+  else
+    failed+=("Release build")
+    echo "log:           $log"
+  fi
+}
+
 case "$what" in
-  spine) run_spine ;;
-  unit)  run_unit ;;
-  ui)    run_ui ;;
+  spine)   run_spine ;;
+  unit)    run_unit ;;
+  ui)      run_ui ;;
+  release) run_release ;;
   all)
     # Cheapest answer first, every time. The spine is three seconds, the unit
     # suite about a minute (most of it the app build the walks need anyway),
@@ -138,12 +177,19 @@ case "$what" in
       run_unit
       if [ ${#failed[@]} -eq 0 ]; then
         run_ui
+        # Last because it is a cold full compile and the least likely to be
+        # red — but it runs, because nothing else here ever builds Release.
+        if [ ${#failed[@]} -eq 0 ]; then
+          run_release
+        else
+          echo "skipping the Release build — the walks are red"
+        fi
       else
         echo "skipping SilkUITests — the unit suite is red"
       fi
     fi
     ;;
-  *)     echo "usage: scripts/ci.sh [all|spine|unit|ui]" >&2; exit 2 ;;
+  *)     echo "usage: scripts/ci.sh [all|spine|unit|ui|release]" >&2; exit 2 ;;
 esac
 
 rule "Result"
