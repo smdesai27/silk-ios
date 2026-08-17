@@ -1,12 +1,16 @@
 # XcodeGen project spec. Regenerate with: xcodegen generate
 #
-# NOTE: bundle IDs use a placeholder prefix. Before TestFlight:
-#   1. change com.sanildesai → your real org identifier (all four targets + app group)
-#   2. request the FamilyControls (Distribution) entitlement for ALL FOUR bundle IDs
-# DEVELOPMENT_TEAM is already set below.
+# BUNDLE IDENTITY LIVES IN ONE PLACE: SILK_BUNDLE_PREFIX, below.
+# Everything else — all four bundle IDs, the app group, the log subsystem —
+# derives from it. To rename, change that one line and regenerate.
+#
+# Two doors close permanently and neither has reopened yet:
+#   - bundle IDs lock at the FIRST build upload to App Store Connect
+#   - the FamilyControls (Distribution) entitlement is granted per bundle ID,
+#     so renaming after it lands means re-requesting all four and waiting again
+# Rename before either happens, not after.
 name: Silk
 options:
-  bundleIdPrefix: com.sanildesai
   deploymentTarget:
     iOS: "26.5"
   createIntermediateGroups: true
@@ -20,6 +24,35 @@ settings:
     MARKETING_VERSION: 0.1.0
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 
+    # ---- the one line to change ----
+    SILK_BUNDLE_PREFIX: com.silkapp
+    # --------------------------------
+    SILK_APP_GROUP: group.$(SILK_BUNDLE_PREFIX).silk
+    SILK_LOG_SUBSYSTEM: $(SILK_BUNDLE_PREFIX).silk
+
+    # NOTE: TARGETED_DEVICE_FAMILY is set per-target, not here — XcodeGen's
+    # target presets inject "1,2" at target level and would override a
+    # project-level value. iPhone only: shipping universal forces an iPad
+    # review pass and iPad screenshots for a wall that doesn't reach the iPad.
+
+  configs:
+    # XcodeGen's target presets otherwise inject the legacy "iPhone Developer"
+    # into Release too, which pins a development cert on the archive path.
+    Debug:
+      CODE_SIGN_IDENTITY: "Apple Development"
+    Release:
+      CODE_SIGN_IDENTITY: "Apple Distribution"
+      # Release only: -file-prefix-map remaps debug, coverage and index info as
+      # well as #file, so in Debug it costs real debuggability and buys nothing
+      # (a Debug binary is never shipped).
+      #
+      # Modest by design. Swift 6 already makes #file concise, #filePath appears
+      # nowhere in the tree, and Release routes DWARF to a separate dSYM — so
+      # this is defence in depth, not the thing keeping paths out of the binary.
+      # It also does not reach SilkCore: Xcode does not propagate
+      # OTHER_SWIFT_FLAGS to Swift Package targets.
+      OTHER_SWIFT_FLAGS: -file-prefix-map $(SRCROOT)=/Silk
+
 packages:
   SilkCore:
     path: SilkCore
@@ -28,7 +61,15 @@ targets:
   Silk:
     type: application
     platform: iOS
-    settings: { base: { PRODUCT_BUNDLE_IDENTIFIER: com.sanildesai.silk } }
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(SILK_BUNDLE_PREFIX).silk
+        TARGETED_DEVICE_FAMILY: "1"
+      configs:
+        Debug:
+          CODE_SIGN_IDENTITY: "Apple Development"
+        Release:
+          CODE_SIGN_IDENTITY: "Apple Distribution"
     sources: [Silk, Shared]
     dependencies:
       - package: SilkCore
@@ -39,20 +80,36 @@ targets:
       path: Silk/Silk.entitlements
       properties:
         com.apple.developer.family-controls: true
-        com.apple.security.application-groups: [group.com.sanildesai.silk]
+        com.apple.security.application-groups: [$(SILK_APP_GROUP)]
     info:
       path: Silk/Info.plist
       properties:
         CFBundleDisplayName: Silk
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        SilkAppGroup: $(SILK_APP_GROUP)
+        SilkLogSubsystem: $(SILK_LOG_SUBSYSTEM)
+        # No crypto, no network layer. Declaring the exemption here stops App
+        # Store Connect gating every single upload behind the manual
+        # export-compliance questionnaire.
+        ITSAppUsesNonExemptEncryption: false
         # Deliberately absent, forever: notification entitlements/usage keys.
         # Mic + speech keys arrive only with Silk's own mic session (not in spine).
 
   SilkMonitor:
     type: app-extension
     platform: iOS
-    settings: { base: { PRODUCT_BUNDLE_IDENTIFIER: com.sanildesai.silk.monitor } }
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(SILK_BUNDLE_PREFIX).silk.monitor
+        TARGETED_DEVICE_FAMILY: "1"
+      configs:
+        Debug:
+          CODE_SIGN_IDENTITY: "Apple Development"
+        Release:
+          CODE_SIGN_IDENTITY: "Apple Distribution"
     sources: [SilkMonitor, Shared]
     dependencies:
       - package: SilkCore
@@ -60,11 +117,15 @@ targets:
       path: SilkMonitor/SilkMonitor.entitlements
       properties:
         com.apple.developer.family-controls: true
-        com.apple.security.application-groups: [group.com.sanildesai.silk]
+        com.apple.security.application-groups: [$(SILK_APP_GROUP)]
     info:
       path: SilkMonitor/Info.plist
       properties:
         CFBundleDisplayName: SilkMonitor
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        SilkAppGroup: $(SILK_APP_GROUP)
+        SilkLogSubsystem: $(SILK_LOG_SUBSYSTEM)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.deviceactivity.monitor-extension
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).MonitorExtension
@@ -72,7 +133,15 @@ targets:
   SilkShield:
     type: app-extension
     platform: iOS
-    settings: { base: { PRODUCT_BUNDLE_IDENTIFIER: com.sanildesai.silk.shield } }
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(SILK_BUNDLE_PREFIX).silk.shield
+        TARGETED_DEVICE_FAMILY: "1"
+      configs:
+        Debug:
+          CODE_SIGN_IDENTITY: "Apple Development"
+        Release:
+          CODE_SIGN_IDENTITY: "Apple Distribution"
     sources: [SilkShield, Shared]
     dependencies:
       - package: SilkCore
@@ -80,11 +149,15 @@ targets:
       path: SilkShield/SilkShield.entitlements
       properties:
         com.apple.developer.family-controls: true
-        com.apple.security.application-groups: [group.com.sanildesai.silk]
+        com.apple.security.application-groups: [$(SILK_APP_GROUP)]
     info:
       path: SilkShield/Info.plist
       properties:
         CFBundleDisplayName: SilkShield
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        SilkAppGroup: $(SILK_APP_GROUP)
+        SilkLogSubsystem: $(SILK_LOG_SUBSYSTEM)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.ManagedSettingsUI.shield-configuration-service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShieldConfigurationExtension
@@ -92,7 +165,15 @@ targets:
   SilkShieldAction:
     type: app-extension
     platform: iOS
-    settings: { base: { PRODUCT_BUNDLE_IDENTIFIER: com.sanildesai.silk.shieldaction } }
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(SILK_BUNDLE_PREFIX).silk.shieldaction
+        TARGETED_DEVICE_FAMILY: "1"
+      configs:
+        Debug:
+          CODE_SIGN_IDENTITY: "Apple Development"
+        Release:
+          CODE_SIGN_IDENTITY: "Apple Distribution"
     sources: [SilkShieldAction, Shared]
     dependencies:
       - package: SilkCore
@@ -100,11 +181,15 @@ targets:
       path: SilkShieldAction/SilkShieldAction.entitlements
       properties:
         com.apple.developer.family-controls: true
-        com.apple.security.application-groups: [group.com.sanildesai.silk]
+        com.apple.security.application-groups: [$(SILK_APP_GROUP)]
     info:
       path: SilkShieldAction/Info.plist
       properties:
         CFBundleDisplayName: SilkShieldAction
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        SilkAppGroup: $(SILK_APP_GROUP)
+        SilkLogSubsystem: $(SILK_LOG_SUBSYSTEM)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.ManagedSettings.shield-action-service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShieldActionExtension
@@ -126,6 +211,8 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: $(SILK_BUNDLE_PREFIX).SilkTests
+        TARGETED_DEVICE_FAMILY: "1"
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Silk.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Silk
         BUNDLE_LOADER: $(TEST_HOST)
     sources: [SilkTests]
@@ -138,7 +225,11 @@ targets:
     platform: iOS
     # A test bundle brings no plist of its own; without this the build stops
     # at code signing asking for one.
-    settings: { base: { GENERATE_INFOPLIST_FILE: YES } }
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: $(SILK_BUNDLE_PREFIX).SilkUITests
+        TARGETED_DEVICE_FAMILY: "1"
     sources: [SilkUITests]
     dependencies:
       - target: Silk

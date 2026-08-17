@@ -11,6 +11,7 @@
 		0F34172CD5594C0E74AF23BD /* NowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A928E6FABAA8B87E0F4C9975 /* NowView.swift */; };
 		192AA7C5AEA91053B6345E24 /* WallController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFF8CA4B6D8F6E393B396D1B /* WallController.swift */; };
 		2580302DF762798F7E8BB26F /* ApertureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B533DAEE56A4E18702C13CB /* ApertureView.swift */; };
+		295613EC78F9ACE4C039B43B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D7DA55B6A7DFC87D922C181E /* PrivacyInfo.xcprivacy */; };
 		29D791169E236E4BB1294C01 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8C8E4D9BB944356CB0771523 /* SilkCore */; };
 		42ECF7C34173F4CF8B02AC9B /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE8AE616C5B452F9B71C9309 /* OnboardingView.swift */; };
 		4432749FB254CF3A908C4E84 /* WheelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1657C506FCDDFE73884FD015 /* WheelPicker.swift */; };
@@ -24,8 +25,10 @@
 		5ADAB23DE5445332AA5BAB10 /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
 		64ED83BCD57A669D67BEB2FE /* WaitTransactionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835D0F9CAADC49CEF71DDEC8 /* WaitTransactionTests.swift */; };
 		6838EA37D28C82DCE6808416 /* WaitModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFBBBFD0F5806BE7C321FC95 /* WaitModelTests.swift */; };
+		741F2244585AFC0424039231 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D7DA55B6A7DFC87D922C181E /* PrivacyInfo.xcprivacy */; };
 		78526713FFB37649F392BD7E /* WaitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF62B7901CB5C69D478E1A69 /* WaitView.swift */; };
 		7F5EAEB1710BBA6C6EE3EED3 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3350D55FC9E5CD602108266F /* SilkCore */; };
+		8054F82CF4808DED821F7663 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D7DA55B6A7DFC87D922C181E /* PrivacyInfo.xcprivacy */; };
 		887AC1C3DE1DB42BED5A67AA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 704D0FDD76C4A32996253007 /* AppModel.swift */; };
 		909C10E2DD8695AC737E92FE /* ShieldConfigurationExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7314275C7464407E4787F3B /* ShieldConfigurationExtension.swift */; };
 		969518E52EEBCC905EE6B755 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = EBD9E28473C5EB7129F8AD9A /* SilkCore */; };
@@ -43,6 +46,7 @@
 		D7D1536658277CF6D6031983 /* WaitIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D0F6128C43C9EDDB8228BBD /* WaitIntentTests.swift */; };
 		DB790AA519D804B0C5C2841A /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300E8AEF4E4B414B82D4799C /* DesignSystem.swift */; };
 		DFFDE67631866FCFAA953E18 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BFDAD382D87C5DBF1C20B6C /* SettingsView.swift */; };
+		E1DD3A58842AFC7A83A3967E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D7DA55B6A7DFC87D922C181E /* PrivacyInfo.xcprivacy */; };
 		E6B4F1900C18BAC1F044851F /* OnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC55F66C7151E4B8038294C3 /* OnboardingUITests.swift */; };
 		E991680108C07B056D17D6B6 /* EnsoPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 654CED2E86E7E41374DA5E0E /* EnsoPath.swift */; };
 		FA9BB7287ECC81A8761D23DC /* SilkModelParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 382B5C7BD5FC37F7B7734E1C /* SilkModelParser.swift */; };
@@ -148,6 +152,7 @@
 		C52C47C7B53ABF04D0E30D6B /* WaitFramePerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitFramePerformanceTests.swift; sourceTree = "<group>"; };
 		C840695F3CB1140C74898A68 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CF62B7901CB5C69D478E1A69 /* WaitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitView.swift; sourceTree = "<group>"; };
+		D7DA55B6A7DFC87D922C181E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		DFF8CA4B6D8F6E393B396D1B /* WallController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallController.swift; sourceTree = "<group>"; };
 		E15288FA96D9B3050754D686 /* ConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationView.swift; sourceTree = "<group>"; };
 		EB1C355D83F2A45FDCC9520A /* Chrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chrome.swift; sourceTree = "<group>"; };
@@ -246,6 +251,7 @@
 		476E29A3B49A66DC1519EEDD /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				D7DA55B6A7DFC87D922C181E /* PrivacyInfo.xcprivacy */,
 				0517AF5402B0AEB586771BE6 /* SharedStore.swift */,
 			);
 			path = Shared;
@@ -333,6 +339,7 @@
 			buildConfigurationList = 2C269F03EA4025DC85207E4E /* Build configuration list for PBXNativeTarget "SilkShield" */;
 			buildPhases = (
 				EA5279F66F7A85592FC2D11E /* Sources */,
+				B179139D45C5018766CB7017 /* Resources */,
 				BE34A03EF157D10CDE79ED5F /* Frameworks */,
 			);
 			buildRules = (
@@ -372,6 +379,7 @@
 			buildConfigurationList = 1001593E715132F13DDC97E0 /* Build configuration list for PBXNativeTarget "SilkMonitor" */;
 			buildPhases = (
 				546E662A48DCA6C3897D7BDB /* Sources */,
+				A2CCFE5EC38DEB2E22391163 /* Resources */,
 				61990A1B60EB829B6BA9E85F /* Frameworks */,
 			);
 			buildRules = (
@@ -391,6 +399,7 @@
 			buildConfigurationList = EF5EA18269BFFC3AF9FBF48F /* Build configuration list for PBXNativeTarget "SilkShieldAction" */;
 			buildPhases = (
 				F1807F8EB4EAAD76B26B1296 /* Sources */,
+				8DC8AC1EA877E91E5E519CC7 /* Resources */,
 				D695969ED3E3323D513C5C25 /* Frameworks */,
 			);
 			buildRules = (
@@ -516,6 +525,31 @@
 			buildActionMask = 2147483647;
 			files = (
 				FF214AF23E475C10C2D345A8 /* Assets.xcassets in Resources */,
+				295613EC78F9ACE4C039B43B /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8DC8AC1EA877E91E5E519CC7 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E1DD3A58842AFC7A83A3967E /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2CCFE5EC38DEB2E22391163 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8054F82CF4808DED821F7663 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B179139D45C5018766CB7017 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				741F2244585AFC0424039231 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -639,9 +673,9 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.SilkUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SILK_BUNDLE_PREFIX).SilkUITests";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_TARGET_NAME = Silk;
 			};
 			name = Release;
@@ -679,6 +713,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
@@ -699,8 +734,12 @@
 				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				OTHER_SWIFT_FLAGS = "-file-prefix-map $(SRCROOT)=/Silk";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SILK_APP_GROUP = "group.$(SILK_BUNDLE_PREFIX).silk";
+				SILK_BUNDLE_PREFIX = com.silkapp;
+				SILK_LOG_SUBSYSTEM = "$(SILK_BUNDLE_PREFIX).silk";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
@@ -717,9 +756,9 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.SilkUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SILK_BUNDLE_PREFIX).SilkUITests";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_TARGET_NAME = Silk;
 			};
 			name = Debug;
@@ -729,15 +768,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Silk/Silk.entitlements;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				INFOPLIST_FILE = Silk/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SILK_BUNDLE_PREFIX).silk";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -746,15 +785,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Silk/Silk.entitlements;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Distribution";
 				INFOPLIST_FILE = Silk/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SILK_BUNDLE_PREFIX).silk";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -768,9 +807,9 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.SilkTests;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SILK_BUNDLE_PREFIX).SilkTests";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Silk.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Silk";
 			};
 			name = Release;
@@ -779,15 +818,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SilkShield/SilkShield.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
 				INFOPLIST_FILE = SilkShield/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk.shield;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SILK_BUNDLE_PREFIX).silk.shield";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -795,15 +835,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SilkMonitor/SilkMonitor.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				INFOPLIST_FILE = SilkMonitor/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk.monitor;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SILK_BUNDLE_PREFIX).silk.monitor";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -817,9 +858,9 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.SilkTests;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SILK_BUNDLE_PREFIX).SilkTests";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Silk.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Silk";
 			};
 			name = Debug;
@@ -828,15 +869,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SilkShield/SilkShield.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				INFOPLIST_FILE = SilkShield/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk.shield;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SILK_BUNDLE_PREFIX).silk.shield";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -844,15 +886,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SilkShieldAction/SilkShieldAction.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				INFOPLIST_FILE = SilkShieldAction/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk.shieldaction;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SILK_BUNDLE_PREFIX).silk.shieldaction";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -889,6 +932,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
@@ -918,6 +962,9 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SILK_APP_GROUP = "group.$(SILK_BUNDLE_PREFIX).silk";
+				SILK_BUNDLE_PREFIX = com.silkapp;
+				SILK_LOG_SUBSYSTEM = "$(SILK_BUNDLE_PREFIX).silk";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -928,15 +975,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SilkShieldAction/SilkShieldAction.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
 				INFOPLIST_FILE = SilkShieldAction/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk.shieldaction;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SILK_BUNDLE_PREFIX).silk.shieldaction";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -944,15 +992,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SilkMonitor/SilkMonitor.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
 				INFOPLIST_FILE = SilkMonitor/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanildesai.silk.monitor;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SILK_BUNDLE_PREFIX).silk.monitor";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};

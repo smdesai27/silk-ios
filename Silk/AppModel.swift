@@ -104,10 +104,14 @@ final class AppModel {
     let wall = WallController()
 
     init() {
+        #if DEBUG
         // Debug/QA: launch with -silkReset YES to wipe state and re-onboard.
+        // Release must never carry this: UserDefaults is the only persistence
+        // Silk has, so wipeAll() there is unrecoverable.
         if UserDefaults.standard.bool(forKey: "silkReset") {
             SharedStore.wipeAll()
         }
+        #endif
         let saved = SharedStore.loadPolicy()
         self.onboarded = saved != nil
         self.policy = saved ?? AppModel.defaultPolicy
@@ -1806,12 +1810,14 @@ final class AppModel {
     var activitySelection = FamilyActivitySelection()
 
     private func refreshWallStanding() {
+        #if DEBUG
         // Debug/QA: -silkWallDown YES forces the row; the simulator's standing
         // is always .up (it has no real wall to lose).
         if UserDefaults.standard.bool(forKey: "silkWallDown") {
             wallDown = onboarded
             return
         }
+        #endif
         wallDown = onboarded && wall.standing != .up
     }
 

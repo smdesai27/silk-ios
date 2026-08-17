@@ -7,7 +7,25 @@ import ManagedSettings
 /// Everything the shield needs to render — and everything the monitor needs to
 /// re-lock — must be readable from here, inside a 6 MB extension.
 public enum SharedStore {
-    public static let appGroup = "group.com.sanildesai.silk"
+    /// Injected from project.yml (`SILK_APP_GROUP`) into every target's
+    /// Info.plist, so the identifier lives in exactly one place and a rename
+    /// can't leave one of the four bundles pointing at the old container.
+    public static let appGroup: String = infoString("SilkAppGroup")
+
+    /// One subsystem across all four processes, so Console shows the app and
+    /// its extensions under a single filter.
+    public static let logSubsystem: String = infoString("SilkLogSubsystem")
+
+    /// Missing means the build is misconfigured, not that the user did
+    /// something — there is no sane fallback for an App Group we'd silently
+    /// get wrong, since a wrong container reads as "all state lost".
+    private static func infoString(_ key: String) -> String {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String,
+              !value.isEmpty else {
+            preconditionFailure("\(key) missing from Info.plist — see project.yml")
+        }
+        return value
+    }
 
     static var defaults: UserDefaults {
         UserDefaults(suiteName: appGroup) ?? .standard

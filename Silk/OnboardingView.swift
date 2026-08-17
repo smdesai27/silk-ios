@@ -16,11 +16,13 @@ struct OnboardingView: View {
     }
 
     @State private var step: Step = {
+        #if DEBUG
         // Debug hook for headless QA: launch with `-silkStep N` (0–2).
         if let i = UserDefaults.standard.string(forKey: "silkStep").flatMap(Int.init),
            let s = Step(rawValue: i) {
             return s
         }
+        #endif
         return .permission
     }()
 
@@ -47,15 +49,19 @@ struct OnboardingView: View {
     /// real 10 PM sees its grants clamped to the approaching edge, and no
     /// assertion survives the wall clock.
     @State private var downStart: TimeOfDay = {
+        #if DEBUG
         if let h = UserDefaults.standard.string(forKey: "silkDownStart").flatMap(Int.init) {
             return TimeOfDay(hour: h)
         }
+        #endif
         return TimeOfDay(hour: 22)
     }()
     @State private var downEnd: TimeOfDay = {
+        #if DEBUG
         if let h = UserDefaults.standard.string(forKey: "silkDownEnd").flatMap(Int.init) {
             return TimeOfDay(hour: h)
         }
+        #endif
         return TimeOfDay(hour: 7)
     }()
 

@@ -62,7 +62,7 @@ final class OnboardingUITests: XCTestCase {
 
     /// XCTest kills every app a test launched when the method returns, and that
     /// implicit kill is where CI died: "Failed to terminate
-    /// com.sanildesai.silk:5985", on a branch carrying no Swift at all. The
+    /// com.silkapp.silk:5985", on a branch carrying no Swift at all. The
     /// timing is not a mystery. A test ends the instant its last assertion
     /// passes, which is routinely the instant the app is still finishing what
     /// the assertion only saw the front of — a grant re-applies the wall and

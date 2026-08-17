@@ -185,7 +185,7 @@ final class WallController {
         return armed
     }
 
-    private static let log = Logger(subsystem: "com.sanildesai.silk", category: "wall")
+    private static let log = Logger(subsystem: SharedStore.logSubsystem, category: "wall")
 
     func stopMonitoring(door: Door) {
         center.stopMonitoring([

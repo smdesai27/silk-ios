@@ -67,10 +67,19 @@ commits being pushed, so a dirty tree or a push of some other branch is not the 
 
 If you change what the script runs, change the workflow to match.
 
-Before running on a device: `DEVELOPMENT_TEAM` is already set in `project.yml`, but the bundle IDs are
-still the placeholder `com.sanildesai.*` — change them (all four targets and the app group), and request
-the **FamilyControls (Distribution)** entitlement for all four (see
-`docs/market/what-is-buildable.md` → Shipping).
+Before running on a device: `DEVELOPMENT_TEAM` is already set in `project.yml`, and development signing
+needs nothing else — FamilyControls is available to every team for development.
+
+Bundle identity derives from a single build setting, `SILK_BUNDLE_PREFIX` in `project.yml`. All four
+bundle IDs, the App Group, and the log subsystem are built from it, so a rename is one line plus
+`xcodegen generate`. Two things make that rename one-way, and neither has happened yet:
+
+- bundle IDs lock at the **first build upload** to App Store Connect;
+- the **FamilyControls (Distribution)** entitlement is granted *per bundle ID* — four separate requests
+  here — so renaming afterward means re-requesting all four and waiting out the queue again.
+
+Distribution is the gate, not development: TestFlight, Ad Hoc and the App Store all require that
+entitlement, and Apple must grant it by hand (see `docs/market/what-is-buildable.md` → Shipping).
 
 ## The rules the code enforces
 

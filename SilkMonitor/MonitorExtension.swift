@@ -13,8 +13,9 @@ final class MonitorExtension: DeviceActivityMonitor {
     /// Every callback logs before it reconciles: the March 2026 forum failure
     /// mode is "no logs or notifications appear from the extension", and the
     /// device test needs to tell a callback that never came from a reconcile
-    /// that failed. Filter Console on subsystem com.sanildesai.silk.
-    private static let log = Logger(subsystem: "com.sanildesai.silk", category: "monitor")
+    /// that failed. Filter Console on the subsystem — it's the app's bundle ID,
+    /// shared by all four processes (SILK_LOG_SUBSYSTEM in project.yml).
+    private static let log = Logger(subsystem: SharedStore.logSubsystem, category: "monitor")
 
     override func intervalDidStart(for activity: DeviceActivityName) {
         super.intervalDidStart(for: activity)
