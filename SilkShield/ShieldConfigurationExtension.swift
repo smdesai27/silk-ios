@@ -64,17 +64,24 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
         let now = Date()
         let policy = SharedStore.loadPolicy()
 
-        // Down hours: the night answers with the hour it opens, not the app.
-        // There is nothing to go ask Silk for until then.
-        if let p = policy, p.downHours.contains(currentTimeOfDay(now)) {
-            return night(subtitle: "☾  \(p.downHours.end.display)")
-        }
-
         // Every wall also drives layer-4 of the re-lock: any shield render of
         // any app is a wake, and every wake reconciles.
+        //
+        // Ahead of the night face, and that ordering is the whole point. This
+        // used to sit below it, so for the nine hours of the default down-hours
+        // window every render returned early and layer 4 did not exist —
+        // exactly the stretch when a grant issued before the edge expires
+        // against a phone whose owner is asleep and whose Silk is not running.
+        // The face a wall shows is a rendering decision; reconciling is not,
+        // and nothing that decides what to draw may sit in front of it.
         Wall.reconcile(now: now)
 
+        // Down hours: the night answers with the hour it opens, not the app.
+        // There is nothing to go ask Silk for until then.
         guard let p = policy else { return day(subtitle: SilkStrings.openSilk) }
+        if p.downHours.contains(currentTimeOfDay(now)) {
+            return night(subtitle: "☾  \(p.downHours.end.display)")
+        }
 
         // A door with balance shows it — "Open Silk · 30 left today" is the
         // one line that says where to go ask *and* what there is to ask for.
@@ -115,9 +122,16 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
 
     override func configuration(shielding webDomain: WebDomain) -> ShieldConfiguration {
         SharedStore.recordAttempt()
+        let now = Date()
+        // A wake is a wake whatever it was that hit the wall. A domain can
+        // never open with a grant (docs/market/gaps.md #2), so this render
+        // reconciles nothing of its own — but it is still a live process with
+        // the ledger in front of it, and some other door's expiry may be
+        // sitting in it. Layer 4 is defined by the wake, not by the subject.
+        Wall.reconcile(now: now)
         // The same two faces as apps — a domain is not a door, so the day
         // face carries no balance, and the night face answers with the hour.
-        if let p = SharedStore.loadPolicy(), p.downHours.contains(currentTimeOfDay(Date())) {
+        if let p = SharedStore.loadPolicy(), p.downHours.contains(currentTimeOfDay(now)) {
             return night(subtitle: "☾  \(p.downHours.end.display)")
         }
         return day(subtitle: SilkStrings.openSilk)

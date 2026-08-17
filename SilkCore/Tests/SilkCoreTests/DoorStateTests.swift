@@ -65,6 +65,26 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
         #expect(ledger.activeGrant(for: instagram, at: now)?.expiresAt == at(7, 29, 15, 25))
     }
 
+    @Test func undoingTheLaterGrantLeavesTheEarlierOneHoldingTheDoor() {
+        // The rule `AppModel.restateRelockLayers` reads, and the reason it
+        // takes a door instead of an instant. A second ask EXTENDS a running
+        // door rather than replacing it, so taking the newer grant back is not
+        // the same as closing the door: the earlier one is still live, the wall
+        // still holds the door open, and the re-lock layers — keyed by door,
+        // not by grant — have to be re-stated to what remains rather than
+        // cleared. Cleared, the door had nothing left to shut it.
+        let now = at(7, 29, 15)
+        var ledger = GrantLedger()
+        ledger.record(grant(instagram, from: now, to: at(7, 29, 15, 10)))
+        let later = grant(instagram, from: now, to: at(7, 29, 15, 25))
+        ledger.record(later)
+
+        ledger.removeGrant(id: later.id)
+
+        #expect(ledger.activeGrant(for: instagram, at: now)?.expiresAt == at(7, 29, 15, 10))
+        #expect(ledger.openDoors(at: now, dayStart: dayStart(now)) == [instagram.id])
+    }
+
     @Test func anotherDoorsGrantIsNotThisDoorsGrant() {
         let now = at(7, 29, 15)
         var ledger = GrantLedger()

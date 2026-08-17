@@ -79,11 +79,12 @@ final class WallController {
     // MARK: - Granting
 
     /// Opens a door until `relockAt`, then arms the re-lock layers:
-    ///   1. a one-shot DeviceActivity schedule ending at expiry — or at the
-    ///      15-minute schedule floor (+30 s margin) when expiry is closer,
-    ///      because a sub-minimum interval fails to arm at all; clamped it
-    ///      fires late, and the ledger makes late harmless
-    ///   2. a staggered backup ~2 minutes after the primary
+    ///   1. a one-shot DeviceActivity schedule ending on the first minute mark
+    ///      at or after expiry — or after the 15-minute schedule floor (+30 s
+    ///      margin) when expiry is closer, because a sub-minimum interval fails
+    ///      to arm at all; clamped it fires late, and the ledger makes late
+    ///      harmless
+    ///   2. a staggered backup 2 minutes after the primary
     ///   3. a usage-threshold event at the true granted minutes, on the
     ///      door's own tokens — its failure mode is independent of the
     ///      schedules', which is the point
@@ -104,9 +105,10 @@ final class WallController {
     /// next opened by hand, which is invariant 4 read backwards.
     ///
     /// Both schedules, and not either: a schedule end carries hours and
-    /// minutes only, so the primary can fire on the minute below expiry while
-    /// the ledger still calls the grant live, and its reconcile then closes
-    /// nothing. The stagger is what clears that minute.
+    /// minutes only, and the daemon that reads them can die. `RelockWindow`
+    /// states both ends ON the minute mark the schedule will fire on, so the
+    /// primary is the one that closes the door and the stagger is what covers a
+    /// wake that never came — which is only a backstop while BOTH are armed.
     ///
     /// In the app the answer is discarded, and not because a wake is
     /// guaranteed there — `apply(.grant)` hands the phone straight to the
@@ -119,6 +121,11 @@ final class WallController {
         let now = Date.now
         let window = RelockWindow(now: now, relockAt: relockAt)
 
+        // Both ends arrive on a minute mark, so dropping the seconds here is a
+        // no-op rather than a move — which is the only reason the schedule can
+        // be trusted to fire on the far side of the expiry the ledger holds.
+        // `start` is the one that truly truncates, and downward is right for
+        // it: an interval that began a moment ago is already running.
         let cal = Calendar.current
         let start = cal.dateComponents([.hour, .minute], from: now)
         let end = cal.dateComponents([.hour, .minute], from: window.primaryEnd)

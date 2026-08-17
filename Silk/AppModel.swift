@@ -913,7 +913,10 @@ final class AppModel {
             let record: (inout GrantLedger) -> Void = { $0.record(grant) }
             record(&ledger)
             commit(reapplying: record)
-            wall.open(door: door, until: relockAt)
+            // Off the committed ledger, not off `relockAt`: `commit` may have
+            // reloaded and re-applied over another process's write, and a door
+            // that already had a longer grant running keeps ITS deadline.
+            restateRelockLayers(for: door)
             Silk.Haptic.grant()
             LaunchCatalog.open(doorName: door.name)
             return ("\(door.name) \(SilkStrings.isOpenFor) \(minutes) \(SilkStrings.minutes).",
@@ -941,10 +944,16 @@ final class AppModel {
                         // the generation moves so every other offer expires.
                         self.ledgerGeneration += 1
                         // The re-lock timers were armed for a grant that no
-                        // longer exists; disarming them is part of putting
-                        // the ledger back — but only for a restore that
-                        // landed.
-                        self.wall.stopMonitoring(door: door)
+                        // longer exists, so they have to be re-stated against
+                        // the ledger that is back — but only for a restore
+                        // that landed. Re-stated and not simply disarmed: the
+                        // two names are keyed by door, and `previous` can still
+                        // hold an EARLIER grant on this one, live and unshielded
+                        // (a second ask extends a running door rather than
+                        // replacing it). Clearing them outright there left that
+                        // grant with no layer at all — the door stayed open past
+                        // its own expiry until Silk was next opened by hand.
+                        self.restateRelockLayers(for: door)
                         return true
                     })
 
@@ -1048,7 +1057,7 @@ final class AppModel {
                 self.policy = restored
                 if !returning.isEmpty { SharedStore.save(doorSelections: selections) }
                 self.commit()
-                for door in returning { self.rearmLiveGrant(for: door) }
+                for door in returning { self.restateRelockLayers(for: door) }
                 // A policy restore has no generation to expire under: the
                 // per-field surgery above always has something true to put
                 // back, so the receipt it earns is always earned.
@@ -1647,20 +1656,39 @@ final class AppModel {
             var selections = SharedStore.loadDoorSelections()
             selections[door.id] = removedSelection
             self.commitDoorChange(policy: restored, selections: selections)
-            self.rearmLiveGrant(for: door)
+            self.restateRelockLayers(for: door)
         })
     }
 
-    /// A removal disarms the re-lock layers, so an undone removal has to arm
-    /// them again: a restored door with a grant still live in the ledger
-    /// reopens on that commit's reconcile, and without this only wake-based
-    /// layer 4 would ever shut it. (Inverse of the grant undo.) A door dropped
-    /// at the bar undoes through here too, so it comes back armed the same way
-    /// whichever path dropped it.
-    private func rearmLiveGrant(for door: Door) {
-        guard let grant = ledger.grants
-            .filter({ $0.doorID == door.id && $0.isActive(at: .now) })
-            .max(by: { $0.expiresAt < $1.expiresAt }) else { return }
+    /// State the door's re-lock layers against the ledger as it stands now.
+    ///
+    /// The one call every path that moves a grant goes through, and it takes a
+    /// door rather than an instant on purpose. The two DeviceActivity names are
+    /// keyed by door (`WallController.stopMonitoring`), and the wall shuts a
+    /// door at the LAST of its live grants to expire — `openDoors` implies it
+    /// and `activeGrant` states it. So the schedules belong to the door's
+    /// deadline, not to whichever grant a turn happened to touch, and reading
+    /// that deadline back off the ledger is the only way the armed instant and
+    /// the enforced one cannot drift apart.
+    ///
+    /// Handing it one grant's expiry instead is how a door is left with nothing
+    /// to close it. Two overlapping grants share one schedule pair, so undoing
+    /// the newer one used to disarm both names outright while the older stayed
+    /// live in the restored ledger — the reconcile keeps the door open and
+    /// nothing is left to shut it — and a second ask clamped at the night edge
+    /// can mint a grant that ends *before* one already running, pulling the
+    /// door's only schedules in ahead of the expiry the ledger will enforce.
+    /// Both wake the monitor early, find a live grant, and close nothing.
+    ///
+    /// No live grant means nothing to close, and then disarming is the whole
+    /// job: a restored ledger must leave no schedule standing behind it. Only
+    /// the schedules — every caller reaches here through a commit, and the
+    /// shield that commit reconciled is already the one the ledger asks for.
+    private func restateRelockLayers(for door: Door) {
+        guard let grant = ledger.activeGrant(for: door, at: .now) else {
+            wall.stopMonitoring(door: door)
+            return
+        }
         wall.open(door: door, until: grant.expiresAt)
     }
 

@@ -12,7 +12,7 @@ See [`docs/design/per-app-caps.md`](docs/design/per-app-caps.md).
 
 | Path | What it is |
 |---|---|
-| `SilkCore/` | The spine as a pure-Swift package: parser, number tokenizer, clause index, validator, polarity engine, grant ledger, per-app ceilings, the wait's clock and price, the launch catalogue's data. `swift test` runs on macOS — 433 tests across 64 suites (three generations of fuzz corpora, a seeded 20k-input fuzzer, see `docs/qa/`, and the wait's frame-budget bounds), no simulator needed. |
+| `SilkCore/` | The spine as a pure-Swift package: parser, number tokenizer, clause index, validator, polarity engine, grant ledger, per-app ceilings, the wait's clock and price, the launch catalogue's data. `swift test` runs on macOS — 438 tests across 65 suites (three generations of fuzz corpora, a seeded 20k-input fuzzer, see `docs/qa/`, the wait's frame-budget bounds, and the re-lock's lateness bounds), no simulator needed. |
 | `Silk/` | The app: Now, Mirror + Settings, the bar and its conversation, the compile pipeline, wall controller, the launch catalogue's one `UIApplication` call, the `Spend` App Intent, the on-device model widener. |
 | `Shared/` | The App Group bridge (`SharedStore`) and the single wall (`Wall.reconcile()`), shared with all three extensions. |
 | `SilkMonitor/` · `SilkShield/` · `SilkShieldAction/` | The Screen Time extensions: re-lock layers, the statement-only shield, the one OK button. |
