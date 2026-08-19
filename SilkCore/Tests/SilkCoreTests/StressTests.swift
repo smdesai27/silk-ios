@@ -2826,77 +2826,150 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         }
     }
 
-    /// The parser does not blow up on an input nobody meant to send.
+    /// Ten thousand words in one breath cost what the same ten thousand words
+    /// cost in ten — which is what "stays cheap" was always trying to say, and
+    /// what a parser being linear in its input MEANS.
     ///
-    /// **Rewritten from a pure stopwatch, and the reason is worth keeping.** The
-    /// original asserted `< 1 second` on the best of three runs, and it reddened
-    /// on a loaded machine — measured failing at 1.15 s, 2.11 s and 4.45 s on
-    /// three separate runs of this branch, and on untouched `main` too, with
-    /// nothing wrong with the parser and a load average of 34 on eight cores.
-    /// A best-of-three does filter a single unlucky preemption; it does nothing
-    /// at all when the machine is oversubscribed for the whole run, which is the
-    /// normal condition of a shared CI runner. The test's own comment already
-    /// named the failure mode — *"a flake that cries wolf teaches everyone to
-    /// ignore the cry"* — and then fell into it.
+    /// **Rewritten twice, and the second rewrite is the one worth reading.** The
+    /// original asserted `< 1 second` on the best of three runs and reddened on a
+    /// loaded machine — 1.15 s, 2.11 s and 4.45 s on three separate runs, on
+    /// untouched `main` too, with nothing wrong with the parser. So the sharp
+    /// assertion became a ratio. But the ratio was built the OBVIOUS way — time
+    /// 10,000 words, time 1,000, assert the result is nearer 10 than 100 — and
+    /// the obvious way flakes for a reason that is worth stating in full, because
+    /// it is not about this parser and it will come up again.
     ///
-    /// So the sharp assertion is now the **shape**, which is what "stays cheap"
-    /// was always trying to say: ten times the words must not cost anything like
-    /// a hundred times the work. That is a ratio between two measurements taken
-    /// in one run on one machine, so contention lands on both and cancels, and
-    /// unlike the stopwatch it actually distinguishes the regression that matters
-    /// — a quadratic scan over the token stream — from a busy afternoon. The
-    /// absolute bound is kept as a coarse backstop and moved to five seconds,
-    /// where it catches a catastrophe and nothing else.
+    /// `fastestPair` estimates each arm's *uncontended* cost by taking a minimum
+    /// over rounds, and a minimum only works if some round ran clean. When the
+    /// arms are different sizes the longer arm's window is proportionally less
+    /// likely to find a quiet slice, so the two arms are contended UNEQUALLY even
+    /// when interleaved — and the bias is one-directional: the numerator inflates
+    /// while the denominator does not. PR #33 measured that naive design ranging
+    /// **10.3 to 23.3** against a bound of 25 on a loaded machine and predicted it
+    /// would flake. It did: on 2026-08-12 at load average ~146 on eight cores the
+    /// scaling reached **25.9**, and the five-second backstop reached **6.0, 6.8,
+    /// 8.2, 9.6 and 17.2 seconds** — five failures in eight consecutive runs, with
+    /// nothing whatever wrong with the parser.
     ///
-    /// (`SilkCore/Tests/SilkCoreTests/WaitPerformanceTests.swift` states this
-    /// ratios-over-stopwatches reasoning at length; this is the same argument
-    /// applied to the gate that taught it.)
+    /// **So both arms do the same total work in the same-length window.** Ten
+    /// thousand words as ONE string against ten thousand words as TEN strings of a
+    /// thousand. A linear parser does identical work either way and the healthy
+    /// ratio is **1.0**; a quadratic one does ten times more on the long string,
+    /// because ten times the length is a hundred times the work spread over a
+    /// tenth as many calls. The signal is preserved and the estimator bias is
+    /// gone, because a quiet slice is now exactly as easy to find on both sides.
+    /// (`ClauseIndexCost.aHugeInputStaysLinear` reached the same design by the
+    /// same route; this is that fix applied to the gate PR #33 left behind.)
+    ///
+    /// **The numbers.** Debug, Apple silicon, best of three. Healthy sits at
+    /// **1.0**: over 20 consecutive runs on a quiet machine the ratio stayed inside
+    /// **0.976–1.033**, and over 20 runs under twelve spinning processes on eight
+    /// cores — load averages 3.6 to 74, which stretched both arms from 0.62 s to
+    /// 2.1 s, better than three times slower — it stayed inside **0.910–1.050**.
+    /// Forty runs, no failures, and the arms moved together every time. Note the
+    /// direction of what drift there is: the ratio falls slightly under load
+    /// rather than rising, which is the safe way for it to be wrong.
+    ///
+    /// And then the whole suite, 21 times: eleven quiet and ten under the same
+    /// twelve spinners, all green. Four of those landed at load averages of
+    /// **154, 554, 476 and 414** — an I/O stall on the external volume piled on
+    /// top of the spinners — which stretched `swift test` from 7 seconds to as
+    /// much as 121. Load ~146 is the condition under which the old gate failed
+    /// five runs in eight. This one does not notice it.
+    ///
+    /// Mutation-tested rather than assumed. `capSet`'s search for the first token
+    /// holding a number, rewritten to ask at every token whether the clause PREFIX
+    /// up to there holds one — the shape of a plausible "an idiom's quantity spans
+    /// several words, so read the run rather than the token" edit, identical
+    /// answers, genuinely O(n²) inside one clause — measures **9.79** and fails on
+    /// the first run. All 430 other tests stayed green under it, which is what
+    /// makes it a fair mutant: a pure performance regression that no correctness
+    /// test in this repo can see.
+    ///
+    /// So the bound is **3**, sitting between a healthy 1.05 at worst and a broken
+    /// 9.79, with roughly a factor of three either side, and its exact value is
+    /// doing no work — the property that makes it safe on hardware nobody has seen
+    /// yet. What it can and cannot see, stated honestly: at 3 it fires once the
+    /// quadratic term reaches about three times the linear one at ten thousand
+    /// words. A quadratic scan small enough to hide under that at this size is not
+    /// hiding at a hundred thousand.
+    ///
+    /// **The absolute backstop is gone, not coarsened.** It reached 17.2 s under
+    /// load with a healthy parser, so catching a catastrophe would have meant a
+    /// bound near a minute — a number that no longer distinguishes anything, since
+    /// the mutant above took **1010 seconds** on the long arm. A wall clock here
+    /// was a flake source and never a detector. The ratio is the instrument.
+    ///
+    /// A ten-thousand-word parse is still bounded by a wall clock elsewhere —
+    /// `ClauseIndexCost.theParserDoesNotPayForWhatItDoesNotAsk`, at five seconds —
+    /// but do not read that as this one's safety net. It is the SAME five seconds
+    /// on the SAME size of input, so the 6.0–17.2 s measured above applies to it
+    /// unchanged and it is a flake waiting for a loaded afternoon. It wants the
+    /// same coarsening, and it is left for the PR that owns that suite.
     @Test func hugeInputStaysCheapAndSilent() {
-        // `bestOfThree` and `fastestPair` live in `PerformanceMeasurement.swift`
-        // now — this test used to carry its own nested copies, and a third suite
-        // needing the same two instruments is what moved them. The bound is on
-        // the BEST of three runs: a wall clock charges the parser for every
-        // neighbour on the machine; a real regression slows all three runs, a
-        // busy neighbour only some. Three rounds rather than the shared default
-        // of seven because each arm here parses ten thousand words.
         func noise(words: Int) -> String {
             Array(repeating: "lorem ipsum dolor sit amet", count: words / 5).joined(separator: " ")
         }
 
+        let state = makeState()
+
+        // The "AndSilent" half, and the only thing here a wall clock is not
+        // needed for: ten thousand words carrying no door reach no rule at all
+        // and must come back silence.
         let tenThousand = noise(words: 10_000)
-        let elapsed = bestOfThree {
-            #expect(DeterministicParser.parse(tenThousand, state: makeState()) == .silence)
-        }
-        #expect(elapsed < .seconds(5), "parser catastrophically slow on 10k words: \(elapsed)")
+        #expect(DeterministicParser.parse(tenThousand, state: state) == .silence)
 
-        // The noise above carries no door, so it never builds a clause index and
+        // Both arms END IN A REAL CAP SENTENCE, and that is load-bearing. The
+        // noise above carries no door, so it never builds a clause index and
         // never reaches a cap rule — a bound that cannot see the expensive path
-        // is a bound on the wrong thing. This second case ends in a real cap
-        // sentence, so the index is built over all ten thousand words and the
-        // whole ladder runs before the answer comes back.
-        // And the shape. A thousand words through the same expensive path, so
-        // the only difference between the two measurements is the length of the
-        // input. Linear would put this at 10 and the parser measures **9.7** —
-        // it is linear. The bound is 25, which leaves room for the constant costs
-        // that do not scale and still sits far below the 100 a quadratic scan
-        // would produce.
-        let capped = tenThousand + " cap tiktok at 20 a day"
-        let thousandCapped = noise(words: 1_000) + " cap tiktok at 20 a day"
-        let (cappedElapsed, smallElapsed) = fastestPair(rounds: 3, {
-            #expect(DeterministicParser.parse(capped, state: makeState())
-                    == .command(.setDoorCap(door: tiktok, minutes: 20)))
-        }, {
-            #expect(DeterministicParser.parse(thousandCapped, state: makeState())
-                    == .command(.setDoorCap(door: tiktok, minutes: 20)))
-        })
-        #expect(cappedElapsed < .seconds(5),
-                "parser catastrophically slow on 10k words ending in a cap: \(cappedElapsed)")
+        // is a bound on the wrong thing. With the cap sentence the index is
+        // built over every word and the whole rule ladder runs before the answer
+        // comes back.
+        let cap = " cap tiktok at 20 a day"
+        let inOneBreath = tenThousand + cap
+        // Ten separately built strings rather than one string parsed ten times:
+        // the long arm walks its input out of cold memory, and a single short
+        // string read ten times would sit in cache and win the comparison on the
+        // strength of that alone.
+        let inTenBreaths = (0..<10).map { _ in noise(words: 1_000) + cap }
 
-        let scaling = ratio(cappedElapsed, to: smallElapsed)
-        #expect(scaling < 25,
+        // What the parser ANSWERS, asserted OUTSIDE the measurement. Inside, the
+        // short arm would pay for ten of Swift Testing's bookkeeping against the
+        // long arm's one — which inflates the denominator and blinds the ratio,
+        // the same estimator mistake the doc comment above is about, wearing a
+        // different hat.
+        let capped = ParseOutcome.command(.setDoorCap(door: tiktok, minutes: 20))
+        #expect(DeterministicParser.parse(inOneBreath, state: state) == capped)
+        #expect(inTenBreaths.allSatisfy { DeterministicParser.parse($0, state: state) == capped })
+
+        // The two arms really are the same amount of work — asserted, because it
+        // is the whole premise of the ratio below and a change to `noise` or to
+        // the cap sentence could quietly break it. The short arm carries the cap
+        // sentence ten times over rather than once, so it does 10,060 tokens of
+        // work against the long arm's 10,006: half a percent MORE, which biases
+        // the ratio down by half a percent and is therefore the conservative
+        // direction — it can only make a real regression harder to hide.
+        #expect(NumberParser.tokenize(inOneBreath).count == 10_006)
+        #expect(inTenBreaths.allSatisfy { NumberParser.tokenize($0).count == 1_006 })
+
+        // Three rounds rather than the shared default of seven because each arm
+        // parses ten thousand words; see `PerformanceMeasurement.swift` for why
+        // the arms are interleaved and why the estimator is a minimum.
+        var sink = 0
+        let (asOneString, asTenStrings) = fastestPair(rounds: 3, {
+            if DeterministicParser.parse(inOneBreath, state: state) != .silence { sink &+= 1 }
+        }, {
+            for piece in inTenBreaths
+            where DeterministicParser.parse(piece, state: state) != .silence { sink &+= 1 }
+        })
+        #expect(sink > 0)   // the compiler may not delete the work
+
+        let scaling = ratio(asOneString, to: asTenStrings)
+        #expect(scaling < 3,
                 """
-                ten times the words cost \(String(format: "%.1f", scaling))× the work — the \
-                parser is no longer close to linear in its input
+                ten thousand words in one string cost \(String(format: "%.2f", scaling))× what \
+                the same ten thousand cost in ten (\(asOneString) against \(asTenStrings)) — \
+                the parser is no longer linear in the length of its input
                 """)
     }
 }

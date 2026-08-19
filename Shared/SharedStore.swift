@@ -324,10 +324,24 @@ public enum SharedStore {
 /// The single wall. One store, one policy — Apple's engineers are explicit
 /// that multiple ManagedSettingsStore instances cannot relax each other.
 public enum Wall {
+    /// Computed, not stored, for the same reason `store` below is:
+    /// `ManagedSettingsStore.Name` is not `Sendable`, so a `static let` of one
+    /// is shared mutable state as far as Swift 6 is concerned. A fresh value
+    /// per call is the same name and costs a string copy.
+    public static var storeName: ManagedSettingsStore.Name { .init("silk.wall") }
+
+    /// Every store name Silk could be holding a shield in, including the one it
+    /// never means to write. A store's settings outlive the process, the
+    /// install, and the app, so the cleanup sweep has to reach further than the
+    /// name this build happens to use: `.default` is where a bare
+    /// `ManagedSettingsStore()` — a slip in Silk or in a future extension —
+    /// would have put a shield, and nothing else would ever come back for it.
+    public static var allStoreNames: Set<ManagedSettingsStore.Name> { [storeName, .default] }
+
     /// Stores with the same name share settings (documented), so a fresh
     /// instance per call is the same wall — and Sendable-clean under Swift 6.
     public static var store: ManagedSettingsStore {
-        ManagedSettingsStore(named: .init("silk.wall"))
+        ManagedSettingsStore(named: storeName)
     }
 
     /// Reconcile the wall against the ledger. Idempotent, callable from any
@@ -384,7 +398,29 @@ public enum Wall {
             guard !blocked.isEmpty else { return }
             exceptions = []
         case .value(let policy):
-            guard policy.wallEnabled else { return }
+            guard policy.wallEnabled else {
+                // Off has to mean DOWN, and down means writing it. Returning
+                // here left `shield.applications` holding exactly what the last
+                // enabled reconcile put there, and nothing else in Silk clears
+                // it — so the wall the user switched off stayed up for good,
+                // every later reconcile taking this branch and returning again.
+                //
+                // The shape of the bug from outside: she turns the wall off,
+                // the door stays shut anyway, she deletes Silk to be rid of it.
+                // The shield settings survive the delete; the extension that
+                // renders them does not. So iOS draws its own default over the
+                // app — "TikTok is restricted." — with no Screen Time
+                // restriction anywhere to explain it and no app left that could
+                // take it down. That is the factory-reset review in
+                // docs/market/gaps.md #5, reached from inside a working install.
+                //
+                // This is not the fail-closed rule bending. Rule 4 governs
+                // state that cannot be READ — the `.corrupt` branch above. Here
+                // the policy decoded and said off. Obeying it is the ledger
+                // being the truth.
+                store.clearAllSettings()
+                return
+            }
             exceptions = SharedStore.openDoorTokens(at: now, policy: policy,
                                                     selections: doorSelections)
         }

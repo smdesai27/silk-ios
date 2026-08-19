@@ -479,6 +479,12 @@ struct OnboardingView: View {
             step = .apps
             #else
             if await model.wall.requestAuthorization() {
+                // The orphan sweep, at the first moment it can take. `AppModel.init`
+                // already ran it on this launch and was not yet authorized to be
+                // obeyed; here Silk is, and no selection has been saved, so there is
+                // nothing of this install's own for it to knock down. Idempotent
+                // either way — worst case it deletes stores that are already gone.
+                model.wall.clearOrphans()
                 step = .apps
             }
             #endif

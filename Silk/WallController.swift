@@ -63,10 +63,23 @@ final class WallController {
     // MARK: - First-run hygiene
 
     /// A previous install's shield survives deletion; left standing it is how
-    /// the "I had to factory reset my iPhone" review happens. Called once, on
-    /// a launch that finds no local state. (docs/market/gaps.md #5)
+    /// the "I had to factory reset my iPhone" review happens. Called on a
+    /// launch that finds no local state, and again the moment authorization is
+    /// granted — because the first of those two is too early to work. The app
+    /// group container goes with the delete, so a reinstall reaches
+    /// `AppModel.init` with no policy and no authorization, and a process that
+    /// is not authorized is in no position to mutate the settings store. On the
+    /// one launch this method exists for, the init call is the sweep that
+    /// cannot land; the onboarding call is the one that can.
+    /// (docs/market/gaps.md #5)
     func clearOrphans() {
-        Wall.store.clearAllSettings()
+        // Delete, don't clear. `clearAllSettings()` empties a store that then
+        // still exists; `deleteStores` takes the store away — and it takes
+        // names, so it reaches a shield standing under a name this build no
+        // longer writes. Names Silk has used, never `ManagedSettingsStore.stores`:
+        // whether that set is scoped to the calling app is exactly the kind of
+        // thing to read off a device before handing it to a delete.
+        ManagedSettingsStore.deleteStores(Wall.allStoreNames)
         center.stopMonitoring()
     }
 

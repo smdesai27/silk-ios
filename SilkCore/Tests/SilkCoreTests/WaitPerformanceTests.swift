@@ -48,8 +48,9 @@ import Testing
 //
 // **Ratios wherever a ratio will do.** A wall-clock bound is a claim about the
 // machine that ran it and fails on a loaded runner for reasons that have
-// nothing to do with the code — this repo already carries one such gate
-// (`StressTests.hugeInputStaysCheapAndSilent`) and it reddens under load. A
+// nothing to do with the code — this repo carried one such gate for a long time
+// (`StressTests.hugeInputStaysCheapAndSilent`) and it reddened under load until
+// its last wall clock was removed in favour of a ratio. A
 // ratio between two measurements taken in the same run, on the same machine,
 // microseconds apart, is a claim about the code and survives the runner being
 // busy, slow, or somebody else's.
