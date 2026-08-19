@@ -229,6 +229,51 @@ private func summarise(grants: [Grant] = [],
     }
 }
 
+// MARK: - Merging
+
+@Suite struct AVerdictOnceRecordedIsNeverRevised {
+
+    private func record(_ start: Date, observed: Bool, reaches: Int = 0) -> DayRecord {
+        DayRecord(dayStart: start, grantedMinutes: 0, reaches: reaches,
+                  lateReaches: 0, observed: observed)
+    }
+
+    @Test func anExistingRecordWinsOverAFreshOneForTheSameDay() {
+        // The walk re-emits a day whenever a write did not land, so a re-walk
+        // must not be able to change a verdict already stored — the attempts
+        // blob has moved on and would summarise it differently.
+        let stored = record(day, observed: true, reaches: 3)
+        let rewalk = record(day, observed: false, reaches: 99)
+        let merged = DayLog.merge(existing: [stored], adding: [rewalk])
+        #expect(merged.count == 1)
+        #expect(merged[0].reaches == 3)
+        #expect(merged[0].observed == true)
+    }
+
+    @Test func genuinelyNewDaysAreAdded() {
+        let merged = DayLog.merge(existing: [record(day, observed: true)],
+                                  adding: [record(at(6, 11, 7), observed: true)])
+        #expect(merged.map(\.dayStart) == [day, at(6, 11, 7)])
+    }
+
+    @Test func theResultIsSortedOldestFirstWhateverOrderItArrivesIn() {
+        let merged = DayLog.merge(existing: [record(at(6, 12, 7), observed: true)],
+                                  adding: [record(at(6, 10, 7), observed: true),
+                                           record(at(6, 11, 7), observed: true)])
+        #expect(merged.map(\.dayStart) == [at(6, 10, 7), at(6, 11, 7), at(6, 12, 7)])
+    }
+
+    @Test func theStoreIsCappedAndDropsOldestFirst() {
+        let many = (0..<(DayLog.recordCap + 10)).compactMap { i -> DayRecord? in
+            cal.date(byAdding: .day, value: i, to: day).map { record($0, observed: true) }
+        }
+        let merged = DayLog.merge(existing: [], adding: many)
+        #expect(merged.count == DayLog.recordCap)
+        // The ten dropped are the ten oldest.
+        #expect(merged.first?.dayStart == cal.date(byAdding: .day, value: 10, to: day))
+    }
+}
+
 // MARK: - The walk
 
 @Suite struct TheWalkHasNoCursor {

@@ -49,19 +49,19 @@ struct SpendIntent: AppIntent {
         }
 
         var ledger = SharedStore.loadLedger()
-        var stamp = SharedStore.ledgerStamp()
+        // `let` since the day-turn sweep moved off this path: nothing between
+        // here and the grant save writes the ledger, so the stamp read here is
+        // still the one that save must compare against.
+        let stamp = SharedStore.ledgerStamp()
         let now = Date()
 
-        // The day-turn sweep lives in the app's clock, and a background-only
-        // user never runs it: this intent can be the only Silk code that
-        // executes for days, so it sweeps on its way through. Written back
-        // only when something was dropped — a quiet pass re-encodes nothing.
-        var compacted = ledger
-        compacted.compact(dayStart: DayBoundary.dayStart(now: now, downHours: policy.downHours))
-        if compacted != ledger {
-            ledger = compacted
-            stamp = SharedStore.save(ledger: ledger)
-        }
+        // The day-turn sweep USED to run here, and could not stay: at this
+        // point the validator has not run, so the intent does not yet know
+        // whether this invocation will mint a grant — and it cannot record a
+        // day's summary without knowing the wall is real. The sweep now lives
+        // on the granted path below, where a schedule has just been armed
+        // against a standing wall. Booked cost: a Shortcuts-only user who
+        // never opens Silk keeps a slightly larger ledger blob.
 
         // Idempotent: an active grant on this door is simply restated.
         if let active = ledger.grants.first(where: { $0.doorID == door.id && $0.isActive(at: now) }) {
@@ -148,6 +148,35 @@ struct SpendIntent: AppIntent {
             }
 
             Wall.reconcile(now: now)
+
+            // The day-turn sweep, moved here from ahead of the validator. This
+            // is the only point where the intent knows both things a record
+            // needs: a grant has just been minted, and a schedule armed
+            // against a wall that was standing — `arm` cannot succeed
+            // otherwise, which is what makes `wallStanding` honest here rather
+            // than assumed.
+            //
+            // Record, then compact, and only compact if every closed day
+            // recorded. A background-only user can go days without the app's
+            // clock running, so this is the one sweep those days will get; if
+            // it cannot summarise them it must not destroy them either.
+            let sweepStart = DayBoundary.dayStart(now: now, downHours: policy.downHours)
+            let sweepStamp = SharedStore.ledgerStamp()
+            let swept = SharedStore.loadLedger()
+            if SharedStore.recordClosedDays(upTo: sweepStart,
+                                            downHours: policy.downHours,
+                                            ledger: swept,
+                                            wallStanding: policy.wallEnabled) {
+                var compacted = swept
+                compacted.compact(dayStart: sweepStart)
+                // Written back only when something was dropped — a quiet pass
+                // re-encodes nothing — and stamped, as every ledger write is.
+                if compacted != swept {
+                    SharedStore.save(ledger: swept, knownStamp: sweepStamp,
+                                     applying: { $0.compact(dayStart: sweepStart) })
+                }
+            }
+
             let time = Validator.timeOfDay(relockAt, calendar: .current)
             return answer(SpendDialog.granted(door: door.name, minutes: granted, until: time))
         case .refuseDownHours(let until):

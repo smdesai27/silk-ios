@@ -205,6 +205,31 @@ public enum DayLog {
         return out
     }
 
+    /// Fold new records into the stored set, oldest first.
+    ///
+    /// **An existing record always wins.** `observed` is decided at write
+    /// time and never revised, so a re-walk — which happens whenever a write
+    /// fails to land and the set-difference walk re-emits the day — must not
+    /// be able to change a verdict already recorded. Without this the hero
+    /// stops being monotone: the same day could summarise differently on a
+    /// later pass, when the attempts blob has moved on.
+    ///
+    /// Capped like every other array in the store, dropping oldest first.
+    public static func merge(existing: [DayRecord], adding fresh: [DayRecord]) -> [DayRecord] {
+        var byDay: [Date: DayRecord] = [:]
+        for record in existing { byDay[record.dayStart] = record }
+        for record in fresh where byDay[record.dayStart] == nil {
+            byDay[record.dayStart] = record
+        }
+        var out = byDay.values.sorted { $0.dayStart < $1.dayStart }
+        if out.count > recordCap { out.removeFirst(out.count - recordCap) }
+        return out
+    }
+
+    /// How many closed days the store keeps — 2000, about 5.5 years, matching
+    /// the convention every other array in `SharedStore` follows.
+    public static let recordCap = 2000
+
     /// The hero: whole days held, over closed observed days only.
     public static func daysHeld(_ records: [DayRecord]) -> Int {
         Int(records.reduce(0.0) { $0 + $1.fraction })

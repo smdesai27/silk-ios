@@ -46,6 +46,9 @@ public enum SharedStore {
         static let firstRunAt = "silk.firstrun"                // days before it have no score
         static let keyJournal = "silk.key.journal"             // [Date] — every exception spent
         static let undoSeconds = "silk.undo.seconds"           // the take-it-back window
+        static let days = "silk.days"                          // [DayRecord] — closed days, append-only
+        static let daysRevision = "silk.days.rev"              // bumped per append
+        static let daysStamp = "silk.days.stamp"               // proof-of-read, as the ledger has
     }
 
     /// Debug/QA only: wipe everything so onboarding runs again.
@@ -56,6 +59,7 @@ public enum SharedStore {
         for key in ["silk.policy", "silk.ledger", "silk.ledger.stamp",
                     "silk.wall.selection", "silk.door.selections",
                     "silk.attempts", "silk.attempts.last", "silk.attempts.rev",
+                    "silk.days", "silk.days.rev", "silk.days.stamp",
                     "silk.pending", "silk.pending.at", "silk.pending.base",
                     "silk.proposal", "silk.firstrun",
                     "silk.key.code", "silk.key.placement", "silk.key.journal",
@@ -162,6 +166,91 @@ public enum SharedStore {
         var ledger = (ledgerStamp() == knownStamp) ? base : loadLedger()
         mutation(&ledger)
         return save(ledger: ledger)
+    }
+
+    // MARK: - Day records (the hero's history)
+
+    /// Every closed day Silk has summarised, oldest first.
+    public static func dayRecords() -> [DayRecord] {
+        (decode([DayRecord].self, key: Key.days) ?? []).sorted { $0.dayStart < $1.dayStart }
+    }
+
+    /// Moves exactly when a record is appended, so a reader can hold a
+    /// derived number until this integer says otherwise — the same contract
+    /// `attemptsRevision` offers the week chart.
+    public static func daysRevision() -> Int {
+        defaults.integer(forKey: Key.daysRevision)
+    }
+
+    /// The stamp under the current records blob. Required for the same reason
+    /// the ledger has one, and for a sharper one: the compaction gate must
+    /// read a record back before it destroys the grants that record
+    /// summarises, and `SpendIntent` in another process can rewrite the array
+    /// wholesale in between. `UserDefaults` has no compare-and-swap.
+    public static func daysStamp() -> String? {
+        defaults.string(forKey: Key.daysStamp)
+    }
+
+    @discardableResult
+    static func save(dayRecords records: [DayRecord]) -> String {
+        encode(records, key: Key.days)
+        let stamp = UUID().uuidString
+        defaults.set(stamp, forKey: Key.daysStamp)
+        defaults.set(daysRevision() &+ 1, forKey: Key.daysRevision)
+        return stamp
+    }
+
+    /// **The compaction gate.** Summarise every closed day that owes a record,
+    /// persist them, read them back, and report whether compaction may
+    /// proceed.
+    ///
+    /// > No compaction without a record.
+    ///
+    /// `GrantLedger.compact` is destructive — it drops every grant older than
+    /// the current day start — and a day whose grants are gone can never be
+    /// summarised again. So the caller must treat `false` as "do not compact":
+    /// the ledger grows slightly and the next tick self-heals, which is the
+    /// cheap side of the trade.
+    ///
+    /// Records are merged idempotently by `dayStart` and an existing record is
+    /// never overwritten — `observed` is decided at write time and never
+    /// revised, so a re-walk must not be able to change a day's verdict.
+    ///
+    /// Returns `true` when every owed boundary is present in the store after
+    /// the write, including the case where nothing was owed.
+    public static func recordClosedDays(upTo currentDayStart: Date,
+                                        downHours: DownHours,
+                                        ledger: GrantLedger,
+                                        wallStanding: Bool,
+                                        calendar: Calendar = .current) -> Bool {
+        let before = dayRecords()
+        let owed = DayLog.missingBoundaries(recorded: Set(before.map(\.dayStart)),
+                                            upTo: currentDayStart,
+                                            calendar: calendar)
+        guard !owed.isEmpty else { return true }
+
+        // The whole blob, not `attempts(since:)` — DayLog decides
+        // observability partly from whether the blob sits at its cap, and a
+        // filtered slice cannot answer that.
+        let blob = decode([Date].self, key: Key.attempts) ?? []
+        let stampAtRead = daysStamp()
+
+        let fresh = owed.map { boundary in
+            DayLog.summarise(dayStart: boundary, downHours: downHours,
+                             grants: ledger.grants, attempts: blob,
+                             wallStanding: wallStanding, calendar: calendar)
+        }
+
+        // If another process wrote between our read and now, our copy is
+        // stale and saving it wholesale would erase their records. Re-read and
+        // merge onto what stands instead.
+        let base = (daysStamp() == stampAtRead) ? before : dayRecords()
+        save(dayRecords: DayLog.merge(existing: base, adding: fresh))
+
+        // Proof, not hope: re-read and confirm. A record that did not land
+        // must hold the compaction, or its grants go with it.
+        let after = Set(dayRecords().map(\.dayStart))
+        return owed.allSatisfy { after.contains($0) }
     }
 
     // MARK: - Pending loosening (applies at next day start, or on key tap)
