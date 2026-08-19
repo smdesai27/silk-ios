@@ -40,6 +40,7 @@
 		BF536F6D32AE0FB218BF7990 /* Atmosphere.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5153837888EC82703E243C5E /* Atmosphere.swift */; };
 		C17B8DA5C889BE567F2D4AB3 /* ShieldActionExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29CD52B79915A13CAA670FF6 /* ShieldActionExtension.swift */; };
 		C1E4838873A7FCB28339D571 /* WaitLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B35D385C97ED1F1EE085C7D1 /* WaitLifecycleTests.swift */; };
+		C89DE4288AD829A5687034ED /* TurnLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD6ADCDFCF44E89DB8B2F57 /* TurnLifecycleTests.swift */; };
 		CA4E8FCF303869A243A38DA9 /* SilkShield.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 83AFCFC6FDE154FD9AF4E017 /* SilkShield.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		CC127156F7044C3E89B85579 /* WaitFramePerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52C47C7B53ABF04D0E30D6B /* WaitFramePerformanceTests.swift */; };
 		D478CBF0FE548D503C4D9F03 /* Chrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB1C355D83F2A45FDCC9520A /* Chrome.swift */; };
@@ -127,6 +128,7 @@
 		382B5C7BD5FC37F7B7734E1C /* SilkModelParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilkModelParser.swift; sourceTree = "<group>"; };
 		3A951AB92F382D74496B1D7F /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
 		3EBD012E973AE09683DBFE68 /* SilkShieldAction.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SilkShieldAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		4BD6ADCDFCF44E89DB8B2F57 /* TurnLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnLifecycleTests.swift; sourceTree = "<group>"; };
 		4D0B8D10154233A0BF5424C9 /* MirrorParts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorParts.swift; sourceTree = "<group>"; };
 		5153837888EC82703E243C5E /* Atmosphere.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atmosphere.swift; sourceTree = "<group>"; };
 		5CA53F3207E7AE5880420E33 /* SilkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilkApp.swift; sourceTree = "<group>"; };
@@ -242,6 +244,7 @@
 			isa = PBXGroup;
 			children = (
 				C3511FBC450CBBFB5B4C398D /* SpendIntentTests.swift */,
+				4BD6ADCDFCF44E89DB8B2F57 /* TurnLifecycleTests.swift */,
 				C52C47C7B53ABF04D0E30D6B /* WaitFramePerformanceTests.swift */,
 				6D0F6128C43C9EDDB8228BBD /* WaitIntentTests.swift */,
 				B35D385C97ED1F1EE085C7D1 /* WaitLifecycleTests.swift */,
@@ -610,6 +613,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7F785A486DF97251D6C757EC /* SpendIntentTests.swift in Sources */,
+				C89DE4288AD829A5687034ED /* TurnLifecycleTests.swift in Sources */,
 				CC127156F7044C3E89B85579 /* WaitFramePerformanceTests.swift in Sources */,
 				D7D1536658277CF6D6031983 /* WaitIntentTests.swift in Sources */,
 				C1E4838873A7FCB28339D571 /* WaitLifecycleTests.swift in Sources */,

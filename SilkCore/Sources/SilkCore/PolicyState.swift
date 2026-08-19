@@ -38,8 +38,42 @@ public struct Door: Hashable, Codable, Sendable, Identifiable {
         self.aliases = aliases
     }
 
-    /// All spoken forms, lowercased, for matching.
-    public var spokenForms: [String] { ([name] + aliases).map { $0.lowercased() } }
+    /// All spoken forms, lowercased, for matching: the name, whatever aliases
+    /// the door carries, and **the catalogue's own names for it**.
+    ///
+    /// That last clause is the whole of this comment. `aliases` is declared,
+    /// plumbed through here, through `DoorRoster.canAdd`, and through the
+    /// grammar's one door matcher — and no code path in the app has ever
+    /// written one. Doors are made `Door(name: display)` at both creation sites,
+    /// so every door that has ever existed on a device shipped with an empty
+    /// alias list. Meanwhile `LaunchCatalog` has always known that "ig" and
+    /// "insta" mean Instagram, that "yt" means YouTube and that "twitter" means
+    /// X — it uses those names to OPEN the app — and the parser could not see
+    /// any of them. "give me 10 minutes of ig" answered "Didn't get that.",
+    /// while `CatalogueNamesAgainstTheGrammar` passed in CI on every one of
+    /// those spellings, because the test builds its doors as
+    /// `Door(name: e.display, aliases: e.names)` and the app does not. A green
+    /// suite over a broken product, and the gap was one initializer wide.
+    ///
+    /// Fixed here rather than at the two creation sites on purpose: a door is
+    /// persisted, so a fix that only ran when a door is MADE would leave every
+    /// existing install exactly as broken as it is today and would need a
+    /// migration to reach them. Reading the catalogue at match time needs
+    /// neither. `aliases` keeps its meaning — learned shorthand, per-user,
+    /// still unwritten by anything — and the catalogue's names are the floor
+    /// under it.
+    public var spokenForms: [String] {
+        let key = name.lowercased()
+        var forms = [key]
+        for alias in aliases {
+            let a = alias.lowercased()
+            if !forms.contains(a) { forms.append(a) }
+        }
+        for known in LaunchCatalog.namesByDisplay[key] ?? [] where !forms.contains(known) {
+            forms.append(known)
+        }
+        return forms
+    }
 }
 
 /// The night window. May cross midnight (22:00 → 7:00).

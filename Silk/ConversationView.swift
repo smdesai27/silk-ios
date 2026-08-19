@@ -66,9 +66,64 @@ final class ConversationModel {
         didSet { if !focused { clear() } }
     }
 
+    /// The blur, as the conversation's own decision rather than the view's.
+    ///
+    /// Every teardown path in the app calls this instead of writing `focused`
+    /// directly, because there is one case where a blur must not land yet: a
+    /// turn still at "…". `AppModel.handle` is async and suspends twice before
+    /// it decides anything — the widener's parse and the beat — and it applies
+    /// what it decided whether or not this conversation is still on screen. With
+    /// the thread already cleared, `land` addresses an id that is gone and
+    /// swallows the receipt: the door shuts, the haptic fires, and there is no
+    /// sentence saying so and no Undo pill to take it back. "Receipts never
+    /// lie", inverted — the state moved and nothing said so — and a tighten is
+    /// the one thing canon will not let the user loosen again before tomorrow.
+    ///
+    /// So the teardown is DEFERRED by one reply, never abandoned. The keyboard
+    /// still goes down (that is the view's own business and happens either
+    /// way); only the thread stands, over the still-dimmed page, until the
+    /// receipt lands on it. The next tap finds nothing pending and clears as it
+    /// always did — a thread is still a moment and not a log.
+    ///
+    /// This is the rule the standing wait already had one beat later, and it
+    /// lives on the model for the reason that one did not: the tap-out catcher
+    /// writes this shadow directly and never passes through the view's
+    /// `onChange`, so a guard written in either place alone is a guard with a
+    /// way around it.
+    ///
+    /// It cannot hang the thread open: `handle` resolves every turn it starts
+    /// on every path — landed, dropped, or answered later by the wait — and the
+    /// widener's own deadline bounds the longest of those at two seconds
+    /// (`SilkModelParser.deadline`).
+    func blur() {
+        guard !hasPendingTurn else { return }
+        focused = false
+    }
+
     /// The `has-turns` class, as state: thread non-empty ⇒ the bar is docked
     /// even while focused (Silk Mockup.dc.html:28, 389).
     var hasTurns: Bool { !turns.isEmpty }
+
+    /// A turn still waiting on the pipeline — the one the thread is drawing as
+    /// "…" right now.
+    ///
+    /// Blur may not tear the thread down while one stands. `handle` is async
+    /// and suspends twice before it decides anything — the widener's parse and
+    /// the beat — and `apply` runs on the far side of both regardless of what
+    /// the screen did in between. With the thread cleared, `land` addresses an
+    /// id that is gone and swallows the receipt: the door shuts, the haptic
+    /// fires, and there is no sentence saying so and no Undo pill to take it
+    /// back. "Receipts never lie" inverted — the state moved and nothing said
+    /// so — and a tighten is the one thing canon will not let the user loosen
+    /// again before tomorrow.
+    ///
+    /// The standing wait already suppresses the blur for exactly this reason
+    /// (SilkApp.swift), and this is the same rule one beat earlier. The thread
+    /// is still a moment and not a log: the teardown is DEFERRED by one reply,
+    /// never abandoned, and the widener's own deadline bounds that reply at two
+    /// seconds (SilkModelParser.deadline). The next tap-out finds nothing
+    /// pending and clears as it always did.
+    var hasPendingTurn: Bool { turns.contains { $0.reply == nil } }
 
     /// The bar's rise condition — focused with nothing said yet. First send
     /// flips `hasTurns` and the bar glides home in one continuous move.
@@ -275,6 +330,32 @@ private struct TurnCell: View {
                 .opacity(dim)
                 .allowsHitTesting(false)
                 .accessibilityIdentifier("silk.turn.reply")
+                // The bar's answer, spoken. It was the one surface in the app
+                // that never announced: the only `Announcement` anywhere served
+                // a Settings wheel, so a wheel commit spoke and the feature's
+                // own primary surface did not. The reply mutates in place on a
+                // view VoiceOver is not focused on, so without this there is no
+                // speech, and on the read-back paths no haptic either — the
+                // answer simply exists somewhere, to be found by swiping.
+                //
+                // `.high` and not the default, and the reason is one line up in
+                // SilkApp: the return key's own resignation is deliberately
+                // refused for a beat, so this fires while the system keyboard is
+                // still live and a default-priority post is droppable behind
+                // typing feedback. Unguarded by `newest`, because the identity
+                // is stable — it speaks once per change, and re-speaks the "Put
+                // back." receipt, which is a receipt and deserves saying.
+                .onChange(of: turn.reply) { _, landed in
+                    guard let landed else { return }
+                    var announcement = AttributedString(landed)
+                    announcement.accessibilitySpeechAnnouncementPriority = .high
+                    AccessibilityNotification.Announcement(announcement).post()
+                }
+                // The "…" is a drawing, not a word. Named, the rotor reads
+                // "horizontal ellipsis"; hidden, the turn is simply not there
+                // yet — which is the truth, and which invents no new string
+                // (nothing outside Strings.swift may speak).
+                .accessibilityHidden(turn.reply == nil)
 
             // .ex-undo — a hairline pill, 13px, border ink-14 / paper-16 (Silk
             // Mockup.dc.html:53, 56). The label's ink-52 / paper-40 are lifted
