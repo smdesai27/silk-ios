@@ -1,28 +1,80 @@
 import SwiftUI
 import SilkCore
 
-/// Mirror: the score, the week, and the log of early applies.
+/// Mirror: the score, the week, and the log of early applies — standing in a
+/// hedgerow that is every day since install.
 ///
 /// The wordmark is absent here on purpose — Mirror is the one screen Silk does
-/// not sign. The score's pop is dusk-slate, not Now's leaf: one pop per screen,
-/// and a different one per screen.
+/// not sign.
+///
+/// Two things changed with the planting. The **loom** is gone: it drew this
+/// month as a woven rectangle in the middle of the screen and crowded the
+/// score, and the border now carries duration better than it did. And the score
+/// and the week became **one centred column** on a single 190pt axis — the
+/// ensō's own diameter — rather than a centred numeral above a band that ran
+/// the full width at 46pt margins. Nothing else about either is different.
+///
+/// At night Mirror no longer takes dusk-slate. The hedgerow is the only colour
+/// on the screen and the score reads in plain paper light, which is what let
+/// the greens go as deep as they do.
 struct MirrorView: View {
     @Environment(AppModel.self) private var model
+
+    /// How much of the planting is in. Linear on purpose — the stagger inside
+    /// `Hedgerow` is what shapes the growth, and curving it twice reads as a
+    /// lurch. 1.15s is atmosphere, so it is allowed past the 350–450ms band the
+    /// canon sets for discrete UI.
+    @State private var grown: Double = 0
+
+    /// The hedgerow's age. **`AppModel` carries no days-since-install figure**,
+    /// so this is the design's year-three planting until the ledger grows one.
+    private static let plantingAge = 600_000
 
     private var night: Bool { model.isDownHours }
 
     var body: some View {
-        VStack(spacing: 0) {
-            hero.padding(.top, 96)
-            week.padding(.top, 52)
-            Spacer(minLength: 0)
-            footnote.padding(.bottom, 110)
+        ZStack {
+            Hedgerow(count: Self.plantingAge, night: night, progress: grown)
+                .ignoresSafeArea()
+
+            // The column, centred in what is left above the key log. The seat
+            // below it is the footnote's, so "centred" means centred between the
+            // top glass and the log — not centred in the whole page, which would
+            // sit visibly low.
+            VStack(spacing: 0) {
+                cluster.frame(maxHeight: .infinity)
+                Color.clear.frame(height: 126)
+            }
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                footnote.padding(.bottom, 110)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(Silk.motion(0.45), value: model.lastClosedScore != nil)
         // 110 is measured from the glass in the mockup, the same coordinate space
         // as the bar's 44 — that is what gives the footnote its clearance.
         .ignoresSafeArea(.container, edges: .bottom)
+        // The planting comes in with the page. It is keyed to the pager and not
+        // to `onAppear`, because a `TabView(.page)` builds every page up front —
+        // `onAppear` fires for Mirror while Now is still on screen, and the whole
+        // growth would be spent before the swipe.
+        .onChange(of: model.page, initial: true) { _, page in
+            guard page == 1 else { return }
+            grown = 0
+            Task { @MainActor in
+                withAnimation(.linear(duration: 1.15)) { grown = 1 }
+            }
+        }
+    }
+
+    /// The score over the week, sharing one axis.
+    private var cluster: some View {
+        VStack(spacing: 0) {
+            hero
+            week.padding(.top, 52)
+        }
     }
 
     /// The score. A closed day's number is written once, when the day ends,
@@ -60,16 +112,19 @@ struct MirrorView: View {
     /// No equation. Earlier versions printed the formula ("82 = 100 − 12
     /// attempts − 6 late"); it was removed on purpose — how the score is
     /// calculated is not something the user needs carried on the page.
+    ///
+    /// 190 wide and centre-aligned: the band is the ensō's base, not a rule
+    /// across the page, so the label sits over its middle rather than its
+    /// leading edge.
     private var week: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(spacing: 16) {
             Text(SilkStrings.week)
                 .font(Silk.sans(12))
                 .tracking(Silk.track(0.04, 12))
                 .foregroundStyle(night ? Silk.paperAlpha(0.59) : Silk.inkAlpha(0.69))
-                .padding(.bottom, 16)
             WeekBand(closedScores: model.closedWeekScores, night: night)
         }
-        .padding(.horizontal, 46)
+        .frame(width: 190)
     }
 
     /// The key log: exceptions spent, and when the last one was.

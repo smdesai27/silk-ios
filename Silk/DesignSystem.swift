@@ -22,9 +22,16 @@ enum Silk {
     static let duskSlate = Color(red: 0.235, green: 0.310, blue: 0.361)  // #3C4F5C
     static let duskSlateNight = Color(red: 0.624, green: 0.714, blue: 0.769) // #9FB6C4
 
-    /// The score ensō carries the same hue at the alpha the handoff sets on it.
+    /// The wash behind the night hero, and nothing else — the faintest green of
+    /// the hedgerow, standing in for what was dusk blue. #607858 at 7.5%.
+    static let hedgeWash = Color(red: 0.376, green: 0.471, blue: 0.345)  // #607858
+
+    /// The score ensō. By day it carries dusk-slate at the alpha the handoff sets
+    /// on it. **At night it carries paper**: Mirror's night pop is the hedgerow
+    /// now, and a dusk-slate ring competing with the planting was the one thing
+    /// that kept the greens from going deep.
     static let scoreRing = Color(red: 0.235, green: 0.310, blue: 0.361).opacity(0.92)
-    static let scoreRingNight = Color(red: 0.620, green: 0.718, blue: 0.780).opacity(0.82)
+    static let scoreRingNight = Color(red: 0.965, green: 0.953, blue: 0.925).opacity(0.70)
 
     /// The ramps. **Text has a floor: ink .65 by day, paper .55 at night.**
     ///

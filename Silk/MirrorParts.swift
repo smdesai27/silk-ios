@@ -19,7 +19,11 @@ struct WeekBand: View {
     var closedScores: [Int?]
     var night: Bool
 
-    private var hue: Color { night ? Silk.duskSlateNight : Silk.duskSlate }
+    /// Day carries dusk-slate. Night carries paper, scaled to 0.78 so the top of
+    /// the ramp reads as a written day and not as a lamp — Mirror's night colour
+    /// is the hedgerow, and the band stays out of its way.
+    private var hue: Color { night ? Silk.paper : Silk.duskSlate }
+    private var ramp: Double { night ? 0.78 : 1 }
 
     var body: some View {
         HStack(spacing: 2) {
@@ -48,9 +52,9 @@ struct WeekBand: View {
             topTrailingRadius: trailing ? 2 : 0
         )
         if let score {
-            shape.fill(hue.opacity(Self.opacity(for: score)))
+            shape.fill(hue.opacity(Self.opacity(for: score) * ramp))
         } else {
-            shape.strokeBorder(hue.opacity(0.16), lineWidth: 1)
+            shape.strokeBorder(hue.opacity(night ? 0.14 : 0.16), lineWidth: 1)
         }
     }
 
