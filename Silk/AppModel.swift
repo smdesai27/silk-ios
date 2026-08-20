@@ -130,6 +130,11 @@ final class AppModel {
         applyPendingIfDayTurned()
         wall.reconcile()
         refreshWallStanding()
+        // Re-armed on every launch rather than once, because the daemon's
+        // activity list is not documented to survive everything that can
+        // happen to it, and arming is a restatement (it stops before it
+        // starts) rather than a second registration.
+        if onboarded { wall.armHeartbeat(downHours: policy.downHours) }
         refreshDoorIcons()
         startClock()
         #if DEBUG
@@ -158,6 +163,10 @@ final class AppModel {
         SharedStore.save(doorSelections: doorSelections)
         refreshDoorIcons(doorSelections)
         wall.reconcile()
+        // First arming: authorization has just been granted, so this is the
+        // earliest point the schedule can take. Until it fires, days record
+        // as unobserved — which is honest, not a bug.
+        wall.armHeartbeat(downHours: downHours)
         onboarded = true
     }
 
@@ -2078,6 +2087,11 @@ final class AppModel {
         guard compactedDayStart != start else { return }
         compactedDayStart = start
         syncLedgerIfStale()
+        // The day turned, which is also the one moment the heartbeat's anchor
+        // could have moved under it — down hours are the boundary. Restating
+        // it here keeps the schedule pinned to the boundary the records are
+        // being cut on.
+        wall.armHeartbeat(downHours: policy.downHours)
 
         // No compaction without a record. `compact` drops every grant older
         // than `start`, and a day whose grants are gone can never be

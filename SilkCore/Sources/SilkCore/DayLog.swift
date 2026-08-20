@@ -88,12 +88,23 @@ public enum DayLog {
     ///
     /// `wallStanding` is the caller's verdict on the two facts Core cannot
     /// see — `policy.wallEnabled` and `WallController.standing == .up`. It is
-    /// ANDed with the two this function *can* decide (span, attempts cap), so
-    /// a caller cannot accidentally promote a day Core knows is unobservable.
+    /// ANDed with the three this function *can* decide (span, attempts cap,
+    /// heartbeat), so a caller cannot accidentally promote a day Core knows is
+    /// unobservable.
+    ///
+    /// `heartbeats` are the instants the permanent daily schedule actually
+    /// fired. `standing` only says the wall is *configured*; the Screen Time
+    /// frameworks fail silently in the field for months, and a wall that is
+    /// dead and never reached is otherwise indistinguishable from a wall that
+    /// is alive and never reached — the day would score a perfect 1.000 while
+    /// the product was dead. Requiring a heartbeat inside the day converts
+    /// that from unfalsifiable to detected. It is the only liveness signal
+    /// Silk has.
     public static func summarise(dayStart: Date,
                                  downHours: DownHours,
                                  grants: [Grant],
                                  attempts: [Date],
+                                 heartbeats: [Date],
                                  wallStanding: Bool,
                                  calendar: Calendar = .current) -> DayRecord {
         let dayEnd = DayBoundary.nextDayStart(after: dayStart, calendar: calendar)
@@ -116,11 +127,19 @@ public enum DayLog {
         let truncated = attempts.count >= attemptsCap
             && (attempts.first.map { dayStart < $0 } ?? false)
 
+        // The liveness term. The schedule is anchored at the day boundary, so
+        // a day Silk was actually watching carries a firing at or just after
+        // its start. No firing means the framework was not alive for this day,
+        // whatever `standing` claims — and an unobserved day is a ring, so
+        // this fails toward crediting nothing rather than crediting a dead
+        // product at the maximum rate.
+        let alive = heartbeats.contains { $0 >= dayStart && $0 < dayEnd }
+
         return DayRecord(dayStart: dayStart,
                          grantedMinutes: grantedMinutes(grants, from: dayStart, to: dayEnd),
                          reaches: inDay.count,
                          lateReaches: late,
-                         observed: wallStanding && sane && !truncated)
+                         observed: wallStanding && sane && !truncated && alive)
     }
 
     /// The union, in minutes, of every grant interval `[issuedAt, expiresAt)`
@@ -229,6 +248,21 @@ public enum DayLog {
     /// How many closed days the store keeps — 2000, about 5.5 years, matching
     /// the convention every other array in `SharedStore` follows.
     public static let recordCap = 2000
+
+    /// The permanent daily schedule's window, anchored at the day boundary.
+    ///
+    /// One minute short of a full turn, so the interval closes and reopens
+    /// each day rather than being a single unbounded one — the reopening is
+    /// what fires `intervalDidStart`, and the firing is the liveness record.
+    ///
+    /// Lives here rather than in `WallController` because the arithmetic
+    /// borrows an hour whenever the boundary sits on the hour, which the
+    /// default policy's 07:00 does — written the naive way it collapses start
+    /// and end onto the same instant and the schedule is never a day long.
+    public static func heartbeatWindow(anchoredAt boundary: TimeOfDay)
+        -> (start: TimeOfDay, end: TimeOfDay) {
+        (boundary, TimeOfDay(minutesSinceMidnight: boundary.minutes - 1))
+    }
 
     /// The hero: whole days held, over closed observed days only.
     public static func daysHeld(_ records: [DayRecord]) -> Int {

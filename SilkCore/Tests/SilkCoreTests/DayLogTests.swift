@@ -31,12 +31,17 @@ private func grant(_ door: Door, from: Date, minutes: Int) -> Grant {
 /// A plain June day: 7:00 Jun 10 → 7:00 Jun 11, no DST anywhere near it.
 private let day = at(6, 10, 7)
 
+/// `heartbeats` defaults to one firing at the day's own boundary — a live
+/// framework — so every test that is not *about* liveness reads as before.
 private func summarise(grants: [Grant] = [],
                        attempts: [Date] = [],
+                       heartbeats: [Date]? = nil,
                        wallStanding: Bool = true,
                        dayStart: Date = day) -> DayRecord {
     DayLog.summarise(dayStart: dayStart, downHours: night, grants: grants,
-                     attempts: attempts, wallStanding: wallStanding, calendar: cal)
+                     attempts: attempts,
+                     heartbeats: heartbeats ?? [dayStart],
+                     wallStanding: wallStanding, calendar: cal)
 }
 
 // MARK: - The inversion test
@@ -226,6 +231,92 @@ private func summarise(grants: [Grant] = [],
         let ring = DayRecord(dayStart: at(6, 11, 7), grantedMinutes: 0, reaches: 0,
                              lateReaches: 0, observed: false)
         #expect(DayLog.daysHeld([held, ring, held]) == 2)
+    }
+}
+
+// MARK: - Liveness
+//
+// The defect §3.4 concedes cannot be closed by `standing` alone: a wall that is
+// dead and never reached looks exactly like a wall that is alive and never
+// reached, and the second one scores a perfect day. The heartbeat is the only
+// signal that tells them apart.
+
+@Suite struct ADeadWallDoesNotAccrue {
+
+    @Test func aQuietDayWithNoHeartbeatCreditsNothing() {
+        // The maximal-payout case: no grants, no reaches, cost 0 — which under
+        // `standing` alone is f = 1.000 every day while the product is dead.
+        let dead = summarise(heartbeats: [])
+        #expect(dead.observed == false)
+        #expect(dead.fraction == 0)
+    }
+
+    @Test func theSameQuietDayWithAHeartbeatIsAPerfectDay() {
+        #expect(summarise(heartbeats: [day]).fraction == 1)
+    }
+
+    @Test func aHeartbeatFromAnotherDayDoesNotCountForThisOne() {
+        // Yesterday's firing proves nothing about today.
+        #expect(summarise(heartbeats: [at(6, 9, 7)]).observed == false)
+        #expect(summarise(heartbeats: [at(6, 11, 7)]).observed == false)
+    }
+
+    @Test func aHeartbeatAnywhereInsideTheDayCounts() {
+        // The schedule is anchored at the boundary, but a late firing after a
+        // reboot is still a live framework.
+        #expect(summarise(heartbeats: [at(6, 10, 7)]).observed == true)
+        #expect(summarise(heartbeats: [at(6, 10, 19, 30)]).observed == true)
+        // The next boundary belongs to the next day, exclusive.
+        #expect(summarise(heartbeats: [at(6, 11, 7)]).observed == false)
+    }
+
+    @Test func livenessCannotRescueADayTheWallWasDownFor() {
+        // The terms are ANDed, not ORed — a heartbeat proves the framework
+        // ran, not that anything was being shielded.
+        #expect(summarise(heartbeats: [day], wallStanding: false).observed == false)
+    }
+
+    @Test func aDayBeforeTheHeartbeatShippedIsARingAndThatIsCorrect() {
+        // Records written by a build with no heartbeat have no firings behind
+        // them. They must read as unobserved rather than as perfect days —
+        // failing toward crediting nothing is the whole point.
+        #expect(summarise(heartbeats: []).observed == false)
+    }
+}
+
+// MARK: - The heartbeat's window
+
+@Suite struct TheDailyScheduleSpansAWholeDay {
+
+    @Test func anOnTheHourBoundaryBorrowsAnHourRatherThanCollapsing() {
+        // 07:00 is the default policy's boundary, so the naive
+        // `minute - 1` — which floors at 0 and leaves start == end — breaks
+        // the common case, not an exotic one.
+        let w = DayLog.heartbeatWindow(anchoredAt: TimeOfDay(hour: 7))
+        #expect(w.start == TimeOfDay(hour: 7, minute: 0))
+        #expect(w.end == TimeOfDay(hour: 6, minute: 59))
+        #expect(w.start != w.end)
+    }
+
+    @Test func midnightWrapsToTheNightBefore() {
+        let w = DayLog.heartbeatWindow(anchoredAt: TimeOfDay(hour: 0))
+        #expect(w.end == TimeOfDay(hour: 23, minute: 59))
+    }
+
+    @Test func anOffHourBoundaryJustStepsBack() {
+        let w = DayLog.heartbeatWindow(anchoredAt: TimeOfDay(hour: 6, minute: 30))
+        #expect(w.end == TimeOfDay(hour: 6, minute: 29))
+    }
+
+    @Test func theWindowIsAlwaysOneMinuteShortOfAFullDay() {
+        // Whatever the boundary, the interval must be long enough to be a day
+        // and short enough to close — so it reopens, and the reopening fires.
+        for m in stride(from: 0, to: 1440, by: 17) {
+            let b = TimeOfDay(minutesSinceMidnight: m)
+            let w = DayLog.heartbeatWindow(anchoredAt: b)
+            let span = (w.end.minutes - w.start.minutes + 1440) % 1440
+            #expect(span == 1439)
+        }
     }
 }
 
