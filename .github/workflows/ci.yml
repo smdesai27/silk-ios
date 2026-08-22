@@ -27,6 +27,48 @@ env:
   DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
 
 jobs:
+  # The spine again, on Linux, in parallel with the macOS job below and gating
+  # nothing. Two different questions are being asked here and only one of them
+  # is about the product.
+  #
+  # SilkCore imports Foundation and nothing else — no UIKit, no SwiftUI, and not
+  # one `#if os(...)` in sixteen thousand lines — so it builds and tests on a
+  # plain swift.org toolchain. That is worth a runner because it is the property
+  # that lets 438 of this repo's 490 test cases run somewhere that is not a Mac:
+  # a container, a Linux runner, a cloud session with no Xcode in it. This job is
+  # what keeps that true. The day someone reaches into UIKit from the spine for
+  # one convenience, this is the thing that says no — on a runner that bills at
+  # a tenth of the ones below it.
+  #
+  # It deliberately does not gate `simulator`. Silk ships to iOS, Darwin's
+  # Foundation is the one the product actually runs against, and Linux-green is
+  # a developer-velocity property rather than a correctness one. A portability
+  # break should name whoever broke it; it should not stop the iOS suites from
+  # answering.
+  #
+  # The image is pinned for the same reason DEVELOPER_DIR is: a bare `swift` tag
+  # moves without notice. Bump it when the toolchain the tree is developed
+  # against moves past it. Noble is Ubuntu 24.04 — the same floor the spine is
+  # expected to run on elsewhere.
+  spine-linux:
+    name: SilkCore (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.2-noble
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Toolchain
+        run: swift --version
+
+      # Package.swift declares platforms: [.iOS, .macOS]. That array sets minimum
+      # deployment targets for Apple platforms and is ignored everywhere else, so
+      # it neither helps nor blocks here — the package builds on Linux or it does
+      # not, purely on the strength of what it imports.
+      - name: swift test
+        working-directory: SilkCore
+        run: swift test
+
   # The spine needs no simulator and no signing — it is a plain SwiftPM package
   # that builds for macOS, so it answers in a couple of minutes and answers
   # first.
