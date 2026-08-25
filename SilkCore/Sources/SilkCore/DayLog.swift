@@ -200,25 +200,47 @@ public enum DayLog {
     /// and the hero reads 0 on day 1, which is what §2.6 specifies. This is
     /// the one place the implementation had to decide something the document
     /// does not state.
+    ///
+    /// **Only fully-elapsed days are owed.** A boundary is emitted only when
+    /// its `nextDayStart` is at or before `currentDayStart`. With a fixed
+    /// boundary the two tests are the same test — but the records chain from
+    /// the OLDEST record's time-of-day, while `currentDayStart` comes from the
+    /// LIVE `policy.downHours`, and the moment the user moves when down hours
+    /// end the two anchors disagree. `cursor < currentDayStart` alone would
+    /// then summarise an old-anchored day two hours into itself, freezing a
+    /// verdict over hours that have not happened yet ("summarised once, never
+    /// revised" makes that permanent). Requiring the whole span to have
+    /// elapsed keeps every written record honest; an old-anchored day is
+    /// simply owed a little later, at the first sweep past its true end.
+    ///
+    /// **Future-dated records never anchor.** A record whose `dayStart` is at
+    /// or past `currentDayStart` was written under a clock that has since
+    /// gone backwards (or been corrected). Anchoring on it — or letting it
+    /// satisfy the guard — would return an empty walk, and an empty walk
+    /// green-lights compaction: real days would have their grants destroyed
+    /// with no record ever written. Such records are ignored here entirely;
+    /// with none in the past, the walk bootstraps as on a fresh install.
     public static func missingBoundaries(recorded: Set<Date>,
                                          upTo currentDayStart: Date,
                                          calendar: Calendar = .current) -> [Date] {
+        let past = recorded.filter { $0 < currentDayStart }
+
         // Anchored on the OLDEST record, not the newest. Anchoring on the
         // newest would skip any gap behind it — which is a stored cursor
         // wearing a different hat, and loses exactly the day this walk exists
         // to recover.
-        guard let anchor = recorded.min() else {
+        guard let anchor = past.min() else {
             let previous = calendar.date(byAdding: .day, value: -1, to: currentDayStart)
             return previous.map { [$0] } ?? []
         }
-        guard anchor < currentDayStart else { return [] }
 
         var out: [Date] = []
         var cursor = DayBoundary.nextDayStart(after: anchor, calendar: calendar)
-        while cursor < currentDayStart && out.count < maxWalk {
-            if !recorded.contains(cursor) { out.append(cursor) }
+        while out.count < maxWalk {
             let next = DayBoundary.nextDayStart(after: cursor, calendar: calendar)
             guard next > cursor else { break }   // a boundary that cannot advance
+            guard next <= currentDayStart else { break }   // day not fully closed
+            if !past.contains(cursor) { out.append(cursor) }
             cursor = next
         }
         return out
@@ -268,4 +290,128 @@ public enum DayLog {
     public static func daysHeld(_ records: [DayRecord]) -> Int {
         Int(records.reduce(0.0) { $0 + $1.fraction })
     }
+
+    // MARK: The heartbeat log
+
+    /// How many firings the store keeps. Strictly past `recordCap` (and
+    /// `maxWalk`, which equals it) on purpose: `summarise` sets `observed`
+    /// only from a beat inside the day, so the beat log must be able to vouch
+    /// for at least as many days as a walk can ever summarise — a smaller cap
+    /// would silently ring every day older than the beats that survived.
+    public static let heartbeatCap = 2200
+
+    /// The dedupe window: firings closer together than this are the daemon
+    /// restating an interval, not a new day — unless the Silk day turned
+    /// between them, which `heartbeatLog` checks separately.
+    public static let heartbeatDedupe: TimeInterval = 3600
+
+    /// Fold a firing into the beat log, or return nil when it is a
+    /// restatement not worth a write.
+    ///
+    /// The dedupe cannot be a flat hour: `summarise` requires a beat strictly
+    /// inside `[dayStart, dayEnd)` to mark the day observed, and re-arming the
+    /// schedule on an app launch shortly before the boundary records a beat
+    /// belonging to the CLOSING day — the daemon's genuine boundary firing
+    /// then arrives within the hour and must not be swallowed, or a day the
+    /// framework was demonstrably alive for is recorded dead (`observed`
+    /// is written once and never revised). So a firing inside the window is
+    /// still recorded when it falls in a later Silk day than the last one.
+    ///
+    /// `downHours` is optional because the writer (the monitor extension)
+    /// reads it from a policy blob that can be absent; with no boundary to
+    /// consult the flat window is all there is, and it fails toward a ring —
+    /// the safe side.
+    public static func heartbeatLog(_ beats: [Date], recording now: Date,
+                                    downHours: DownHours?,
+                                    calendar: Calendar = .current) -> [Date]? {
+        if let last = beats.last, now.timeIntervalSince(last) < heartbeatDedupe {
+            // A clock that went backwards is also in here (negative interval);
+            // dropping it keeps the log ordered.
+            guard now > last, let downHours,
+                  DayBoundary.dayStart(now: now, downHours: downHours, calendar: calendar)
+                    != DayBoundary.dayStart(now: last, downHours: downHours, calendar: calendar)
+            else { return nil }
+        }
+        var out = beats
+        out.append(now)
+        if out.count > heartbeatCap { out.removeFirst(out.count - heartbeatCap) }
+        return out
+    }
+
+    // MARK: The compaction gate
+
+    /// **The compaction gate.** Summarise every closed day that owes a record,
+    /// persist it through `store`, read it back, and report whether compaction
+    /// may proceed.
+    ///
+    /// > No compaction without a record.
+    ///
+    /// Lives here — pure, over an injected store — so the write-ordering
+    /// protocol below is testable from `swift test` with a scripted
+    /// concurrent writer, which no simulator race can pin reliably.
+    ///
+    /// **The stamp is read before the data it proves.** The proof-of-read
+    /// protocol only works in one direction: stamp first, then records. Read
+    /// the other way round, a concurrent writer landing between the two
+    /// leaves the stamp already moved when it is first read, the pre-save
+    /// check then "passes" against a records array from before the write, and
+    /// the save erases the other process's records — the exact lost write the
+    /// stamp exists to prevent. Both writers synchronise on the day boundary
+    /// (the app's tick and `SpendIntent`'s sweep), so the window is
+    /// correlated, not random.
+    public static func recordClosedDays(upTo currentDayStart: Date,
+                                        downHours: DownHours,
+                                        ledger: GrantLedger,
+                                        wallStanding: Bool,
+                                        calendar: Calendar = .current,
+                                        store: any DayRecordStore) -> Bool {
+        let stampAtRead = store.daysStamp()
+        let before = store.dayRecords()
+        let owed = missingBoundaries(recorded: Set(before.map(\.dayStart)),
+                                     upTo: currentDayStart,
+                                     calendar: calendar)
+        guard !owed.isEmpty else { return true }
+
+        // The whole blob, not a filtered slice — `summarise` decides
+        // observability partly from whether the blob sits at its cap, and a
+        // filtered slice cannot answer that.
+        let blob = store.attemptsBlob()
+        let beats = store.heartbeats()
+
+        let fresh = owed.map { boundary in
+            summarise(dayStart: boundary, downHours: downHours,
+                      grants: ledger.grants, attempts: blob,
+                      heartbeats: beats,
+                      wallStanding: wallStanding, calendar: calendar)
+        }
+
+        // If another process wrote between our read and now, our copy is
+        // stale and saving it wholesale would erase their records. Re-read and
+        // merge onto what stands instead.
+        let base = (store.daysStamp() == stampAtRead) ? before : store.dayRecords()
+        store.save(dayRecords: merge(existing: base, adding: fresh))
+
+        // Proof, not hope: re-read and confirm. A record that did not land
+        // must hold the compaction, or its grants go with it.
+        let after = Set(store.dayRecords().map(\.dayStart))
+        return owed.allSatisfy { after.contains($0) }
+    }
+}
+
+/// What the compaction gate needs from persistent storage, and nothing more.
+/// `SharedStore` is the live conformance; tests script one to interleave a
+/// concurrent writer at exact points, which is how the gate's ordering
+/// protocol stays pinned from `swift test`.
+public protocol DayRecordStore {
+    /// Every closed day summarised so far, oldest first.
+    func dayRecords() -> [DayRecord]
+    /// The proof-of-read stamp under the current records blob; moves on every
+    /// save, in any process.
+    func daysStamp() -> String?
+    /// The whole attempts blob, unfiltered.
+    func attemptsBlob() -> [Date]
+    /// Every recorded firing of the permanent daily schedule.
+    func heartbeats() -> [Date]
+    /// Persist the records wholesale and move the stamp.
+    func save(dayRecords: [DayRecord])
 }

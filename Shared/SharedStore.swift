@@ -186,18 +186,18 @@ public enum SharedStore {
 
     /// Records a firing of the daily schedule.
     ///
-    /// Deduped at an hour: the schedule fires once a Silk day, so anything
-    /// closer together is the daemon restating an interval rather than a new
-    /// day, and the record only has to answer "was it alive during this day".
-    /// Runs inside a 6 MB extension, so it stays a small append and nothing
-    /// more.
+    /// Deduped at an hour — UNLESS the Silk day turned between the last beat
+    /// and this one. A launch-time re-arm shortly before the boundary records
+    /// a beat belonging to the closing day; the daemon's genuine boundary
+    /// firing arrives within the hour and must still land, or the new day is
+    /// permanently summarised dead. The rule (and the cap, sized past the
+    /// 2000-record day cap so a full walk can always be vouched for) lives in
+    /// `DayLog.heartbeatLog`, where `swift test` reaches it. Runs inside a
+    /// 6 MB extension, so it stays a decode, a small append and nothing more.
     public static func recordHeartbeat(at now: Date = Date()) {
-        var beats = heartbeats()
-        if let last = beats.last, now.timeIntervalSince(last) < 3600 { return }
-        beats.append(now)
-        // Two years of daily firings; the same shape every other array here
-        // uses, and comfortably past the 2000-record day cap.
-        if beats.count > 800 { beats.removeFirst(beats.count - 800) }
+        guard let beats = DayLog.heartbeatLog(heartbeats(), recording: now,
+                                              downHours: loadPolicy()?.downHours)
+        else { return }
         encode(beats, key: Key.heartbeats)
     }
 
@@ -256,36 +256,27 @@ public enum SharedStore {
                                         ledger: GrantLedger,
                                         wallStanding: Bool,
                                         calendar: Calendar = .current) -> Bool {
-        let before = dayRecords()
-        let owed = DayLog.missingBoundaries(recorded: Set(before.map(\.dayStart)),
-                                            upTo: currentDayStart,
-                                            calendar: calendar)
-        guard !owed.isEmpty else { return true }
+        // The gate itself — including the stamp-before-data read order its
+        // proof-of-read depends on — lives in `DayLog.recordClosedDays`,
+        // where `swift test` can pin it against a scripted concurrent writer.
+        // This is only the binding to the live container.
+        DayLog.recordClosedDays(upTo: currentDayStart, downHours: downHours,
+                                ledger: ledger, wallStanding: wallStanding,
+                                calendar: calendar, store: LiveDayRecordStore())
+    }
 
+    /// `SharedStore`'s conformance for the compaction gate, kept as a value
+    /// the gate takes rather than methods it reaches for, so the tests can
+    /// substitute a scripted store.
+    private struct LiveDayRecordStore: DayRecordStore {
+        func dayRecords() -> [DayRecord] { SharedStore.dayRecords() }
+        func daysStamp() -> String? { SharedStore.daysStamp() }
         // The whole blob, not `attempts(since:)` — DayLog decides
         // observability partly from whether the blob sits at its cap, and a
         // filtered slice cannot answer that.
-        let blob = decode([Date].self, key: Key.attempts) ?? []
-        let beats = heartbeats()
-        let stampAtRead = daysStamp()
-
-        let fresh = owed.map { boundary in
-            DayLog.summarise(dayStart: boundary, downHours: downHours,
-                             grants: ledger.grants, attempts: blob,
-                             heartbeats: beats,
-                             wallStanding: wallStanding, calendar: calendar)
-        }
-
-        // If another process wrote between our read and now, our copy is
-        // stale and saving it wholesale would erase their records. Re-read and
-        // merge onto what stands instead.
-        let base = (daysStamp() == stampAtRead) ? before : dayRecords()
-        save(dayRecords: DayLog.merge(existing: base, adding: fresh))
-
-        // Proof, not hope: re-read and confirm. A record that did not land
-        // must hold the compaction, or its grants go with it.
-        let after = Set(dayRecords().map(\.dayStart))
-        return owed.allSatisfy { after.contains($0) }
+        func attemptsBlob() -> [Date] { decode([Date].self, key: Key.attempts) ?? [] }
+        func heartbeats() -> [Date] { SharedStore.heartbeats() }
+        func save(dayRecords records: [DayRecord]) { SharedStore.save(dayRecords: records) }
     }
 
     // MARK: - Pending loosening (applies at next day start, or on key tap)

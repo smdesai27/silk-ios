@@ -433,9 +433,309 @@ private func summarise(grants: [Grant] = [],
         #expect(missing == [at(6, 9, 7)])
     }
 
-    @Test func anAnchorAheadOfTodayEmitsNothing() {
-        // A clock that went backwards must not produce a negative walk.
-        #expect(DayLog.missingBoundaries(recorded: [at(6, 20, 7)],
-                                         upTo: day, calendar: cal).isEmpty)
+    @Test func anAnchorAheadOfTodayBootstrapsRatherThanSilencingTheWalk() {
+        // A clock that went backwards must not produce a negative walk — but
+        // it must not produce an EMPTY one either: recordClosedDays reads
+        // empty-owed as "nothing to record, compact away", so a lone
+        // future-dated record (written while the clock was ahead, then
+        // corrected) would green-light destroying every real day's grants
+        // with no record ever written. With no usable past anchor the walk
+        // starts over the way a fresh install does.
+        let missing = DayLog.missingBoundaries(recorded: [at(6, 20, 7)],
+                                               upTo: day, calendar: cal)
+        #expect(missing == [at(6, 9, 7)])
+    }
+}
+
+// MARK: - The walk under a moved boundary
+//
+// The records chain from the OLDEST record's time-of-day; `upTo` comes from
+// the live policy. One sentence ("end my down hours at 9") makes them
+// disagree, and "summarised once, never revised" makes any record written in
+// that disagreement permanent — so the walk may only owe a day whose whole
+// span has already elapsed.
+
+@Suite struct TheWalkNeverOwesADayStillInProgress {
+
+    @Test func anOldAnchoredDayIsNotOwedWhileItsHoursAreStillHappening() {
+        // Records anchored at 07:00; down hours now end at 09:00. At 09:30 on
+        // Jun 23 the sweep runs with upTo = Jun 23 09:00. The old-anchored
+        // day starting Jun 23 07:00 runs until Jun 24 07:00 — ~21.5 hours of
+        // it have not happened. Owing it now would freeze a verdict over
+        // hours that do not exist yet, and inflate `fraction` toward a
+        // dead-quiet day whatever actually happens.
+        let recorded: Set<Date> = [at(6, 20, 7), at(6, 21, 7)]
+        let missing = DayLog.missingBoundaries(recorded: recorded,
+                                               upTo: at(6, 23, 9), calendar: cal)
+        #expect(missing == [at(6, 22, 7)])
+        #expect(!missing.contains(at(6, 23, 7)))
+    }
+
+    @Test func theSameDayIsOwedAtTheFirstSweepPastItsTrueEnd() {
+        // Not lost — merely late. By the next boundary's sweep the whole
+        // old-anchored span has elapsed and the record is honest.
+        let recorded: Set<Date> = [at(6, 20, 7), at(6, 21, 7), at(6, 22, 7)]
+        let missing = DayLog.missingBoundaries(recorded: recorded,
+                                               upTo: at(6, 24, 9), calendar: cal)
+        #expect(missing == [at(6, 23, 7)])
+    }
+
+    @Test func aMatchedAnchorStillOwesEveryClosedDay() {
+        // When the boundary has NOT moved, next-day-start-at-or-before-upTo
+        // and start-before-upTo are the same test — the guard must not eat a
+        // legitimate final day.
+        let missing = DayLog.missingBoundaries(recorded: [at(6, 20, 7)],
+                                               upTo: at(6, 23, 7), calendar: cal)
+        #expect(missing == [at(6, 21, 7), at(6, 22, 7)])
+    }
+
+    @Test func everyOwedDayEndsAtOrBeforeTheSweepInstant() {
+        // The invariant itself, over a moved boundary in both directions.
+        for upTo in [at(6, 23, 5), at(6, 23, 9), at(6, 23, 7)] {
+            let missing = DayLog.missingBoundaries(recorded: [at(6, 18, 7)],
+                                                   upTo: upTo, calendar: cal)
+            for owed in missing {
+                #expect(DayBoundary.nextDayStart(after: owed, calendar: cal) <= upTo)
+            }
+        }
+    }
+}
+
+// MARK: - Future-dated records
+//
+// Clock manipulation is an expected input for a screen-time lock. A record
+// written while the clock was a week ahead must not silence the walk after
+// the clock is corrected — empty-owed green-lights compaction, and compaction
+// with no record destroys the day's grants unrecoverably.
+
+@Suite struct AFutureDatedRecordDoesNotSilenceTheWalk {
+
+    @Test func futureRecordsAreIgnoredWhenAnchoringThePast() {
+        // One real record and one from the clock-ahead week: the real one
+        // anchors, the future one neither anchors nor satisfies anything.
+        let recorded: Set<Date> = [at(6, 9, 7), at(6, 20, 7)]
+        let missing = DayLog.missingBoundaries(recorded: recorded,
+                                               upTo: at(6, 12, 7), calendar: cal)
+        #expect(missing == [at(6, 10, 7), at(6, 11, 7)])
+    }
+
+    @Test func onlyFutureRecordsMeansBootstrapNotEmpty() {
+        // The fresh-install-with-clock-ahead shape: the bootstrap wrote one
+        // record for futureDay−1, the user corrected the clock. Owed must be
+        // non-empty, or every real day compacts recordless forever.
+        let missing = DayLog.missingBoundaries(recorded: [at(6, 17, 7)],
+                                               upTo: day, calendar: cal)
+        #expect(missing == [at(6, 9, 7)])
+    }
+
+    @Test func theWalkNeverEmitsAFutureBoundary() {
+        // "Refuse to write records whose dayStart is not strictly in the
+        // past" — enforced at the walk, where every written record is born.
+        for recorded in [Set<Date>(), [at(6, 1, 7)], [at(6, 25, 7)]] {
+            for owed in DayLog.missingBoundaries(recorded: recorded, upTo: day,
+                                                 calendar: cal) {
+                #expect(owed < day)
+            }
+        }
+    }
+}
+
+// MARK: - The heartbeat dedupe
+//
+// `summarise` needs a beat strictly inside the day, and a launch-time re-arm
+// shortly before the boundary records a beat for the CLOSING day. The
+// daemon's genuine boundary firing arrives within the hour; a flat 3600 s
+// window swallows it, and the new day is summarised dead — permanently,
+// because `observed` is never revised.
+
+@Suite struct ABoundaryFiringIsNeverSwallowedByTheDedupe {
+
+    @Test func theFirstBeatEverRecords() {
+        #expect(DayLog.heartbeatLog([], recording: day, downHours: night,
+                                    calendar: cal) == [day])
+    }
+
+    @Test func aRestatementInsideTheSameDayIsNotWorthAWrite() {
+        #expect(DayLog.heartbeatLog([at(6, 10, 12)], recording: at(6, 10, 12, 30),
+                                    downHours: night, calendar: cal) == nil)
+    }
+
+    @Test func anHourApartAlwaysRecords() {
+        let beats = DayLog.heartbeatLog([at(6, 10, 12)], recording: at(6, 10, 13),
+                                        downHours: night, calendar: cal)
+        #expect(beats == [at(6, 10, 12), at(6, 10, 13)])
+    }
+
+    @Test func theBoundaryFiringAfterALateLaunchReArmIsKept() {
+        // She opens Silk at 06:20 — the re-arm fires an immediate
+        // intervalDidStart, a beat belonging to the closing day. The daemon's
+        // genuine 07:00 firing lands 40 minutes later, inside the flat
+        // window, but in a NEW Silk day: it must record, because it is the
+        // only beat that can mark the new day observed.
+        let beats = DayLog.heartbeatLog([at(6, 10, 6, 20)], recording: at(6, 10, 7),
+                                        downHours: night, calendar: cal)
+        #expect(beats == [at(6, 10, 6, 20), at(6, 10, 7)])
+
+        // And it is load-bearing: without that beat the day rings.
+        let observed = summarise(heartbeats: beats ?? [])
+        let swallowed = summarise(heartbeats: [at(6, 10, 6, 20)])
+        #expect(observed.observed == true)
+        #expect(swallowed.observed == false)
+    }
+
+    @Test func withNoKnownBoundaryTheFlatWindowStands() {
+        // No policy blob to read — fail toward a ring, the safe side.
+        #expect(DayLog.heartbeatLog([at(6, 10, 6, 20)], recording: at(6, 10, 7),
+                                    downHours: nil, calendar: cal) == nil)
+    }
+
+    @Test func aClockThatWentBackwardsDoesNotDisorderTheLog() {
+        #expect(DayLog.heartbeatLog([at(6, 10, 12)], recording: at(6, 10, 11, 30),
+                                    downHours: night, calendar: cal) == nil)
+    }
+}
+
+// MARK: - The heartbeat cap
+
+@Suite struct TheBeatLogCanVouchForEveryWalkableDay {
+
+    @Test func theCapIsComfortablyPastTheDayRecordCap() {
+        // `observed` requires a beat inside the day; a walk can summarise up
+        // to `maxWalk` days at once. A beat cap smaller than that silently
+        // rings every day older than the beats that survived — the invariant
+        // the store's comment states must actually hold.
+        #expect(DayLog.heartbeatCap > DayLog.recordCap)
+        #expect(DayLog.heartbeatCap > DayLog.maxWalk)
+    }
+
+    @Test func theCapDropsOldestFirst() {
+        let full = (0..<DayLog.heartbeatCap).map {
+            day.addingTimeInterval(Double($0) * 86_400)
+        }
+        let next = full.last!.addingTimeInterval(90_000)
+        let beats = DayLog.heartbeatLog(full, recording: next,
+                                        downHours: night, calendar: cal)
+        #expect(beats?.count == DayLog.heartbeatCap)
+        #expect(beats?.first == full[1])
+        #expect(beats?.last == next)
+    }
+}
+
+// MARK: - The compaction gate's read order
+//
+// UserDefaults has no compare-and-swap; the stamp is the proof-of-read the
+// writers agree on. The proof only works read stamp-first: taken after the
+// data, a concurrent write landing between the two is invisible — the check
+// passes against a stale array, and the save erases the other process's
+// records. Both writers synchronise on the day boundary, so the race is
+// correlated, not rare.
+
+private final class ScriptedDayStore: DayRecordStore, @unchecked Sendable {
+    var records: [DayRecord]
+    var stamp: String?
+    var beats: [Date]
+    var saves = 0
+    var reads: [String] = []
+    /// Simulates another process, fired while this one decodes the blob.
+    var duringAttemptsRead: () -> Void = {}
+
+    init(records: [DayRecord] = [], beats: [Date] = []) {
+        self.records = records
+        self.beats = beats
+        self.stamp = "genesis"
+    }
+
+    func dayRecords() -> [DayRecord] {
+        reads.append("records")
+        return records.sorted { $0.dayStart < $1.dayStart }
+    }
+    func daysStamp() -> String? {
+        reads.append("stamp")
+        return stamp
+    }
+    func attemptsBlob() -> [Date] { duringAttemptsRead(); return [] }
+    func heartbeats() -> [Date] { beats }
+    func save(dayRecords: [DayRecord]) {
+        records = dayRecords
+        stamp = UUID().uuidString
+        saves += 1
+    }
+    /// What `SharedStore.save(dayRecords:)` does in the other process.
+    func concurrentWrite(_ record: DayRecord) {
+        records.append(record)
+        stamp = UUID().uuidString
+    }
+}
+
+@Suite struct TheGateCannotEraseAWriteItDidNotSee {
+
+    private func record(_ start: Date, reaches: Int, observed: Bool) -> DayRecord {
+        DayRecord(dayStart: start, grantedMinutes: 0, reaches: reaches,
+                  lateReaches: 0, observed: observed)
+    }
+
+    @Test func theStampIsReadBeforeTheDataItProves() {
+        // The direction itself. Every other stamp user reads stamp-first;
+        // read the other way the proof-of-read proves nothing.
+        let store = ScriptedDayStore(records: [record(at(6, 8, 7), reaches: 0,
+                                                      observed: true)],
+                                     beats: [at(6, 9, 7)])
+        _ = DayLog.recordClosedDays(upTo: at(6, 10, 7), downHours: night,
+                                    ledger: GrantLedger(), wallStanding: true,
+                                    calendar: cal, store: store)
+        guard let stampAt = store.reads.firstIndex(of: "stamp"),
+              let recordsAt = store.reads.firstIndex(of: "records") else {
+            Issue.record("the gate read neither stamp nor records")
+            return
+        }
+        #expect(stampAt < recordsAt)
+    }
+
+    @Test func aConcurrentSweepsRecordSurvivesAndItsVerdictStands() {
+        // The finding's exact scenario: at the boundary, SpendIntent's sweep
+        // (another process) lands yesterday's record while the app's gate is
+        // between its reads. The app must merge onto what stands — not
+        // overwrite the day with its own verdict, which "observed is never
+        // revised" forbids.
+        let store = ScriptedDayStore(records: [record(at(6, 8, 7), reaches: 0,
+                                                      observed: true)],
+                                     beats: [at(6, 9, 7)])
+        let theirs = record(at(6, 9, 7), reaches: 7, observed: false)
+        store.duringAttemptsRead = { [weak store] in
+            store?.concurrentWrite(theirs)
+            store?.duringAttemptsRead = {}   // one process, one write
+        }
+
+        let ok = DayLog.recordClosedDays(upTo: at(6, 10, 7), downHours: night,
+                                         ledger: GrantLedger(), wallStanding: true,
+                                         calendar: cal, store: store)
+        #expect(ok)
+        let jun9 = store.records.first { $0.dayStart == at(6, 9, 7) }
+        #expect(jun9?.reaches == 7)
+        #expect(jun9?.observed == false)
+    }
+
+    @Test func aFutureOnlyStoreWritesARealRecordBeforeSayingYes() {
+        // The clock-ahead bootstrap record, after correction: the gate may
+        // only answer true by landing a record for a real day — never by
+        // finding nothing owed.
+        let store = ScriptedDayStore(records: [record(at(6, 17, 7), reaches: 0,
+                                                      observed: true)])
+        let ok = DayLog.recordClosedDays(upTo: day, downHours: night,
+                                         ledger: GrantLedger(), wallStanding: true,
+                                         calendar: cal, store: store)
+        #expect(ok)
+        #expect(store.saves == 1)
+        #expect(store.records.contains { $0.dayStart == at(6, 9, 7) })
+    }
+
+    @Test func nothingOwedIsATrueWithoutAWrite() {
+        let store = ScriptedDayStore(records: [record(at(6, 9, 7), reaches: 0,
+                                                      observed: true)])
+        let ok = DayLog.recordClosedDays(upTo: at(6, 10, 7), downHours: night,
+                                         ledger: GrantLedger(), wallStanding: true,
+                                         calendar: cal, store: store)
+        #expect(ok)
+        #expect(store.saves == 0)
     }
 }
