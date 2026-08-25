@@ -155,6 +155,11 @@ struct Planting {
         var band: Int
         var t0: Double
         var isStem: Bool
+        /// How much of the 0…1 progress the unfurl takes. Leaves and stems share
+        /// the 0.40 the stagger was tuned around; blossoms are born after every
+        /// leaf and get exactly the time that remains, so they too are whole
+        /// when the settled paths take over at progress 1.
+        var window: Double = 0.40
     }
 
     var items: [Item] = []
@@ -315,8 +320,12 @@ struct Planting {
             // into a plus sign on a phone and reads as sparkle rather than flowering.
             var petals = Path()
             petals.addEllipse(in: CGRect(x: -1, y: -1, width: 2, height: 2))
+            // Born past the leaves' 0.60 cap — never with them — and unfurling
+            // in whatever remains of the run, so the latest bud is still open
+            // by the time the settled paths swap in.
+            let t0 = 0.70 + 0.22 * r()
             add(Item(path: petals, origin: CGPoint(x: x, y: y), band: 4,
-                     t0: min(0.60, 0.70 + 0.22 * r()), isStem: false))
+                     t0: t0, isStem: false, window: 1 - t0))
         }
 
         return out
@@ -325,7 +334,7 @@ struct Planting {
 
 // MARK: - The view
 
-struct Hedgerow: View {
+struct Hedgerow: View, Animatable {
     /// The lifetime metric the border reads. **Not yet wired to real data** —
     /// `AppModel` carries no days-since-install figure, so this is passed in and
     /// the default is the design's year-three planting. Lushness is
@@ -334,6 +343,15 @@ struct Hedgerow: View {
     var night: Bool
     /// 0…1. Linear from the caller; the per-leaf curve is applied here.
     var progress: Double
+
+    /// The interpolation channel. `Canvas` is not an animatable leaf and a plain
+    /// view's body sees only the endpoints of `withAnimation`, so without this
+    /// the planting snapped in fully grown — the creep never drew. Same
+    /// mechanism as `EnsoFlick`: declare the scalar, and SwiftUI walks it.
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
 
     @State private var planting = Planting()
 
@@ -376,7 +394,7 @@ struct Hedgerow: View {
         }
 
         for item in p.items {
-            let e = silkEase(min(max((progress - item.t0) / 0.40, 0), 1))
+            let e = silkEase(min(max((progress - item.t0) / item.window, 0), 1))
             if e <= 0.001 { continue }
             let alpha = Ladder.alpha[item.band] * min(1, e * 1.35)
 
