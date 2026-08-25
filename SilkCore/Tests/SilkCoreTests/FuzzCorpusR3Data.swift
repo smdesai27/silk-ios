@@ -75,7 +75,13 @@ enum FuzzCorpusR3Data {
         FuzzCorpusRow(source: "conversation", index: 63, utterance: "shes always telling me to limit tiktok to 20", stateSpec: nil, expect: "VERDICT RULE_CHANGE polarity=tighten cap[tiktok]=20"),
         FuzzCorpusRow(source: "conversation", index: 64, utterance: "everyone says i should cap tiktok at 20", stateSpec: nil, expect: "VERDICT RULE_CHANGE polarity=tighten cap[tiktok]=20"),
         FuzzCorpusRow(source: "conversation", index: 65, utterance: "my therapist thinks a limit on instagram would help", stateSpec: nil, expect: "PARSE UNPARSED-to-widener"),
-        FuzzCorpusRow(source: "conversation", index: 66, utterance: "my mom said no tiktok after 9", stateSpec: nil, expect: "VERDICT GRANT door=tiktok minutes=9 relock=+9m"),
+        // A reported refusal is not an ask, and this row pinned it granting NINE
+        // MINUTES of the app being refused — the clock hour read as a duration,
+        // out of a sentence whose only verb belongs to somebody else. SPEND now
+        // declines a door with a negator standing on it, so the sentence goes to
+        // the widener, which is the same answer conversation#54 already gets for
+        // the same shape.
+        FuzzCorpusRow(source: "conversation", index: 66, utterance: "my mom said no tiktok after 9", stateSpec: nil, expect: "PARSE UNPARSED-to-widener"),
         FuzzCorpusRow(source: "conversation", index: 67, utterance: "i told my friends id do 30 a day", stateSpec: nil, expect: "VERDICT RULE_CHANGE polarity=tighten budget=30"),
         FuzzCorpusRow(source: "conversation", index: 68, utterance: "put a cap on tiktok maybe 25 i think", stateSpec: nil, expect: "VERDICT RULE_CHANGE polarity=tighten cap[tiktok]=25"),
         FuzzCorpusRow(source: "conversation", index: 69, utterance: "put it back to 40 a day please", stateSpec: nil, expect: "VERDICT RULE_CHANGE polarity=unchanged budget=40"),

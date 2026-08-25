@@ -163,7 +163,12 @@ struct RootView: View {
                                     .onTapGesture {
                                         submittedAt = .distantPast
                                         barFocused = false
-                                        model.conversation.focused = false
+                                        // The keyboard always goes; whether the THREAD
+                                        // goes with it is the conversation's own
+                                        // decision — `blur()` holds it open while a
+                                        // turn is still at "…", so the receipt has
+                                        // somewhere to land.
+                                        model.conversation.blur()
                                     }
                                     .ignoresSafeArea()
                             }
@@ -379,8 +384,29 @@ struct RootView: View {
                     // tearing the thread down here would delete the turn the
                     // grant readback is addressed to — `land` would find no id
                     // and swallow the receipt silently.
+                    //
                     if !focused, model.waiting != nil { return }
-                    model.conversation.focused = focused
+                    // A turn still at "…" holds the thread open the same way,
+                    // one beat earlier — `blur()` is where that rule lives, so
+                    // the tap-out catcher above and this path cannot disagree
+                    // about it.
+                    if focused { model.conversation.focused = true }
+                    else { model.conversation.blur() }
+                    // The bar is the window the widener needs: focus to return
+                    // is seconds, and `prewarm` only costs the tenth of a
+                    // millisecond it takes to schedule the load. It is what
+                    // keeps the first widened sentence of a session off the
+                    // cold path — measured 591 ms warmed against 1650 ms cold.
+                    // Cooling on the way out is the other half: a session held
+                    // past the conversation is memory kept warm for nobody.
+                    let policy = model.policy
+                    Task {
+                        if focused {
+                            await SilkModelParser.shared.prewarm(state: policy)
+                        } else {
+                            await SilkModelParser.shared.cool()
+                        }
+                    }
                 }
                 // The one thing the veil cannot cover. The system keyboard is
                 // its own window and draws over every overlay Silk owns, so a

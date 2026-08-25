@@ -333,20 +333,53 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
         let proposed = [instagram.id: 15, tiktok.id: 20]
         let live = [instagram.id: 15, tiktok.id: 20, reddit.id: 30]
         let restored = Caps.restoring(previous, over: proposed, into: live)
-        #expect(restored[tiktok.id] == nil)
-        #expect(restored[reddit.id] == 30)
-        #expect(restored[instagram.id] == 15)
+        #expect(restored.caps[tiktok.id] == nil)
+        #expect(restored.caps[reddit.id] == 30)
+        #expect(restored.caps[instagram.id] == 15)
+        #expect(restored.changed)
     }
 
     @Test func aCeilingTheProposalClearedIsPutBack() {
         let previous = [tiktok.id: 20]
         let proposed: [UUID: Int] = [:]
-        #expect(Caps.restoring(previous, over: proposed, into: proposed)[tiktok.id] == 20)
+        let restored = Caps.restoring(previous, over: proposed, into: proposed)
+        #expect(restored.caps[tiktok.id] == 20)
+        #expect(restored.changed)
     }
 
     @Test func aTurnThatMovedNoCeilingRestoresNothing() {
         let caps = [tiktok.id: 20]
-        #expect(Caps.restoring(caps, over: caps, into: caps) == caps)
+        let restored = Caps.restoring(caps, over: caps, into: caps)
+        #expect(restored.caps == caps)
+        #expect(restored.changed == false, "an offer with nothing to put back reported a restore")
+    }
+
+    /// **A LATER TURN ON THE SAME DOOR OWNS IT NOW.** Two ceilings said inside
+    /// one undo window — "cap tiktok at 20", then "cap tiktok at 10" — and the
+    /// older pill is tapped. It used to write 20 over the live 10: a LOOSENING
+    /// applied instantly, which is the one thing canon forbids, from a control
+    /// that promises to undo one turn. It also destroyed the second turn's
+    /// tighten with no receipt, while that turn's own pill still stood offering
+    /// to put back 20.
+    @Test func aCeilingOverwrittenSinceIsNotPutBack() {
+        let previous: [UUID: Int] = [:]
+        let proposed = [tiktok.id: 20]     // what the first turn wrote
+        let live = [tiktok.id: 10]         // what the second turn wrote over it
+        let restored = Caps.restoring(previous, over: proposed, into: live)
+        #expect(restored.caps[tiktok.id] == 10, "the older offer loosened a newer ceiling")
+        #expect(restored.changed == false, "an expired offer reported a restore it did not make")
+    }
+
+    /// The same rule where the later hand CLEARED the ceiling instead of
+    /// lowering it: the door has no cap now because someone asked for none, and
+    /// an older offer may not put one back.
+    @Test func aCeilingClearedSinceIsNotPutBack() {
+        let previous: [UUID: Int] = [:]
+        let proposed = [tiktok.id: 20]
+        let live: [UUID: Int] = [:]
+        let restored = Caps.restoring(previous, over: proposed, into: live)
+        #expect(restored.caps[tiktok.id] == nil, "an older offer re-imposed a ceiling that was removed")
+        #expect(restored.changed == false)
     }
 }
 

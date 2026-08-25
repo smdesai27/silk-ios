@@ -14,6 +14,26 @@ import Foundation
 // Regenerating this file to make a red test green is the one edit that defeats
 // its purpose. If a change to `tokenize` is genuinely wanted, the diff here is
 // the review: it shows every sentence in the suite whose reading moved.
+//
+// MOVED ONCE, DELIBERATELY, AND BY ONE ROW: the apostrophe before a "t".
+// `tokenize` still splits on every apostrophe; "'t" alone now joins, so "don't"
+// is ["dont"] and not ["don", "t"]. That single row below is the whole diff,
+// and it is the review.
+//
+// What it bought: the negator family is spelled without the mark everywhere in
+// the grammar — dont, cant, wont, isnt, doesnt, arent, hasnt, havent, couldnt,
+// shouldnt, wouldnt, mustnt, didnt, wasnt, werent, hadnt, aint — and splitting
+// the word in half meant not one of them was reachable. "don't cap tiktok at
+// 20" therefore wrote the ceiling it refuses, while "dont cap tiktok at 20"
+// correctly fell silent, and iOS smart punctuation makes the broken spelling
+// the one users actually type.
+//
+// Two wider rules were tried here first and taken back out — deleting every
+// apostrophe, and folding a word-final "'s" to its base — and each fixed the
+// negators and broke a different word. See `NumberParser.foldingApostrophes`
+// for what they cost; this file is where you would have seen it, which is what
+// it is for.
+
 enum TokenizeGolden {
     static let pairs: [(input: String, tokens: [String])] = [
         ("Instagram", ["instagram"]),
@@ -278,7 +298,7 @@ enum TokenizeGolden {
         ("delete all my rules", ["delete", "all", "my", "rules"]),
         ("turn yourself off", ["turn", "yourself", "off"]),
         ("give me a break from instagram", ["give", "me", "a", "break", "from", "instagram"]),
-        ("don't give me instagram", ["don", "t", "give", "me", "instagram"]),
+        ("don't give me instagram", ["dont", "give", "me", "instagram"]),
         ("dont block instagram", ["dont", "block", "instagram"]),
         ("keep instagram quiet until 9", ["keep", "instagram", "quiet", "until", "9"]),
         ("im done after this, unlock everything", ["im", "done", "after", "this", "unlock", "everything"]),

@@ -183,6 +183,12 @@ private func clauseStrings(_ text: String) -> [[String]] {
     @Test func anApostropheIsNotASeparator() {
         // "tiktok's" already arrives as two tokens; they must not become two
         // clauses, or every possessive and contraction is a sentence boundary.
+        //
+        // The token shape moved here on purpose (see TokenizeGolden's header):
+        // splitting left "don't" as ["don", "t"], which matches nothing, so the
+        // apostrophe spelling of every negator in the grammar was dead and
+        // "don't cap tiktok at 20" wrote the ceiling it refuses. The clause
+        // claim below is the one this test was written for, and it is unmoved.
         let idx = Clauses("tiktok's cap")
         #expect(idx.tokens == ["tiktok", "s", "cap"])
         #expect(idx.clauseCount == 1)
