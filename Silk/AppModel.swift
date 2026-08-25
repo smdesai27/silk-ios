@@ -255,15 +255,25 @@ final class AppModel {
     /// then, labelled as today, so the screen is never scoreless.
     var lastClosedScore: Int? { closedWeekScores.last ?? nil }
 
-    /// Today's running score. Same equation as a closed day, still moving —
-    /// written in stone only when the day turns.
+    /// Today's running score. The record's own equation on the live counts —
+    /// a granted minute now costs what `DayRecord.fraction` will charge for it
+    /// when the day closes, so the number moves the moment an unlock lands
+    /// instead of flattering the day that spent. Written in stone only when
+    /// the day turns.
     var todayScore: Int {
-        weekAttemptBuckets.last.map(Self.score) ?? 100
+        let bucket = weekAttemptBuckets.last ?? (0, 0)
+        let cal = Calendar.current
+        let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
+        let granted = DayLog.grantedMinutes(ledger.grants, from: dayStart, to: dayEnd)
+        return DayLog.runningScore(grantedMinutes: granted,
+                                   reaches: bucket.attempts, lateReaches: bucket.late)
     }
 
-    /// The planned equation (canon.md: "82 = 100 − 12 attempts − 6 late"):
-    /// every attempt at the wall costs one, and an attempt during down hours
-    /// costs one more. Floor at zero — a worse day than that has no number.
+    /// The shipped equation (canon.md: "82 = 100 − 12 attempts − 6 late"),
+    /// kept ONLY as the fallback for a closed day that has no record — a day
+    /// from before the day log shipped, or one whose monitor never vouched.
+    /// It has no term for granted minutes ("the shipped inversion"); a day
+    /// with a record scores through `DayRecord.score` instead.
     private static func score(_ bucket: (attempts: Int, late: Int)) -> Int {
         max(0, 100 - bucket.attempts - bucket.late)
     }
@@ -292,19 +302,31 @@ final class AppModel {
     var closedWeekScores: [Int?] {
         let cal = Calendar.current
         let installed = SharedStore.firstRun()
+        // One decode for the whole band. An observed record is the day's
+        // number — the equation with the granted-minutes term, frozen when
+        // the day closed. The attempts bucket is only the fallback for a day
+        // no record vouches for.
+        let records = SharedStore.dayRecords()
         return weekAttemptBuckets.dropLast().enumerated().map { i, bucket in
             // Bucket i covers [dayStart - (6 - i) days, +1 day).
             guard let end = cal.date(byAdding: .day, value: i - 5, to: dayStart),
                   end > installed else { return nil }
+            if let start = cal.date(byAdding: .day, value: -1, to: end),
+               let record = records.first(where: {
+                   start <= $0.dayStart && $0.dayStart < end && $0.observed
+               }) {
+                return record.score
+            }
             return Self.score(bucket)
         }
     }
 
     /// "1 · Jul 12" — exceptions spent and when the last one was, read from the
-    /// key journal in SharedStore. Today the journal's only writer is the
-    /// in-app "Tap your key." path; the physical key will record through the
-    /// same call when it lands, and this line needs no new wiring. Zero
-    /// exceptions is a real count, so it reads "0" and no date.
+    /// key journal in SharedStore. The journal's writers are every unlock
+    /// landing (the in-app grant path and the Siri intent's) and the "Tap
+    /// your key." loosening path; the physical key will record through the
+    /// same call when it lands. Zero exceptions is a real count, so it reads
+    /// "0" and no date.
     var keyLog: String {
         if let cached = keyLogCache { return cached }
         let journal = SharedStore.keyJournal()
@@ -952,6 +974,12 @@ final class AppModel {
             // that already had a longer grant running keeps ITS deadline.
             restateRelockLayers(for: door)
             Silk.Haptic.grant()
+            // Every unlock is an exception spent, and Mirror's key line is
+            // where the count is read — so the journal takes one here, at the
+            // landing, not only on the key-tap path. Sanil's call (2026-08-25):
+            // the counter must visibly rise each time an unlock is used.
+            SharedStore.recordKeyUse()
+            keyLogCache = nil
             LaunchCatalog.open(doorName: door.name)
             return ("\(door.name) \(SilkStrings.isOpenFor) \(minutes) \(SilkStrings.minutes).",
                     { [weak self] in

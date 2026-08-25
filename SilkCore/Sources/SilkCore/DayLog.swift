@@ -49,6 +49,11 @@ public struct DayRecord: Codable, Hashable, Sendable {
         let cost = Double(grantedMinutes + reaches + lateReaches)
         return max(0, 1 - cost / DayLog.allowance)
     }
+
+    /// The day on Mirror's 0–100 scale: `fraction`, written as the number the
+    /// hero draws. One rounding, defined here, so the hero and the week band
+    /// can never disagree with the record by a point.
+    public var score: Int { Int((fraction * 100).rounded()) }
 }
 
 // MARK: - The log
@@ -61,6 +66,16 @@ public enum DayLog {
     /// derived from anything; see mirror-continuity §8.5. Provisional until
     /// calibrated against a real device day.
     public static let allowance: Double = 180
+
+    /// Today's number before the day closes: the record's own equation, taken
+    /// on the live counts. Defined beside `DayRecord.fraction` so the running
+    /// hero and the record it becomes at the day's turn are one formula — the
+    /// two can drift only by a coefficient change both would feel.
+    public static func runningScore(grantedMinutes: Int, reaches: Int,
+                                    lateReaches: Int) -> Int {
+        let cost = Double(grantedMinutes + reaches + lateReaches)
+        return Int((max(0, 1 - cost / allowance) * 100).rounded())
+    }
 
     /// The cap `recordAttempt` enforces on the attempts blob. Mirrored here
     /// because §3.5's observability rule turns on the blob being *at* it.
@@ -152,7 +167,7 @@ public enum DayLog {
     /// Rounded to nearest rather than floored: a grant crossing a boundary is
     /// split in two, and flooring both halves loses up to a minute per
     /// crossing in a direction that always flatters the user.
-    static func grantedMinutes(_ grants: [Grant], from dayStart: Date, to dayEnd: Date) -> Int {
+    public static func grantedMinutes(_ grants: [Grant], from dayStart: Date, to dayEnd: Date) -> Int {
         let clipped: [(start: Date, end: Date)] = grants.compactMap { g in
             let s = max(g.issuedAt, dayStart)
             let e = min(g.expiresAt, dayEnd)

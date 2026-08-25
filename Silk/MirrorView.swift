@@ -62,11 +62,34 @@ struct MirrorView: View {
         // growth would be spent before the swipe.
         .onChange(of: model.page, initial: true) { _, page in
             guard page == 1 else { return }
+            guard Self.earnsCeremony() else { grown = 1; return }
             grown = 0
             Task { @MainActor in
                 withAnimation(.linear(duration: 1.15)) { grown = 1 }
             }
         }
+    }
+
+    /// Whether this visit earns the grow-in. The planting used to come in on
+    /// every swipe to Mirror, and a ceremony repeated on demand reads as a
+    /// trick, not a garden — a hedge does not regrow because you looked away.
+    /// So the growth is spent: the first three visits ever play it in full
+    /// (the planting is new; let it arrive), and after that it replays only
+    /// when Mirror has not been seen for six hours — roughly a sitting, long
+    /// enough that the return reads as coming back rather than flipping pages.
+    /// Every other visit finds the border already standing. UserDefaults, not
+    /// the App Group store: this is the screen's own memory of having been
+    /// seen, no other process has any claim on it, and losing it costs one
+    /// extra ceremony. Sanil's call (2026-08-25).
+    private static func earnsCeremony(now: Date = .now) -> Bool {
+        let d = UserDefaults.standard
+        let plays = d.integer(forKey: "silk.mirror.grows")
+        let last = d.double(forKey: "silk.mirror.grown.at")
+        if plays >= 3,
+           now.timeIntervalSinceReferenceDate - last < 6 * 3600 { return false }
+        d.set(plays + 1, forKey: "silk.mirror.grows")
+        d.set(now.timeIntervalSinceReferenceDate, forKey: "silk.mirror.grown.at")
+        return true
     }
 
     /// The score over the week, sharing one axis.

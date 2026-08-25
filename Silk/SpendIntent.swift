@@ -166,6 +166,12 @@ struct SpendIntent: AppIntent {
 
             Wall.reconcile(now: now)
 
+            // The armed grant is an exception spent: Mirror's key line counts
+            // every unlock, and this background launch is an unlock nobody's
+            // screen witnessed. Same call the in-app landing and the key tap
+            // make; the app's cache re-reads on foreground.
+            SharedStore.recordKeyUse(at: now)
+
             // The day-turn sweep, moved here from ahead of the validator. This
             // is the only point where the intent knows both things a record
             // needs: a grant has just been minted, and the wall's standing was

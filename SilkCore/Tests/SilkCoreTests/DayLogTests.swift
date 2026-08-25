@@ -739,3 +739,44 @@ private final class ScriptedDayStore: DayRecordStore, @unchecked Sendable {
         #expect(store.saves == 0)
     }
 }
+
+// MARK: - The hero and the record are one formula
+
+/// Mirror's numbers come from here now: a closed day draws `DayRecord.score`,
+/// today draws `DayLog.runningScore` on the live counts. These pins hold the
+/// two to a single equation — the repair of "the shipped inversion", where a
+/// granted minute cost nothing and a day you spent outscored a day you held.
+@Suite struct TheHeroAndTheRecordAreOneFormula {
+    @Test func aRecordsScoreIsItsFractionOnTheHundredScale() {
+        let rec = summarise(grants: [grant(tiktok, from: at(6, 10, 12), minutes: 45)],
+                            attempts: [at(6, 10, 13)])
+        #expect(rec.score == Int((rec.fraction * 100).rounded()))
+        // 180 − (45 granted + 1 reach) = 134/180 → 74, not the shipped 99.
+        #expect(rec.score == 74)
+    }
+
+    @Test func theRunningScoreAgreesWithTheRecordItWillBecome() {
+        let grants = [grant(instagram, from: at(6, 10, 9), minutes: 30)]
+        let attempts = [at(6, 10, 10), at(6, 10, 23)]   // one plain, one late
+        let rec = summarise(grants: grants, attempts: attempts)
+        let running = DayLog.runningScore(
+            grantedMinutes: DayLog.grantedMinutes(grants, from: day, to: at(6, 11, 7)),
+            reaches: rec.reaches, lateReaches: rec.lateReaches)
+        #expect(running == rec.score)
+    }
+
+    @Test func aGrantedMinuteMovesTheNumberAndAResistedDayOutscoresASpentOne() {
+        let held = DayLog.runningScore(grantedMinutes: 0, reaches: 3, lateReaches: 0)
+        let spent = DayLog.runningScore(grantedMinutes: 60, reaches: 0, lateReaches: 0)
+        #expect(held > spent)   // the inversion, repaired
+    }
+
+    @Test func theFloorHoldsAtZeroForARuinousDay() {
+        #expect(DayLog.runningScore(grantedMinutes: 500, reaches: 40, lateReaches: 10) == 0)
+    }
+
+    @Test func anUnobservedDayScoresZeroThroughItsFraction() {
+        let rec = summarise(heartbeats: [], wallStanding: false)
+        #expect(rec.score == 0)
+    }
+}
