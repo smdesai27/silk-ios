@@ -334,7 +334,7 @@ struct Planting {
 
 // MARK: - The view
 
-struct Hedgerow: View, Animatable {
+struct Hedgerow: View, @MainActor Animatable {
     /// The lifetime metric the border reads. **Not yet wired to real data** —
     /// `AppModel` carries no days-since-install figure, so this is passed in and
     /// the default is the design's year-three planting. Lushness is
