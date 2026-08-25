@@ -16,6 +16,7 @@
 		42ECF7C34173F4CF8B02AC9B /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE8AE616C5B452F9B71C9309 /* OnboardingView.swift */; };
 		4432749FB254CF3A908C4E84 /* WheelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1657C506FCDDFE73884FD015 /* WheelPicker.swift */; };
 		44D77529D4F6F30068A42C1D /* MirrorParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0B8D10154233A0BF5424C9 /* MirrorParts.swift */; };
+		7E1C0A0B00001111ABCD0001 /* Hedgerow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E1C0A0B00002222ABCD0002 /* Hedgerow.swift */; };
 		49ACAB6F16F6E0A58DA185C5 /* SpendIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C417C7CA0E5D215A9487363E /* SpendIntent.swift */; };
 		4DF4A22565FFC52E7D1BFB0A /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
 		4EFC6BA6B84C4195AA795BE9 /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
@@ -130,6 +131,7 @@
 		3EBD012E973AE09683DBFE68 /* SilkShieldAction.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SilkShieldAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4BD6ADCDFCF44E89DB8B2F57 /* TurnLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnLifecycleTests.swift; sourceTree = "<group>"; };
 		4D0B8D10154233A0BF5424C9 /* MirrorParts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorParts.swift; sourceTree = "<group>"; };
+		7E1C0A0B00002222ABCD0002 /* Hedgerow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hedgerow.swift; sourceTree = "<group>"; };
 		5153837888EC82703E243C5E /* Atmosphere.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atmosphere.swift; sourceTree = "<group>"; };
 		5CA53F3207E7AE5880420E33 /* SilkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilkApp.swift; sourceTree = "<group>"; };
 		654CED2E86E7E41374DA5E0E /* EnsoPath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnsoPath.swift; sourceTree = "<group>"; };
@@ -224,6 +226,7 @@
 				C840695F3CB1140C74898A68 /* Info.plist */,
 				7A15D91F5D0F1DB70D57FE88 /* LaunchCatalog.swift */,
 				4D0B8D10154233A0BF5424C9 /* MirrorParts.swift */,
+				7E1C0A0B00002222ABCD0002 /* Hedgerow.swift */,
 				2915B4038B33955C859B21BE /* MirrorView.swift */,
 				A928E6FABAA8B87E0F4C9975 /* NowView.swift */,
 				BE8AE616C5B452F9B71C9309 /* OnboardingView.swift */,
@@ -584,6 +587,7 @@
 				E991680108C07B056D17D6B6 /* EnsoPath.swift in Sources */,
 				FC88E375AB3C3A6F905AC76D /* LaunchCatalog.swift in Sources */,
 				44D77529D4F6F30068A42C1D /* MirrorParts.swift in Sources */,
+				7E1C0A0B00001111ABCD0001 /* Hedgerow.swift in Sources */,
 				B413BC5B70A31DCA05E3E74D /* MirrorView.swift in Sources */,
 				0F34172CD5594C0E74AF23BD /* NowView.swift in Sources */,
 				42ECF7C34173F4CF8B02AC9B /* OnboardingView.swift in Sources */,

@@ -69,9 +69,14 @@ struct Dapple: View {
     ]
 }
 
-/// The night counterpart: one cool pool sitting behind the hero, so the moon
-/// and the closing hour have something to sit in. Night is not day inverted —
-/// day gets four sources, night gets one. (ds-bundle/_ds_bundle.css:59-66)
+/// The night counterpart: one pool sitting behind the hero, so the closing hour
+/// has something to sit in. Night is not day inverted — day gets four sources,
+/// night gets one. (ds-bundle/_ds_bundle.css:59-66)
+///
+/// It was dusk blue. On the blacker ground the blue was the one cool thing left
+/// in a warm room and it read as a colour cast rather than as light, so the pool
+/// is now the faintest green of the hedgerow — barely above the ground, and the
+/// same family as the planting it sits among.
 struct Moonwash: View {
     var body: some View {
         GeometryReader { geo in
@@ -80,8 +85,8 @@ struct Moonwash: View {
 
             RadialGradient(
                 stops: [
-                    .init(color: Silk.duskBlue.opacity(0.09), location: 0),
-                    .init(color: Silk.duskBlue.opacity(0), location: 0.74)
+                    .init(color: Silk.hedgeWash.opacity(0.075), location: 0),
+                    .init(color: Silk.hedgeWash.opacity(0), location: 0.74)
                 ],
                 center: .center,
                 startRadius: 0,
@@ -95,17 +100,29 @@ struct Moonwash: View {
     }
 }
 
-/// The ground itself. By day it is flat paper; at night it is a warm-cool slate
-/// radial, deliberately **not** near-black — the handoff records that pure black
-/// read as too harsh. This is the one place the night ground is not `lacquer`.
+/// The ground itself. By day it is flat paper; at night it is a warm near-black
+/// radial, below `lacquer` rather than above it.
 ///
-///   radial-gradient(580px 440px at 50% 32%, #262B32 0%, #1E2126 48%, #1A1C20 100%)
+///   radial-gradient(580px 440px at 50% 32%, #1C1913 0%, #15120C 48%, #0E0C08 100%)
+///
+/// **This reverses a recorded decision.** The handoff had settled on a warm-cool
+/// slate (#262B32 → #1A1C20) because near-black "read as too harsh", and this was
+/// the one place the night ground was not `lacquer`. It was taken blacker on
+/// request, and the harshness the handoff feared is answered differently now:
+/// Mirror's hedgerow gives night something to sit against, so the ground no
+/// longer has to carry the whole room by itself. The warmth is kept — these are
+/// lacquer's hues, not neutral black — because Silk's paper is warm and a neutral
+/// night reads as a different app.
+///
+/// The night text floors in `DesignSystem` were measured against the *old*,
+/// lighter ground. A darker ground only raises contrast for paper-on-night, so
+/// every one of them still clears; none were re-derived downward.
 struct Ground: View {
     var night: Bool
 
-    private static let high = Color(red: 0.149, green: 0.169, blue: 0.196)   // #262B32
-    private static let mid  = Color(red: 0.118, green: 0.129, blue: 0.149)   // #1E2126
-    private static let low  = Color(red: 0.102, green: 0.110, blue: 0.125)   // #1A1C20
+    private static let high = Color(red: 0.110, green: 0.098, blue: 0.075)   // #1C1913
+    private static let mid  = Color(red: 0.082, green: 0.071, blue: 0.047)   // #15120C
+    private static let low  = Color(red: 0.055, green: 0.047, blue: 0.031)   // #0E0C08
 
     var body: some View {
         GeometryReader { geo in
