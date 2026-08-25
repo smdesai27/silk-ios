@@ -132,6 +132,60 @@ final class WallController {
     /// guaranteed there — `apply(.grant)` hands the phone straight to the
     /// granted app, which suspends Silk's own clock. Refusing a spend she
     /// asked for out loud is a product decision and waits for its own change.
+    // MARK: - The heartbeat
+
+    /// Arm the permanent daily schedule — the one liveness signal Silk has.
+    ///
+    /// Every other schedule in this file is `repeats: false` and per-grant, so
+    /// a quiet day produces no monitor callback at all even when everything is
+    /// working. This one repeats, is anchored at the day boundary, and fires
+    /// `intervalDidStart` once every Silk day whenever the framework is alive.
+    /// A day with no firing behind it writes `observed: false` and draws a
+    /// ring, so a silently dead wall stops accruing a perfect score.
+    ///
+    /// **Judged as a wall change, not a Mirror change** (growth-metaphor §9
+    /// P1). Two things are unverified against real hardware and the device
+    /// test is what settles them: Apple's limit on concurrent activities, and
+    /// whether a permanent daily schedule coexists with the per-grant ones.
+    /// Both failure modes are contained — arming is idempotent, a throw is
+    /// logged and swallowed, and the cost of it never arming is that days read
+    /// unobserved rather than that anything stops locking.
+    ///
+    /// Idempotent by construction: `stopMonitoring` before `startMonitoring`,
+    /// so re-arming on every launch restates one activity rather than stacking
+    /// registrations against the concurrency limit.
+    @discardableResult
+    func armHeartbeat(downHours: DownHours) -> Bool {
+        let name = DeviceActivityName(Wall.heartbeatActivity)
+
+        // Anchored at the boundary — when down hours END — so the firing lands
+        // inside the day it vouches for, not at midnight in the middle of it.
+        // The wrap arithmetic lives in SilkCore, where `swift test` can reach
+        // it: it borrows an hour on an on-the-hour boundary, which is exactly
+        // what the default 07:00 policy is.
+        let window = DayLog.heartbeatWindow(anchoredAt: downHours.end)
+        let start = DateComponents(hour: window.start.hour, minute: window.start.minute)
+        let end = DateComponents(hour: window.end.hour, minute: window.end.minute)
+
+        center.stopMonitoring([name])
+        do {
+            try center.startMonitoring(
+                name,
+                during: DeviceActivitySchedule(intervalStart: start,
+                                               intervalEnd: end,
+                                               repeats: true)
+            )
+            Self.log.notice("heartbeat armed, anchored \(start.hour ?? -1, privacy: .public):\(start.minute ?? -1, privacy: .public) daily")
+            return true
+        } catch {
+            // Not fatal and not retried in a loop: the wall still locks, the
+            // ledger is still the truth, and the only consequence is that days
+            // cannot be proven observed. The device test reads this line.
+            Self.log.error("heartbeat failed to arm: \(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
     @discardableResult
     func arm(door: Door, until relockAt: Date) -> Bool {
         #if DEBUG

@@ -130,6 +130,11 @@ final class AppModel {
         applyPendingIfDayTurned()
         wall.reconcile()
         refreshWallStanding()
+        // Re-armed on every launch rather than once, because the daemon's
+        // activity list is not documented to survive everything that can
+        // happen to it, and arming is a restatement (it stops before it
+        // starts) rather than a second registration.
+        if onboarded { wall.armHeartbeat(downHours: policy.downHours) }
         refreshDoorIcons()
         startClock()
         #if DEBUG
@@ -158,6 +163,10 @@ final class AppModel {
         SharedStore.save(doorSelections: doorSelections)
         refreshDoorIcons(doorSelections)
         wall.reconcile()
+        // First arming: authorization has just been granted, so this is the
+        // earliest point the schedule can take. Until it fires, days record
+        // as unobserved — which is honest, not a bug.
+        wall.armHeartbeat(downHours: downHours)
         onboarded = true
     }
 
@@ -221,6 +230,23 @@ final class AppModel {
     }
 
     // MARK: - Mirror
+
+    /// **Days held** — the accumulating hero, over closed observed days only.
+    ///
+    /// Not yet on screen. `MirrorView` still draws `lastClosedScore`, and the
+    /// swap is deliberately not made here: growth-metaphor §10 puts the
+    /// re-lock device test and the daily heartbeat ahead of every drawing,
+    /// and mirror-continuity §9.5 calls `DayLog.allowance` provisional until
+    /// it is calibrated from a real device day. Reading it now means the
+    /// records accumulate from this build forward, so the calibration has
+    /// data to read when the gate opens.
+    ///
+    /// Repairs the shipped inversion: `100 − attempts − late` has no term for
+    /// granted minutes, so the current hero is strictly higher on a day you
+    /// spent than a day you resisted. This one charges a granted minute.
+    var daysHeld: Int {
+        DayLog.daysHeld(SharedStore.dayRecords())
+    }
 
     /// A day is scored once, when it closes, so the hero prefers the last
     /// closed day and holds it. `nil` before there is a closed day to read:
@@ -2061,6 +2087,33 @@ final class AppModel {
         guard compactedDayStart != start else { return }
         compactedDayStart = start
         syncLedgerIfStale()
+        // The day turned, which is also the one moment the heartbeat's anchor
+        // could have moved under it — down hours are the boundary. Restating
+        // it here keeps the schedule pinned to the boundary the records are
+        // being cut on.
+        wall.armHeartbeat(downHours: policy.downHours)
+
+        // No compaction without a record. `compact` drops every grant older
+        // than `start`, and a day whose grants are gone can never be
+        // summarised again — so every closed day must be written AND read
+        // back before anything is dropped. A boundary that fails to record
+        // holds the sweep entirely: the ledger grows slightly and the next
+        // tick self-heals, which is much the cheaper side of the trade.
+        //
+        // One guard, two compactions. The `persist(reapplying:)` below only
+        // runs if the compaction above it did, so both sit behind this.
+        guard SharedStore.recordClosedDays(
+            upTo: start,
+            downHours: policy.downHours,
+            ledger: ledger,
+            wallStanding: policy.wallEnabled && wall.standing == .up
+        ) else {
+            // Not swept. Clear the marker so the next tick retries rather
+            // than treating this day as done.
+            compactedDayStart = nil
+            return
+        }
+
         var compacted = ledger
         compacted.compact(dayStart: start)
         // Written back only when something was dropped, so a quiet day's
