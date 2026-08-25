@@ -2654,7 +2654,10 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     /// naming the budget and then stating a number is rule 3's other trigger,
     /// and it terminates on every path exactly as the period words do. (It used
     /// to be the same test — "budget" rode inside `statesAPeriod` as a bare
-    /// substring — and that is the bug `namesThePool` was split out to fix, so
+    /// substring — and that is the bug `namesThePool` was split out to fix (the
+    /// filter here is `mentionsThePool`, rule 3's actual TRIGGER, which is
+    /// wider than the ownership decision and is the set the property must
+    /// hold over), so
     /// the property has to ask both questions or it stops covering half of what
     /// it was written for.) An earlier cut let one shape fall
     /// out of its own block — past ADD/REMOVE and into SPEND — so "give me 60 a
@@ -2665,7 +2668,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     @Test func noPeriodWordSentenceEverGrants() {
         var seen = 0
         for text in Self.corpus where DeterministicParser.statesAPeriod(text)
-            || DeterministicParser.namesThePool(NumberParser.tokenize(text)) {
+            || DeterministicParser.mentionsThePool(NumberParser.tokenize(text)) {
             seen += 1
             for state in [makeState(), makeCappedState()] {
                 if case .grant(let d, let m, _) = verdict(text, state: state) {
@@ -2683,7 +2686,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     @Test func aPeriodWordSentenceCompilesToACapABudgetOrNothing() {
         var seen = 0
         for text in Self.corpus where DeterministicParser.statesAPeriod(text)
-            || DeterministicParser.namesThePool(NumberParser.tokenize(text)) {
+            || DeterministicParser.mentionsThePool(NumberParser.tokenize(text)) {
             seen += 1
             switch DeterministicParser.parse(text, state: makeState()) {
             case .silence, .command(.setDoorCap), .command(.setBudget):

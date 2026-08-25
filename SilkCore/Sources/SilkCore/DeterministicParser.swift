@@ -232,8 +232,10 @@ public enum DeterministicParser {
             // shared pool instantly, answered "20 left today.", and never
             // opened TikTok. A sentence that merely mentions budgeting states
             // no new allowance; it terminates here, and silence reaches the
-            // widener, which can read it as the spend it is.
-            if mentionsThePool(tokens), namesThePool(tokens) {
+            // widener, which can read it as the spend it is. Ownership is
+            // clause-scoped — see `namesThePool` for the mirrored order and
+            // the idiom that each defeated the pure position test.
+            if mentionsThePool(tokens), namesThePool(clauses()) {
                 return .command(.setBudget(minutes: n))
             }
             // A sentence that merely MENTIONS budgeting states no new
@@ -777,31 +779,48 @@ public enum DeterministicParser {
     /// rather than as a token (contrast `periodPhrase`, which is token-shaped
     /// precisely so that "today" is not "a day").
     ///
-    /// The pool's own sentence puts its number AFTER the pool noun, because
-    /// that is what stating a new value looks like in English: "budget of 40",
-    /// "set the budget to 25", "my tiktok budget should be 25", "i want a
-    /// budget of 40". A sentence whose number comes first is a sentence about
-    /// something else with budgeting mentioned afterwards, and the number
-    /// belongs to whatever asked for it.
+    /// The pool's own sentence puts its number AFTER the pool noun — and IN
+    /// THE POOL NOUN'S OWN BREATH — because that is what stating a new value
+    /// looks like in English: "budget of 40", "set the budget to 25", "my
+    /// tiktok budget should be 25", "i want a budget of 40". A sentence whose
+    /// number comes first is a sentence about something else with budgeting
+    /// mentioned afterwards, and the number belongs to whatever asked for it.
+    ///
+    /// POSITION ALONE WAS NOT ENOUGH, and the sentence that proved it is the
+    /// mirror of the one this function was written to fix: "im on a budget,
+    /// give me 20 of tiktok" puts the pool noun BEFORE the number — in a
+    /// different clause, attached to a different thought — and a pure order
+    /// test handed the 20 to the pool. Same cut, same instant tighten, same
+    /// silent non-opening as the forward order, surviving in exactly the
+    /// "[budget excuse], [spend ask]" shape people actually type. So the pool
+    /// owns the number only when it stands before it in the SAME clause; a
+    /// noun in another breath is commentary, and the sentence falls to the
+    /// guards below like every other period-word sentence.
     ///
     /// A number that occupies NO token — the idioms, where "my budget is an
-    /// hour" carries its 60 in no digit anywhere — cannot be placed, and is
-    /// read as the pool's: there is no competing claim on a quantity nothing
-    /// in the sentence spells.
+    /// hour" carries its 60 in no digit anywhere — is anchored at the idiom's
+    /// own "hour", which every idiom in `allNumbers`' table contains. The
+    /// first draft skipped the anchor and answered "the pool's" whenever no
+    /// token parsed as a number, on the theory that a quantity nothing spells
+    /// has no competing claim — and the competing claim was the spend ask
+    /// standing right on it: "give me an hour of tiktok, im on a budget"
+    /// resurrected the fixed defect through the idiom door, in the exact
+    /// forward order the tests pin for digits.
     ///
-    /// Tokens, not clauses, on purpose: rule 3 asks this of every sentence
-    /// carrying the word, and the clause index is built only for rules that
-    /// need it (see `clauses()` on why a sentence that never asks a clause
-    /// question never pays for the answer).
+    /// Takes the clause index rather than bare tokens because the clause
+    /// question cannot be answered after `tokenize` has erased the commas;
+    /// rule 3 builds the index only when the pool stem is present, so the
+    /// sentences that never mention it never pay (see `clauses()`).
     /// `internal` for the same reason `statesAPeriod` is: the invariant suite
     /// asks the parser the same question the parser asks, and a restated copy in
     /// the tests would drift away from the rule it claims to prove.
-    static func namesThePool(_ tokens: [String]) -> Bool {
+    static func namesThePool(_ index: NumberParser.ClauseIndex) -> Bool {
+        let tokens = index.tokens
         guard let pool = tokens.firstIndex(of: "budget") else { return false }
-        guard let firstNumber = tokens.firstIndex(where: {
-            !NumberParser.allNumbers(in: $0).isEmpty
-        }) else { return true }
-        return pool < firstNumber
+        let anchor = tokens.firstIndex(where: { !NumberParser.allNumbers(in: $0).isEmpty })
+            ?? tokens.firstIndex(of: "hour")
+        guard let anchor else { return true }
+        return pool < anchor && index.sameClause(pool, anchor)
     }
 
     /// Whether one token could stand inside a ceiling's own noun phrase. See
@@ -1845,10 +1864,19 @@ public enum DeterministicParser {
             // An hours unit must stand ON the number, and the question is asked
             // of `NumberParser` rather than answered again here — a guard that
             // reads a token differently from the reader it guards is a guard
-            // with a hole in it, and this one had it: an inline "is the next
-            // token an hour word" could not see the glued "2h" that
-            // `allNumbers` reads as 120.
-            if NumberParser.statesAnHour(i + 1 < clause.upperBound ? t[i + 1] : nil) {
+            // with a hole in it, and this one had it twice. The inline set it
+            // kept before lacked the spaced "h" that `allNumbers` reads, so
+            // "cap tiktok at 2 h" was 120 to the reader and invisible to the
+            // guard. (NOT the glued "2h", as an earlier draft of this comment
+            // claimed — glued units are deliberately read by neither side; see
+            // `hourUnits`.) And a one-token lookahead could not see through an
+            // intensifier the reader now reads through: "cap tiktok at 2 whole
+            // hours" was 120 to `allNumbers` and bare 2 to the guard, a
+            // two-hour ceiling written in the vocabulary this arm declines.
+            // Passing the following tokens — bounded by the clause, at most
+            // the intensifier and the unit — keeps the pair one reading.
+            if NumberParser.statesAnHour(
+                following: t[min(i + 1, clause.upperBound)..<min(i + 3, clause.upperBound)]) {
                 return true
             }
             // A clock word may hang off a preposition ("cap tiktok at 10 in the
@@ -1901,17 +1929,29 @@ public enum DeterministicParser {
     /// those go to the widener, which is the safe direction: the Validator's
     /// provenance still bounds whatever comes back, and a grant out of a
     /// refusal cannot be taken back.
+    ///
+    /// **EVERY occurrence of the door is inspected, not the first.** The scan
+    /// used to stop at `t.indices.first(where:)`, so any earlier un-negated
+    /// mention shadowed the refusal standing on a later one: "im addicted to
+    /// tiktok, no tiktok for 20 minutes" and "i love tiktok but no tiktok for
+    /// 20 minutes" both opened the door and debited the pool — the grant out
+    /// of a refusal this guard exists to close, reachable through the most
+    /// natural spelling there is, a reason before the rule. A negator on ANY
+    /// occurrence silences; the sentence where one mention is refused and
+    /// another asked is a refusal and an ask sharing a sentence, which is the
+    /// widener's by the paragraph above.
     private static func aRefusalNamesTheDoor(_ d: Door, _ index: NumberParser.ClauseIndex,
                                              state: PolicyState) -> Bool {
         let t = index.tokens
-        guard let doorAt = t.indices.first(where: { i in
-            door(t[i], in: state)?.id == d.id
-                || (i + 1 < t.count && door(t[i] + " " + t[i + 1], in: state)?.id == d.id)
-        }), let clause = index.clauseRange(containing: doorAt) else { return false }
-        var head = doorAt
-        while head > clause.lowerBound, determiners.contains(t[head - 1]) { head -= 1 }
-        guard head > clause.lowerBound else { return false }
-        return nounNegators.contains(t[head - 1])
+        for doorAt in t.indices where door(t[doorAt], in: state)?.id == d.id
+            || (doorAt + 1 < t.count && door(t[doorAt] + " " + t[doorAt + 1], in: state)?.id == d.id) {
+            guard let clause = index.clauseRange(containing: doorAt) else { continue }
+            var head = doorAt
+            while head > clause.lowerBound, determiners.contains(t[head - 1]) { head -= 1 }
+            guard head > clause.lowerBound else { continue }
+            if nounNegators.contains(t[head - 1]) { return true }
+        }
+        return false
     }
 
     private static func spendClauseFunds(_ d: Door, _ index: NumberParser.ClauseIndex,
@@ -1943,13 +1983,21 @@ public enum DeterministicParser {
     /// door. Rule 3's last guard, and the reason the pool does not move on a
     /// sentence about one app.
     ///
-    /// A number with no token position — an idiom's — cannot be placed in a
-    /// clause, so this answers no and the sentence keeps today's budget reading.
+    /// A number with no token position — an idiom's — is anchored at the
+    /// idiom's own "hour", exactly as `namesThePool` anchors it. This guard
+    /// used to answer no for the idioms on the theory that their quantity
+    /// cannot be placed, and the theory cost the sentence it was written for:
+    /// "give me an hour of tiktok, im on a budget" lost the pool shortcut
+    /// (rightly), fell here, was waved past the door guard, and the fallback
+    /// set the shared allowance to 60 out of a spend ask. The idiom's hour
+    /// stands in a clause like any other token, and the clause it stands in
+    /// names TikTok.
     private static func numberClauseNamesADoor(_ index: NumberParser.ClauseIndex,
                                                state: PolicyState) -> Bool {
         let t = index.tokens
-        guard let at = t.indices.first(where: { !NumberParser.allNumbers(in: t[$0]).isEmpty }),
-              let clause = index.clauseRange(containing: at)
+        let at = t.indices.first(where: { !NumberParser.allNumbers(in: t[$0]).isEmpty })
+            ?? t.firstIndex(of: "hour")
+        guard let at, let clause = index.clauseRange(containing: at)
         else { return false }
         if case .none = doors(in: clause, of: index, state: state) { return false }
         return true

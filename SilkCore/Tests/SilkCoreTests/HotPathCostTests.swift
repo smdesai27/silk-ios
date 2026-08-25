@@ -159,3 +159,39 @@ private let sentence = "give me 20 minutes of instagram"
         }
     }
 }
+
+/// **THE VALIDATOR IS ON THE COST BUDGET TOO.** Every huge-input bound in the
+/// package stops at `DeterministicParser.parse` — `hugeInputStaysCheapAndSilent`
+/// and `aHugeInputStaysLinear` never call `Validator.validate` — and the gap
+/// was not hypothetical: `statedTimes` re-ran `statedTime` on the utterance
+/// with one leading token dropped per iteration, each run re-tokenizing
+/// everything that remained. A clock near the END of a long text made the
+/// provenance guards quadratic: three thousand ordinary words ending "night
+/// should start at 10" parsed in ~50 ms and then hung validation for ~4.6 s on
+/// the machine that measured it — a paste plus one sentence, on the
+/// deterministic path, worse on a phone and 4x worse per doubling.
+@Suite struct ValidationCost {
+
+    /// The hang case, end to end. The input is prose that compiles (rule 2
+    /// reads the trailing clause), so validation must run the very guard that
+    /// was quadratic — `statedTimes` over the whole utterance. One second is
+    /// the same shape of backstop the parser's huge-input bounds use: an order
+    /// of magnitude above the linear cost measured (~10 ms debug), and several
+    /// below the quadratic one it refuses.
+    @Test func aHugeUtteranceValidatesInOnePass() {
+        let noise = Array(repeating: "lorem ipsum dolor sit amet", count: 600)
+            .joined(separator: " ")
+        let utterance = noise + " night should start at 10"
+
+        let outcome = DeterministicParser.parse(utterance, state: state)
+        #expect(outcome == .command(.setDownHoursStart(TimeOfDay(hour: 22))),
+                "the probe sentence stopped compiling, so the bound below measures nothing")
+
+        let cost = bestOfThree {
+            _ = Validator.validate(outcome, utterance: utterance, state: state,
+                                   ledger: GrantLedger(), now: Date())
+        }
+        #expect(seconds(cost) < 1.0,
+                "validating 3000 words cost \(String(format: "%.2f", seconds(cost))) s")
+    }
+}

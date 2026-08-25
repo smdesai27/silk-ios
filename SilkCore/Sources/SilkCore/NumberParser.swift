@@ -37,9 +37,11 @@ public enum NumberParser {
     /// hand.
     ///
     /// So an hours unit standing on a number multiplies it, and the same is
-    /// true whether the unit is spaced ("2 hours"), abbreviated ("2 hrs") or
-    /// glued to the digits ("2h"). Every consumer keeps its contract unchanged:
-    /// the domain was always minutes, and this is the reading that makes it so.
+    /// true whether the unit is spelled out ("2 hours"), abbreviated ("2 hrs")
+    /// or a single spaced letter ("2 h") — but NOT glued to the digits: "2h"
+    /// is deliberately not read, and `hourUnits` states why. Every consumer
+    /// keeps its contract unchanged: the domain was always minutes, and this
+    /// is the reading that makes it so.
     ///
     /// The idiom table is untouched and still runs first — its quantities live
     /// in no token at all ("half an hour" is 30 with no digit anywhere), which
@@ -128,9 +130,22 @@ public enum NumberParser {
     /// `tokenize` cannot answer this — it erases a comma and a space alike —
     /// and the unit reading needs the difference. Colons stay inside a piece so
     /// "10:30" survives, exactly as the tokenizer keeps it whole.
+    ///
+    /// THE HYPHEN IS A SPACE HERE, because it is a space to the tokenizer:
+    /// `tokenize` rewrites "-" to " " before it splits, so the grammar's token
+    /// stream for "2-hour" is identical to "2 hour" everywhere else in the
+    /// file. When this predicate treated it as punctuation instead, the two
+    /// spellings diverged in exactly one place — the unit lookahead refused to
+    /// cross the group boundary the hyphen opened — and "give me a 2-hour
+    /// break from tiktok" granted TWO MINUTES where the spaced spelling grants
+    /// 120: the sixty-times-too-small class this file's header claims is
+    /// killed, reachable through the one spelling a phone keyboard favours.
+    /// The comma rationale ("a unit must not bind across ', hours of
+    /// homework'") never applied to a character the tokenizer defines as
+    /// whitespace — the "twenty-five" → 25 contract already depends on it.
     private static func groups(of text: String) -> [Substring] {
         text.split(whereSeparator: { c in
-            !(c.isLetter || c.isNumber || c == ":" || c == " " || c == "\t")
+            !(c.isLetter || c.isNumber || c == ":" || c == " " || c == "\t" || c == "-")
         })
     }
 
@@ -149,6 +164,19 @@ public enum NumberParser {
     private static let hourUnits: Set<String> = ["h", "hr", "hrs", "hour", "hours"]
     private static let minuteUnits: Set<String> = ["m", "min", "mins", "minute", "minutes"]
 
+    /// The words a speaker puts BETWEEN a number and its hour word for
+    /// emphasis, and nothing else. "give me 2 whole hours of tiktok" stated
+    /// two hours as plainly as the unadorned spelling, and a lookahead of
+    /// exactly one token read it as 2 — a two-minute grant out of a two-hour
+    /// sentence, the sixty-times-too-small class this file exists to kill,
+    /// and on the cap side a permanent two-minute ceiling ("cap tiktok at 2
+    /// whole hours"). The list is a whitelist and stays one: each entry is an
+    /// adjective that never carries a quantity of its own, so skipping it can
+    /// only connect a number to the unit already standing on it, never invent
+    /// one. It is consulted only when the very next token IS an hour word —
+    /// "20 full of tiktok" reads nothing here.
+    private static let hourIntensifiers: Set<String> = ["whole", "full", "entire"]
+
     /// `value` with the hours unit standing on it applied.
     ///
     /// `at` is the position of the LAST token the number occupies, which is why
@@ -156,12 +184,16 @@ public enum NumberParser {
     /// looking one past the "twenty" would find "five" and no unit at all.
     ///
     /// Neither multiplier crosses a group boundary — see the comment in
-    /// `allNumbers` for the sentence that cost.
+    /// `allNumbers` for the sentence that cost. The intensifier walk is bounded
+    /// the same way: "for 2 whole, hours later" scales nothing, because the
+    /// comma opens a group between the intensifier and the unit.
     private static func scaled(_ value: Int, at i: Int, in tokens: [String],
                                _ opensGroup: [Bool]) -> Int {
-        let next = i + 1
-        guard next < tokens.count, !opensGroup[next] else { return value }
-        if hourUnits.contains(tokens[next]) { return saturating(value, times: 60) }
+        // At most two tokens past the number — an optional intensifier and the
+        // unit — and never past a group boundary.
+        var end = i + 1
+        while end < tokens.count, end <= i + 2, !opensGroup[end] { end += 1 }
+        if statesAnHour(following: tokens[(i + 1)..<end]) { return saturating(value, times: 60) }
         return value
     }
 
@@ -221,16 +253,31 @@ public enum NumberParser {
         return overflowed ? Int.max : product
     }
 
-    /// Whether an hours unit stands on a number — "2 hours", "2 hrs", "2 h".
+    /// Whether an hours unit stands on a number whose following tokens are
+    /// `following` — "2 hours", "2 hrs", "2 h", and through one intensifier,
+    /// "2 whole hours". The caller passes AT MOST the two tokens its own
+    /// bounds admit (a clause for the guard, a group for the reader), so the
+    /// walk can never reach past a boundary the caller respects.
     ///
     /// `internal` so the grammar's cap guard can ask the same question this
     /// file answers when it reads the number. It used to keep its own list, and
     /// a reader and its guard that disagree about one token make the guard
-    /// decoration: `allNumbers` learned "h" and the guard had not, so the one
-    /// spelling it could not read was the one that wrote a two-hour ceiling.
-    static func statesAnHour(_ unit: String?) -> Bool {
-        guard let unit else { return false }
-        return hourUnits.contains(unit)
+    /// decoration: `allNumbers` learned the spaced "2 h" and the guard's
+    /// inline set had not, so the one spelling it could not read was the one
+    /// that wrote a two-hour ceiling. (The glued "2h" is a different story:
+    /// deliberately read by NEITHER side — see `hourUnits`.) Taking the
+    /// following tokens rather than one keeps the pair agreeing about the
+    /// intensifiers too, or "cap tiktok at 2 whole hours" would be 120 to the
+    /// reader and invisible to the guard — a two-hour ceiling written in the
+    /// vocabulary the guard exists to decline.
+    static func statesAnHour(following: ArraySlice<String>) -> Bool {
+        var it = following.makeIterator()
+        guard var word = it.next() else { return false }
+        if hourIntensifiers.contains(word) {
+            guard let unit = it.next() else { return false }
+            word = unit
+        }
+        return hourUnits.contains(word)
     }
 
     /// The single number an utterance carries, or nil when there are zero or
@@ -267,10 +314,45 @@ public enum NumberParser {
     /// scan of the whole string would call that hour explicit and wave the
     /// guess through.
     public static func statedTime(in utterance: String, assumeEvening: Bool) -> StatedTime? {
+        scanStatedTimes(in: utterance, assumeEvening: assumeEvening, stopAtFirst: true).first
+    }
+
+    /// EVERY clock the sentence states, in order.
+    ///
+    /// `statedTime` answers with the FIRST, which is the right answer for a
+    /// grammar that reads one edge at a time — and the wrong domain for a
+    /// provenance check. "lock me out from 10pm to 7am" states two hours, and a
+    /// widened `setDownHoursEnd(07:00)` is a correct reading of it; asking only
+    /// for the first clock silenced it because 22:00 is not 07:00. The question
+    /// provenance actually asks is "did the user say this hour", and that is
+    /// membership, not identity with the first.
+    public static func statedTimes(in utterance: String, assumeEvening: Bool) -> [TimeOfDay] {
+        scanStatedTimes(in: utterance, assumeEvening: assumeEvening, stopAtFirst: false)
+            .map(\.time)
+    }
+
+    /// One pass over one tokenization, for both readers above.
+    ///
+    /// THE ALL-CLOCKS READER MUST TOKENIZE THE SENTENCE ONCE. Its first
+    /// version re-ran `statedTime` on the string with one leading token
+    /// dropped per iteration — each call re-tokenizing everything that
+    /// remained — so a clock near the END of a long utterance cost O(n²)
+    /// tokenizations and returned thousands of duplicate entries. That is not
+    /// a widener-only path: rule 2 compiles "…night should start at 10" out
+    /// of any prose that mentions the night, and the Validator's provenance
+    /// guard then asked this question of the WHOLE utterance — three thousand
+    /// words of ordinary text ending in that clause hung validation for
+    /// seconds, quadratically worse as the text grows, on hardware slower
+    /// than the machine that measured it. The parser's own huge-input bounds
+    /// never saw it because they stop at `parse`;
+    /// `aHugeUtteranceValidatesInOnePass` now bounds this side too.
+    private static func scanStatedTimes(in utterance: String, assumeEvening: Bool,
+                                        stopAtFirst: Bool) -> [StatedTime] {
         let text = utterance.lowercased()
             .replacingOccurrences(of: "p.m.", with: "pm")
             .replacingOccurrences(of: "a.m.", with: "am")
         let tokens = tokenize(text)
+        var found: [StatedTime] = []
 
         for (i, tok) in tokens.enumerated() {
             // "11pm" arrives as one token — the tokenizer splits on characters
@@ -310,31 +392,9 @@ public enum NumberParser {
                     h += 12
                 }
             }
-            return StatedTime(time: TimeOfDay(hour: h % 24, minute: minute),
-                              meridiemWasStated: stated)
-        }
-        return nil
-    }
-
-    /// EVERY clock the sentence states, in order.
-    ///
-    /// `statedTime` answers with the FIRST, which is the right answer for a
-    /// grammar that reads one edge at a time — and the wrong domain for a
-    /// provenance check. "lock me out from 10pm to 7am" states two hours, and a
-    /// widened `setDownHoursEnd(07:00)` is a correct reading of it; asking only
-    /// for the first clock silenced it because 22:00 is not 07:00. The question
-    /// provenance actually asks is "did the user say this hour", and that is
-    /// membership, not identity with the first.
-    public static func statedTimes(in utterance: String, assumeEvening: Bool) -> [TimeOfDay] {
-        var found: [TimeOfDay] = []
-        var rest = Substring(utterance)
-        while let stated = statedTime(in: String(rest), assumeEvening: assumeEvening) {
-            found.append(stated.time)
-            // Step past the token that produced it, so the scan advances.
-            guard let cut = rest.firstIndex(where: { $0.isNumber || $0.isLetter }) else { break }
-            guard let space = rest[cut...].firstIndex(of: " ") else { break }
-            rest = rest[rest.index(after: space)...]
-            if rest.isEmpty { break }
+            found.append(StatedTime(time: TimeOfDay(hour: h % 24, minute: minute),
+                                    meridiemWasStated: stated))
+            if stopAtFirst { return found }
         }
         return found
     }

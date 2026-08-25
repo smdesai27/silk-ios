@@ -606,3 +606,246 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
                                    ledger: GrantLedger(), now: afternoon, calendar: cal) == .silence)
     }
 }
+
+@Suite struct AHyphenIsASpaceToTheUnitReader {
+
+    /// The tokenizer rewrites "-" to a space before it splits, so the grammar's
+    /// token stream for "2-hour" is identical to "2 hour" — everywhere except
+    /// the unit reader, whose `groups` treated the hyphen as punctuation and
+    /// whose lookahead then refused to cross the boundary it opened. "give me
+    /// a 2-hour break from tiktok" granted TWO MINUTES where the spaced
+    /// spelling grants 120: the sixty-times-too-small class this file exists
+    /// to kill, through the one spelling a phone keyboard favours.
+    @Test(arguments: [
+        ("give me a 2-hour break from tiktok", 120),
+        ("give me 2-hours of tiktok", 120),
+        ("give me a 2-hr break from tiktok", 120),
+        ("tiktok for a 2-hour break", 120),
+        ("two-hour tiktok session", 120),
+        ("give me a 3-hour tiktok pass", 180),
+    ])
+    func aHyphenatedDurationReadsLikeASpacedOne(_ row: (utterance: String, minutes: Int)) {
+        #expect(spend(row.utterance)?.1 == row.minutes, "\"\(row.utterance)\"")
+    }
+
+    /// The pool, where the wrong reading landed instantly: "set my budget to
+    /// 2-hours" cut the day's allowance to two minutes, because tightening
+    /// does not wait.
+    @Test func aHyphenatedBudgetIsNotSixtyTimesTooTight() {
+        guard case .command(.setBudget(let m)) =
+                DeterministicParser.parse("set my budget to 2-hours", state: makeState()) else {
+            Issue.record("the hyphenated budget sentence stopped landing")
+            return
+        }
+        #expect(m == 120)
+    }
+
+    /// What the hyphen fix must NOT have moved: the comma is still a wall to
+    /// the unit ("20, hours of homework" is twenty minutes), and the
+    /// tokenizer's compounding contract still reads "twenty-five" as one
+    /// number.
+    @Test func commasStillBoundAndCompoundsStillJoin() {
+        #expect(NumberParser.allNumbers(in: "give me tiktok for 20, hours of homework left") == [20])
+        #expect(spend("twenty-five minutes of tiktok")?.1 == 25)
+        #expect(NumberParser.allNumbers(in: "give me a 2-hour break from tiktok") == [120])
+        // "one-hundred" now poisons exactly as "one hundred" does — the two
+        // spellings the tokenizer equates answer alike.
+        #expect(NumberParser.allNumbers(in: "one-hundred minutes of reddit").isEmpty)
+    }
+
+    /// And the Validator traces the hyphenated grant, or every one of these
+    /// sentences would parse and then be refused as invented.
+    @Test func theValidatorTracesTheHyphenatedNumber() {
+        let state = makeState()
+        let utterance = "give me a 2-hour break from tiktok"
+        guard case .grant(_, let minutes, _) =
+                Validator.validate(DeterministicParser.parse(utterance, state: state),
+                                   utterance: utterance, state: state,
+                                   ledger: GrantLedger(), now: afternoon, calendar: cal) else {
+            Issue.record("the hyphenated grant failed its own provenance")
+            return
+        }
+        #expect(minutes == 120)
+    }
+}
+
+@Suite struct ThePoolOwnsOnlyItsOwnClause {
+
+    /// The MIRRORED order of the sentence `namesThePool` was written to kill.
+    /// The position test — pool noun before the first number — was satisfied by
+    /// "[budget excuse], [spend ask]", so "im on a budget, give me 20 of
+    /// tiktok" cut the shared allowance from 240 to 20, instantly, and never
+    /// opened TikTok. The pool owns a number only when it stands before it in
+    /// the SAME clause; these all fall silent and reach the widener as the
+    /// spends they are.
+    @Test(arguments: [
+        "im on a budget, give me 20 of tiktok",
+        "my budget is fine, give me 20 of tiktok",
+        "im over budget, give me 20 minutes of tiktok",
+        "im on a budget, tiktok for 20",
+    ])
+    func aBudgetExcuseBeforeASpendAskNeverMovesThePool(_ utterance: String) {
+        #expect(DeterministicParser.parse(utterance, state: makeState()) == .silence,
+                "\"\(utterance)\" moved the pool")
+    }
+
+    /// The pool's own sentences are untouched: noun before number, one breath.
+    @Test(arguments: [
+        ("budget of 40", 40),
+        ("set the budget to 25", 25),
+        ("budget of 40 for instagram", 40),
+        ("bump my daily budget to 60 tiktok is killing me", 60),
+        ("block everything, my budget is 30", 30),
+    ])
+    func thePoolsOwnSentenceStillLands(_ row: (utterance: String, minutes: Int)) {
+        guard case .command(.setBudget(let m)) =
+                DeterministicParser.parse(row.utterance, state: makeState()) else {
+            Issue.record("\"\(row.utterance)\" stopped setting the budget")
+            return
+        }
+        #expect(m == row.minutes, "\"\(row.utterance)\"")
+    }
+
+    /// AND THE IDIOMS ARE PLACED, NOT WAVED THROUGH. A quantity that occupies
+    /// no token — "an hour" carries its 60 in no digit anywhere — used to be
+    /// read as the pool's whenever the sentence mentioned budgeting, on the
+    /// theory that nothing else claimed it. The competing claim was the spend
+    /// ask standing right on it: "give me an hour of tiktok, im on a budget"
+    /// set the shared allowance to 60, in the exact forward order the digit
+    /// tests pin as fixed. The idiom's own "hour" anchors it to a clause like
+    /// any other token.
+    @Test(arguments: [
+        "give me an hour of tiktok, im on a budget",
+        "give me half an hour of instagram, im on a budget",
+        "im on a budget, give me an hour of tiktok",
+    ])
+    func anIdiomSpendWithABudgetMentionNeverMovesThePool(_ utterance: String) {
+        let outcome = DeterministicParser.parse(utterance, state: makeState())
+        if case .command(.setBudget(let m)) = outcome {
+            Issue.record("\"\(utterance)\" set the budget to \(m)")
+        }
+        #expect(outcome == .silence, "\"\(utterance)\"")
+    }
+
+    /// While an idiom the pool really does own still lands — noun before
+    /// quantity, one breath — and the plain idiom spend still spends.
+    @Test func anOwnedIdiomStillSetsAndAPlainIdiomStillSpends() {
+        guard case .command(.setBudget(let m)) =
+                DeterministicParser.parse("my budget is an hour", state: makeState()) else {
+            Issue.record("\"my budget is an hour\" stopped setting the budget")
+            return
+        }
+        #expect(m == 60)
+        #expect(spend("give me an hour of tiktok")?.1 == 60)
+        #expect(spend("give me half an hour of instagram")?.1 == 30)
+    }
+}
+
+@Suite struct ARefusalOnAnyMentionIsStillARefusal {
+
+    /// `aRefusalNamesTheDoor` used to locate the door with `indices.first` and
+    /// test the negator only there, so any earlier un-negated mention shadowed
+    /// the refusal standing on a later one: "im addicted to tiktok, no tiktok
+    /// for 20 minutes" opened the door and debited the pool out of an explicit
+    /// refusal — a grant that cannot be taken back, through the most natural
+    /// spelling there is, a reason before the rule.
+    @Test(arguments: [
+        "im addicted to tiktok, no tiktok for 20 minutes",
+        "i love tiktok but no tiktok for 20 minutes",
+        "tiktok is my weakness, no tiktok for 2 hours",
+        "i keep opening tiktok, absolutely no tiktok for 20 minutes",
+    ])
+    func anEarlierMentionDoesNotShadowTheRefusal(_ utterance: String) {
+        #expect(DeterministicParser.parse(utterance, state: makeState()) == .silence,
+                "\"\(utterance)\" opened the door it refuses")
+    }
+
+    /// The verb-governing negators still leave the ask alone — the scan is
+    /// wider across occurrences, not wider across words.
+    @Test func aNegatorGoverningAVerbStillLeavesTheAskAlone() {
+        let state = makeState()
+        #expect(spend("i love tiktok, dont give me more than 10 of tiktok", state)?.1 == 10)
+        #expect(spend("tiktok tiktok tiktok, give me 20 of tiktok", state)?.1 == 20)
+    }
+}
+
+@Suite struct AnIntensifierDoesNotHideTheHour {
+
+    /// "2 whole hours" states two hours as plainly as "2 hours", and a
+    /// lookahead of exactly one token read it as bare 2 — a two-minute grant
+    /// out of a two-hour sentence, the sixty-times-too-small class this file's
+    /// header declares closed.
+    @Test(arguments: [
+        ("give me 2 whole hours of tiktok", 120),
+        ("give me 2 full hours of tiktok", 120),
+        ("give me 2 entire hours of tiktok", 120),
+        ("tiktok for 3 whole hours", 180),
+    ])
+    func anIntensifiedHourIsStillSixtyMinutes(_ row: (utterance: String, minutes: Int)) {
+        #expect(spend(row.utterance)?.1 == row.minutes, "\"\(row.utterance)\"")
+    }
+
+    /// The cap guard reads through the intensifier too, or "cap tiktok at 2
+    /// whole hours" would be 120 to the reader and invisible to the guard —
+    /// a two-hour ceiling (a LOOSENING against a door capped at ten) written
+    /// in the vocabulary of restriction. It declines, exactly as the
+    /// unadorned hour spellings do.
+    @Test(arguments: [
+        "cap tiktok at 2 whole hours", "cap tiktok at 2 full hours",
+        "limit tiktok to 2 entire hours a day",
+    ])
+    func anIntensifiedHourNeverWritesACeiling(_ utterance: String) {
+        var state = makeState()
+        let tiktok = state.doors.first { $0.name == "TikTok" }!
+        state.doorCaps[tiktok.id] = 10
+        if case .command(.setDoorCap(_, let minutes)) =
+            DeterministicParser.parse(utterance, state: state) {
+            Issue.record("\"\(utterance)\" wrote a ceiling of \(minutes.map(String.init) ?? "none")")
+        }
+    }
+
+    /// The intensifier is consulted only when an hour word stands beyond it: a
+    /// minutes ceiling still lands, a trailing "full" with no unit reads
+    /// nothing, and the group boundary still bounds the walk.
+    @Test func theIntensifierInventsNothing() {
+        guard case .command(.setDoorCap(_, let m)) =
+                DeterministicParser.parse("cap tiktok at 20 whole minutes", state: makeState()) else {
+            Issue.record("a minutes ceiling with an intensifier stopped landing")
+            return
+        }
+        #expect(m == 20)
+        #expect(spend("give me 20 full of tiktok")?.1 == 20)
+        #expect(NumberParser.allNumbers(in: "for 2 whole, hours of homework left") == [2])
+    }
+}
+
+@Suite struct EveryClockIsReadExactlyOnce {
+
+    /// `statedTimes` used to re-run `statedTime` on the string with one leading
+    /// token dropped per iteration — so the same clock was found once per
+    /// suffix it led, and "lock me out from 10pm to 7am" answered with a pile
+    /// of duplicate 22:00s before the 7:00 appeared. Membership hid it (the
+    /// provenance guards only ask `contains`), and the COST did not: each
+    /// re-run re-tokenized everything remaining, which is the quadratic hang
+    /// `aHugeUtteranceValidatesInOnePass` bounds. One entry per stated clock,
+    /// in order, is the reading.
+    @Test func statedTimesAnswersOncePerClock() {
+        #expect(NumberParser.statedTimes(in: "lock me out from 10pm to 7am",
+                                         assumeEvening: false)
+                == [TimeOfDay(hour: 22), TimeOfDay(hour: 7)])
+        #expect(NumberParser.statedTimes(in: "night should start at 10", assumeEvening: true)
+                == [TimeOfDay(hour: 22)])
+        #expect(NumberParser.statedTimes(in: "no clock here at all", assumeEvening: false)
+                == [])
+    }
+
+    /// And the first-clock reader is unmoved: same tokens, same meridiem
+    /// handling, first answer only.
+    @Test func theFirstClockReaderIsUnmoved() {
+        #expect(NumberParser.statedTime(in: "lock me out from 10pm to 7am",
+                                        assumeEvening: false)
+                == NumberParser.StatedTime(time: TimeOfDay(hour: 22), meridiemWasStated: true))
+        #expect(NumberParser.statedTime(in: "i am up till 11", assumeEvening: false)
+                == NumberParser.StatedTime(time: TimeOfDay(hour: 11), meridiemWasStated: false))
+    }
+}
