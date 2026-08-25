@@ -2103,11 +2103,18 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // set, and the query answers. Not a cap and not a grant, which is the
         // half that matters.
         row("down hours till 11 p.m. cap tiktok at 20", .command(.downHoursQuery)),
-        // `main`'s reading, unchanged by this PR. A per-app schedule has no
-        // compilation, and the cap rules never see this sentence — its first
-        // clause carries no ceiling word. Fixing it needs a negator standing on
-        // a door to read as a close, which belongs to the close grammar.
-        row("no tiktok after 10 pm, thats my limit", .command(.spend(door: tiktok, minutes: 10))),
+        // It no longer buys ten minutes of the app it is refusing. This row used
+        // to pin `spend(tiktok, 10)` and the comment above it named the missing
+        // piece exactly: "fixing it needs a negator standing on a door". SPEND
+        // now reads one (`aRefusalNamesTheDoor`), so the sentence terminates.
+        //
+        // Silence and not a close, which is the half of that prediction this
+        // change does NOT make: reading a bare negator as a CLOSE is the close
+        // grammar's to decide, and minting the tightest thing in the product
+        // out of an inference is not a step to take on the way past. Silence
+        // reaches the widener, whose whole vocabulary is direction, and the
+        // Validator bounds whatever comes back.
+        row("no tiktok after 10 pm, thats my limit", .silence),
     ]
 
     @Test(arguments: rows)
@@ -2641,9 +2648,18 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         #expect(seen >= 20, "the corpus stopped carrying closing sentences: \(seen)")
     }
 
-    /// **A PERIOD-WORD SENTENCE NEVER GRANTS.** "a day", "daily", "per day" and
-    /// "budget" make a sentence a statement about every day, and no statement
-    /// about every day may spend today's pool. An earlier cut let one shape fall
+    /// **A PERIOD-WORD SENTENCE NEVER GRANTS.** "a day", "daily" and "per day"
+    /// make a sentence a statement about every day, and no statement about
+    /// every day may spend today's pool. A sentence ABOUT THE POOL joins them:
+    /// naming the budget and then stating a number is rule 3's other trigger,
+    /// and it terminates on every path exactly as the period words do. (It used
+    /// to be the same test — "budget" rode inside `statesAPeriod` as a bare
+    /// substring — and that is the bug `namesThePool` was split out to fix (the
+    /// filter here is `mentionsThePool`, rule 3's actual TRIGGER, which is
+    /// wider than the ownership decision and is the set the property must
+    /// hold over), so
+    /// the property has to ask both questions or it stops covering half of what
+    /// it was written for.) An earlier cut let one shape fall
     /// out of its own block — past ADD/REMOVE and into SPEND — so "give me 60 a
     /// day max on tiktok" debited the whole remaining budget and took the wall
     /// down. Every rule that claims a period-word sentence now terminates; this
@@ -2651,7 +2667,8 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     /// it is written rather than after.
     @Test func noPeriodWordSentenceEverGrants() {
         var seen = 0
-        for text in Self.corpus where DeterministicParser.statesAPeriod(text) {
+        for text in Self.corpus where DeterministicParser.statesAPeriod(text)
+            || DeterministicParser.mentionsThePool(NumberParser.tokenize(text)) {
             seen += 1
             for state in [makeState(), makeCappedState()] {
                 if case .grant(let d, let m, _) = verdict(text, state: state) {
@@ -2668,7 +2685,8 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     /// what was broken.
     @Test func aPeriodWordSentenceCompilesToACapABudgetOrNothing() {
         var seen = 0
-        for text in Self.corpus where DeterministicParser.statesAPeriod(text) {
+        for text in Self.corpus where DeterministicParser.statesAPeriod(text)
+            || DeterministicParser.mentionsThePool(NumberParser.tokenize(text)) {
             seen += 1
             switch DeterministicParser.parse(text, state: makeState()) {
             case .silence, .command(.setDoorCap), .command(.setBudget):

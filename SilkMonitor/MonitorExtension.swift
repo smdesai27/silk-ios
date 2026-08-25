@@ -20,6 +20,15 @@ final class MonitorExtension: DeviceActivityMonitor {
     override func intervalDidStart(for activity: DeviceActivityName) {
         super.intervalDidStart(for: activity)
         Self.log.notice("intervalDidStart \(activity.rawValue, privacy: .public)")
+        // The permanent daily schedule. Its firing IS the record: it proves
+        // the framework was alive for this Silk day, which nothing else in
+        // this extension can establish — a quiet day produces no per-grant
+        // callback even when everything is working. Written before the
+        // reconcile, because the reconcile is the part that can fail and the
+        // liveness fact is true either way.
+        if activity.rawValue == Wall.heartbeatActivity {
+            SharedStore.recordHeartbeat()
+        }
         Wall.reconcile()
     }
 

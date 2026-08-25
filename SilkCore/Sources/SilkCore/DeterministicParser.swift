@@ -51,6 +51,37 @@ public enum DeterministicParser {
         //    Ahead of every cap rule by design: "how much of my tiktok budget is
         //    left" is a question, and the answer to a question is never a new
         //    rule. (spec §5.8 records the imprecision this leaves.)
+        //    A KNOWN IMPRECISION LIVES HERE, and it is left alone deliberately.
+        //    Five of the six STATUS triggers are substring tests over the whole
+        //    sentence, so a close with a balance question riding along — "no
+        //    more tiktok today how much is left", "block instagram and tell me
+        //    whats left" — answers the balance and drops the close on the
+        //    floor. The door the user asked to shut stays open.
+        //
+        //    A gate was written for it and then taken back out, and the reason
+        //    is worth more than the gate was. `hasClosingVerb` is a test over
+        //    the whole sentence and `door` is `firstDoor` — the first door
+        //    NAMED, not the door the closing verb governs — so gating STATUS on
+        //    "there is a close here" hands the sentence to rule 4, which closes
+        //    whichever door was spelled first. Measured, on the shape users
+        //    actually type when they have two things to say:
+        //
+        //      "how much is left on tiktok, block instagram"  → closed TIKTOK
+        //      "how much of my tiktok block is left"          → closed TIKTOK
+        //          (here "block" is a NOUN, and there is no close in the
+        //           sentence at all)
+        //      "whats left, i want to block reddit later"     → closed REDDIT
+        //
+        //    So the gate traded a DROPPED close for a WRONG one. A dropped
+        //    close costs the user the sentence and she says it again; a wrong
+        //    close shuts a door she is using and canon will not let her open it
+        //    again before tomorrow. Between a recoverable failure and an
+        //    unrecoverable one this rule keeps the recoverable one.
+        //
+        //    What would actually fix it is not here: rule 4 has to decide WHICH
+        //    door a closing verb governs — clause-scoped, the way the cap rules
+        //    already read their own — and until it can, nothing above it should
+        //    be routing sentences to it on the strength of a substring.
         if isStatusAsk(text, hasDoor: door != nil) { return .command(.status) }
 
         // 2. DOWN HOURS — must be checked before budget: both can carry a number.
@@ -139,7 +170,7 @@ public enum DeterministicParser {
             // whole — "block tiktok, 20 minutes a day is plenty" is still a
             // close — because there the sentence named the door it wants shut.
             if tokens.contains("everything") || tokens.contains("all"),
-               !(statesAPeriod(text) && number != nil) {
+               !((statesAPeriod(text) || mentionsThePool(tokens)) && number != nil) {
                 return .command(.closeAllToday(until: until))
             }
         }
@@ -178,13 +209,41 @@ public enum DeterministicParser {
         //    remaining budget and took the wall down, out of a sentence stating a
         //    daily maximum. A period word makes a sentence a statement about
         //    every day, and no statement about every day may spend today's pool.
-        if statesAPeriod(text) {
+        // The trigger is two questions, not one: a statement about every day,
+        // or a sentence that says the pool's NAME at all.
+        //
+        // RULE 3 TERMINATES ON EVERY PATH, and the trigger is where that
+        // invariant lives. It was briefly narrowed — the pool arm fired only
+        // when the pool noun preceded the number — and the sentences it stopped
+        // claiming did not stop existing: they fell THROUGH, past ADD/REMOVE
+        // into SPEND, and "drop me to 20, im over budget on instagram" DELETED
+        // A DOOR while "cut me to 20, tiktok is eating my budget" opened one.
+        // That is the exact failure the block's own comment below describes
+        // from the last time it was allowed to fall out of its own arm. So the
+        // trigger is wide and the DECISION inside it is narrow.
+        if statesAPeriod(text) || mentionsThePool(tokens) {
             guard let n = number else { return .silence }
             // Naming the pool means the pool, however close a door stands:
             // "budget of 40 for instagram" is 40 minutes of budget, and "bump
             // my daily budget to 60 tiktok is killing me" is a budget raise
-            // with a reason attached.
-            if tokens.contains("budget") { return .command(.setBudget(minutes: n)) }
+            // with a reason attached — but only when the pool OWNS the number.
+            // "budget" used to be matched as a bare substring of the whole
+            // sentence, so "give me 20 of tiktok, im on a budget" halved the
+            // shared pool instantly, answered "20 left today.", and never
+            // opened TikTok. A sentence that merely mentions budgeting states
+            // no new allowance; it terminates here, and silence reaches the
+            // widener, which can read it as the spend it is. Ownership is
+            // clause-scoped — see `namesThePool` for the mirrored order and
+            // the idiom that each defeated the pure position test.
+            if mentionsThePool(tokens), namesThePool(clauses()) {
+                return .command(.setBudget(minutes: n))
+            }
+            // A sentence that merely MENTIONS budgeting states no new
+            // allowance, and it does not get a shortcut. It falls to the guards
+            // below — the same ones every other period-word sentence passes —
+            // which is what makes this narrowing safe: rule 3 still terminates
+            // on every path, and the door guard still refuses to move the pool
+            // on a sentence about one app.
             // Otherwise the pool's sentence is about no door in particular. If
             // the clause carrying the number NAMES a door and no cap rule above
             // could read it, the sentence is about that door and the pool must
@@ -303,8 +362,20 @@ public enum DeterministicParser {
         //    guess wearing a comma.
         //    Every refusal terminates: silence reaches the widener, and a
         //    grant on the wrong door cannot be taken back.
+        //    AND A REFUSAL IS NOT AN ASK. A negator standing in front of the
+        //    door is the same fact rule 4.5 already reads for ceilings, and
+        //    SPEND never learned it: "no tiktok for 20 minutes" bought twenty
+        //    minutes of the app the sentence was refusing. It stayed small only
+        //    because the hour spellings carried no number — "no tiktok for 2h"
+        //    was silent and "no tiktok for 2 hours" granted two minutes — so
+        //    reading the unit turned a two-minute mistake into a two-hour one,
+        //    which is how it was found. The hole is older than the unit.
+        //
+        //    Silence and not a decline, for the reason the cap rule states:
+        //    declining walks into the next rule and buys the app anyway.
         if let d = door, let n = number, !windowMention {
             guard spendClauseFunds(d, clauses(), state: state) else { return .silence }
+            guard !aRefusalNamesTheDoor(d, clauses(), state: state) else { return .silence }
             return .command(.spend(door: d, minutes: n))
         }
 
@@ -672,8 +743,84 @@ public enum DeterministicParser {
     /// same question the parser asks — a restated copy in the tests would
     /// drift, and then the property proved is not the property that ships.
     static func statesAPeriod(_ text: String) -> Bool {
-        text.contains(" a day") || text.contains("per day")
-            || text.contains("daily") || text.contains("budget")
+        text.contains(" a day") || text.contains("per day") || text.contains("daily")
+    }
+
+    /// Whether the sentence says the pool's name at all — rule 3's other
+    /// trigger, and the doorless close's veto.
+    ///
+    /// The STEM, token-shaped, because both halves of that matter. `statesAPeriod`
+    /// used to carry "budget" as a bare SUBSTRING of the whole utterance, which
+    /// is how "give me 20 of tiktok, im on a budget" halved the daily allowance
+    /// — the defect `namesThePool` below exists to fix. Narrowing it to the
+    /// exact token went too far the other way: "budgeted", "budgeting" and
+    /// "budgets" stopped claiming their sentences, and rule 3 not claiming a
+    /// sentence means some LATER rule does. "last week i budgeted 60 for
+    /// youtube" walked into the rules below it, and "block everything, my
+    /// budget is 30" lost the veto that keeps a doorless close off a sentence
+    /// stating an allowance — closing every door in the product instead.
+    ///
+    /// A stem is what the substring was reaching for and a token is the shape
+    /// the rest of this file uses, so it is both.
+    static func mentionsThePool(_ tokens: [String]) -> Bool {
+        tokens.contains { $0.hasPrefix("budget") }
+    }
+
+    /// Whether the pool OWNS the sentence's number — the narrower question, and
+    /// the only one that may move the allowance.
+    ///
+    /// That was the loosest test in the file, and it cost the user her ask:
+    /// "give me 20 of tiktok, im on a budget" said `statesAPeriod`, took rule 3,
+    /// found the token, and set the DAILY ALLOWANCE to twenty — instantly,
+    /// because tightening does not wait — then answered "20 left today.", which
+    /// reads like a plausible reply to the question she asked. Nothing opened.
+    /// The pool was halved by a sentence that merely mentioned budgeting, and
+    /// "budget" was the only entry in the period test matched as a substring
+    /// rather than as a token (contrast `periodPhrase`, which is token-shaped
+    /// precisely so that "today" is not "a day").
+    ///
+    /// The pool's own sentence puts its number AFTER the pool noun — and IN
+    /// THE POOL NOUN'S OWN BREATH — because that is what stating a new value
+    /// looks like in English: "budget of 40", "set the budget to 25", "my
+    /// tiktok budget should be 25", "i want a budget of 40". A sentence whose
+    /// number comes first is a sentence about something else with budgeting
+    /// mentioned afterwards, and the number belongs to whatever asked for it.
+    ///
+    /// POSITION ALONE WAS NOT ENOUGH, and the sentence that proved it is the
+    /// mirror of the one this function was written to fix: "im on a budget,
+    /// give me 20 of tiktok" puts the pool noun BEFORE the number — in a
+    /// different clause, attached to a different thought — and a pure order
+    /// test handed the 20 to the pool. Same cut, same instant tighten, same
+    /// silent non-opening as the forward order, surviving in exactly the
+    /// "[budget excuse], [spend ask]" shape people actually type. So the pool
+    /// owns the number only when it stands before it in the SAME clause; a
+    /// noun in another breath is commentary, and the sentence falls to the
+    /// guards below like every other period-word sentence.
+    ///
+    /// A number that occupies NO token — the idioms, where "my budget is an
+    /// hour" carries its 60 in no digit anywhere — is anchored at the idiom's
+    /// own "hour", which every idiom in `allNumbers`' table contains. The
+    /// first draft skipped the anchor and answered "the pool's" whenever no
+    /// token parsed as a number, on the theory that a quantity nothing spells
+    /// has no competing claim — and the competing claim was the spend ask
+    /// standing right on it: "give me an hour of tiktok, im on a budget"
+    /// resurrected the fixed defect through the idiom door, in the exact
+    /// forward order the tests pin for digits.
+    ///
+    /// Takes the clause index rather than bare tokens because the clause
+    /// question cannot be answered after `tokenize` has erased the commas;
+    /// rule 3 builds the index only when the pool stem is present, so the
+    /// sentences that never mention it never pay (see `clauses()`).
+    /// `internal` for the same reason `statesAPeriod` is: the invariant suite
+    /// asks the parser the same question the parser asks, and a restated copy in
+    /// the tests would drift away from the rule it claims to prove.
+    static func namesThePool(_ index: NumberParser.ClauseIndex) -> Bool {
+        let tokens = index.tokens
+        guard let pool = tokens.firstIndex(of: "budget") else { return false }
+        let anchor = tokens.firstIndex(where: { !NumberParser.allNumbers(in: $0).isEmpty })
+            ?? tokens.firstIndex(of: "hour")
+        guard let anchor else { return true }
+        return pool < anchor && index.sameClause(pool, anchor)
     }
 
     /// Whether one token could stand inside a ceiling's own noun phrase. See
@@ -1684,17 +1831,29 @@ public enum DeterministicParser {
     /// for exactly this reason (NumberParser.swift); the clause index works in
     /// tokens, so the same fact is spelled here in tokens.
     ///
-    /// HOURS ARE NOT MINUTES. `allNumbers` knows the idioms "an hour" and "half
-    /// an hour" and reads a digit before "hours" as the digit, so "cap tiktok at
-    /// 2 hours" wrote a TWO-MINUTE daily ceiling — sixty times too tight, on the
-    /// tightening side, and permanent where the old misreading was a two-minute
-    /// grant spent by dinner. The idiom shapes are untouched: "an hour" holds
-    /// its quantity in no token at all, so nothing here can see it to refuse.
+    /// HOURS ARE NOT MINUTES, and the cap rule declines them rather than
+    /// reading them. `allNumbers` now scales an hours unit onto the number it
+    /// stands on, so "give me 2 hours of tiktok" is 120 and the two-minute
+    /// grant is gone — but the arm below stays, and the reason it stays is
+    /// different from the reason it arrived.
+    ///
+    /// It arrived because 2 was read as 2 and the rule would have written a
+    /// TWO-MINUTE daily ceiling: sixty times too tight, on the tightening side,
+    /// and permanent. That reading is fixed. What is left is the DIRECTION.
+    /// A ceiling is standing policy, and "cap tiktok at 2 hours" against a door
+    /// already capped at ten is a two-hour ceiling — which is a LOOSENING, said
+    /// in the vocabulary of restriction. `capHostileStringsNeverLoosen` and the
+    /// disambiguation table both pin that no cap sentence may loosen, and they
+    /// are right to: the sentence reads as a tighten to everyone who says it.
+    /// Silence reaches the widener, which is structurally incapable of
+    /// producing a cap at all (docs/design/per-app-caps.md §5.7), so it cannot
+    /// get the direction wrong either. The other arms are about CLOCKS, which
+    /// no unit can rescue: "cap tiktok at 10 in the evening" is a schedule, and
+    /// per-app schedules are out of scope.
     private static func numberIsNotMinutes(_ t: [String], in clause: Range<Int>) -> Bool {
         let boundaries: Set<String> = ["after", "until", "untill", "till", "til"]
         let clockWords: Set<String> = ["am", "pm", "oclock", "clock", "noon", "midnight",
                                        "tonight", "morning", "evening", "afternoon"]
-        let hourWords: Set<String> = ["hour", "hours", "hr", "hrs"]
         for i in clause where !NumberParser.allNumbers(in: t[i]).isEmpty {
             if i > clause.lowerBound, boundaries.contains(t[i - 1]) { return true }
             // The abbreviated meridiem, as its two tokens. "9 a day" is not one:
@@ -1702,10 +1861,27 @@ public enum DeterministicParser {
             if i + 2 < clause.upperBound, t[i + 1] == "p" || t[i + 1] == "a", t[i + 2] == "m" {
                 return true
             }
-            // An hours unit must stand ON the number; a clock word may hang off
-            // a preposition ("cap tiktok at 10 in the evening"), so it is looked
-            // for anywhere after the number this clause is about.
-            if i + 1 < clause.upperBound, hourWords.contains(t[i + 1]) { return true }
+            // An hours unit must stand ON the number, and the question is asked
+            // of `NumberParser` rather than answered again here — a guard that
+            // reads a token differently from the reader it guards is a guard
+            // with a hole in it, and this one had it twice. The inline set it
+            // kept before lacked the spaced "h" that `allNumbers` reads, so
+            // "cap tiktok at 2 h" was 120 to the reader and invisible to the
+            // guard. (NOT the glued "2h", as an earlier draft of this comment
+            // claimed — glued units are deliberately read by neither side; see
+            // `hourUnits`.) And a one-token lookahead could not see through an
+            // intensifier the reader now reads through: "cap tiktok at 2 whole
+            // hours" was 120 to `allNumbers` and bare 2 to the guard, a
+            // two-hour ceiling written in the vocabulary this arm declines.
+            // Passing the following tokens — bounded by the clause, at most
+            // the intensifier and the unit — keeps the pair one reading.
+            if NumberParser.statesAnHour(
+                following: t[min(i + 1, clause.upperBound)..<min(i + 3, clause.upperBound)]) {
+                return true
+            }
+            // A clock word may hang off a preposition ("cap tiktok at 10 in the
+            // evening"), so it is looked for anywhere after the number this
+            // clause is about.
             if (i + 1..<clause.upperBound).contains(where: { clockWords.contains(t[$0]) }) {
                 return true
             }
@@ -1722,6 +1898,62 @@ public enum DeterministicParser {
     /// clause defers to the whole sentence, which must then be about exactly
     /// one door. None of those is a sentence this grammar may answer with a
     /// grant on `d`.
+    /// Whether a negator stands in front of the door this sentence would spend
+    /// on — "no tiktok for 2 hours", "not instagram today, 20 minutes".
+    ///
+    /// The cap rule has had this scan since the round that found "dont give me
+    /// 30 a day on tiktok" writing a ceiling out of a refusal; SPEND, one rule
+    /// below it, never got the same reading, and there the wrong answer is a
+    /// GRANT — the door opened and the pool debited, in reply to a sentence
+    /// asking for neither.
+    ///
+    /// **THE NEGATOR HAS TO STAND ON THE DOOR ITSELF**, and that is narrower
+    /// than the cap rule's clause-wide scan on purpose. The first draft here
+    /// was that scan, and it read four pinned sentences wrong in one direction:
+    /// "dont give me more than 10 of tiktok" is a BOUNDED ASK, "dont close
+    /// instagram, just give me 10" refuses the close and then asks — in both
+    /// the negator governs a verb, not the door, and both went silent.
+    ///
+    /// So the test is `nounNegators` — the four words this file already
+    /// separates out as the ones that can stand directly on a noun phrase — and
+    /// adjacency, reading back over determiners only. "no tiktok" negates the
+    /// door; "dont give me … tiktok" negates the giving. That distinction is
+    /// already made once in this file for the clearing rule, and this is the
+    /// same distinction, not a second theory of negation.
+    ///
+    /// Adjacency also retires the "no more than" carve-out the cap rule needs:
+    /// in "no more than 20 of tiktok" the "no" is nowhere near the door, so
+    /// nothing here can see it.
+    ///
+    /// It costs the sentences where a refusal and an ask share a breath, and
+    /// those go to the widener, which is the safe direction: the Validator's
+    /// provenance still bounds whatever comes back, and a grant out of a
+    /// refusal cannot be taken back.
+    ///
+    /// **EVERY occurrence of the door is inspected, not the first.** The scan
+    /// used to stop at `t.indices.first(where:)`, so any earlier un-negated
+    /// mention shadowed the refusal standing on a later one: "im addicted to
+    /// tiktok, no tiktok for 20 minutes" and "i love tiktok but no tiktok for
+    /// 20 minutes" both opened the door and debited the pool — the grant out
+    /// of a refusal this guard exists to close, reachable through the most
+    /// natural spelling there is, a reason before the rule. A negator on ANY
+    /// occurrence silences; the sentence where one mention is refused and
+    /// another asked is a refusal and an ask sharing a sentence, which is the
+    /// widener's by the paragraph above.
+    private static func aRefusalNamesTheDoor(_ d: Door, _ index: NumberParser.ClauseIndex,
+                                             state: PolicyState) -> Bool {
+        let t = index.tokens
+        for doorAt in t.indices where door(t[doorAt], in: state)?.id == d.id
+            || (doorAt + 1 < t.count && door(t[doorAt] + " " + t[doorAt + 1], in: state)?.id == d.id) {
+            guard let clause = index.clauseRange(containing: doorAt) else { continue }
+            var head = doorAt
+            while head > clause.lowerBound, determiners.contains(t[head - 1]) { head -= 1 }
+            guard head > clause.lowerBound else { continue }
+            if nounNegators.contains(t[head - 1]) { return true }
+        }
+        return false
+    }
+
     private static func spendClauseFunds(_ d: Door, _ index: NumberParser.ClauseIndex,
                                          state: PolicyState) -> Bool {
         let t = index.tokens
@@ -1751,13 +1983,21 @@ public enum DeterministicParser {
     /// door. Rule 3's last guard, and the reason the pool does not move on a
     /// sentence about one app.
     ///
-    /// A number with no token position — an idiom's — cannot be placed in a
-    /// clause, so this answers no and the sentence keeps today's budget reading.
+    /// A number with no token position — an idiom's — is anchored at the
+    /// idiom's own "hour", exactly as `namesThePool` anchors it. This guard
+    /// used to answer no for the idioms on the theory that their quantity
+    /// cannot be placed, and the theory cost the sentence it was written for:
+    /// "give me an hour of tiktok, im on a budget" lost the pool shortcut
+    /// (rightly), fell here, was waved past the door guard, and the fallback
+    /// set the shared allowance to 60 out of a spend ask. The idiom's hour
+    /// stands in a clause like any other token, and the clause it stands in
+    /// names TikTok.
     private static func numberClauseNamesADoor(_ index: NumberParser.ClauseIndex,
                                                state: PolicyState) -> Bool {
         let t = index.tokens
-        guard let at = t.indices.first(where: { !NumberParser.allNumbers(in: t[$0]).isEmpty }),
-              let clause = index.clauseRange(containing: at)
+        let at = t.indices.first(where: { !NumberParser.allNumbers(in: t[$0]).isEmpty })
+            ?? t.firstIndex(of: "hour")
+        guard let at, let clause = index.clauseRange(containing: at)
         else { return false }
         if case .none = doors(in: clause, of: index, state: state) { return false }
         return true

@@ -20,9 +20,33 @@ public enum NumberParser {
         "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
     ]
 
-    /// Every number expressible in the utterance, in order of appearance.
-    /// Used both for parsing and for the validator's provenance check: a grant
-    /// whose minutes do not appear here was invented and must be refused.
+    /// Every number expressible in the utterance, **in minutes**, in order of
+    /// appearance. Used both for parsing and for the validator's provenance
+    /// check: a grant whose minutes do not appear here was invented and must be
+    /// refused.
+    ///
+    /// THE UNIT IS PART OF THE NUMBER. This function used to read a bare digit
+    /// and stop, so "give me 2 hours of tiktok" put **2** in a domain whose
+    /// every consumer means minutes: the grant was two minutes, the reply said
+    /// "TikTok is open for 2 minutes.", and the sentence that asked for two
+    /// hours was answered sixty times too small — silently wrong on the one
+    /// axis this architecture promises never to be. It reached further than the
+    /// grant: "set my budget to 2 hours" cut the whole day's allowance to two
+    /// minutes, instantly, because tightening does not wait. Only the article
+    /// idioms below ever worked, and only because they are spelled out here by
+    /// hand.
+    ///
+    /// So an hours unit standing on a number multiplies it, and the same is
+    /// true whether the unit is spelled out ("2 hours"), abbreviated ("2 hrs")
+    /// or a single spaced letter ("2 h") — but NOT glued to the digits: "2h"
+    /// is deliberately not read, and `hourUnits` states why. Every consumer
+    /// keeps its contract unchanged: the domain was always minutes, and this
+    /// is the reading that makes it so.
+    ///
+    /// The idiom table is untouched and still runs first — its quantities live
+    /// in no token at all ("half an hour" is 30 with no digit anywhere), which
+    /// is exactly why they had to be spelled out and why nothing below can see
+    /// them.
     public static func allNumbers(in utterance: String) -> [Int] {
         let text = utterance.lowercased()
         var results: [Int] = []
@@ -40,13 +64,37 @@ public enum NumberParser {
             consumed = consumed.replacingOccurrences(of: pattern, with: " ")
         }
 
-        // Digits.
-        var tokens = tokenize(consumed)
+        // Digits, and the unit standing on them.
+        //
+        // GROUPED AT PUNCTUATION, because a unit binds to the number it stands
+        // ON and a comma is not a space. `tokenize` erases punctuation, so
+        // without this "give me tiktok for 20, hours of homework left" read its
+        // 20 as twenty HOURS — a 1200-minute ask out of a sentence stating
+        // twenty minutes and then changing the subject. Same shape on the pool
+        // ("set my budget to 30, hundred things going on" set 3000) and on the
+        // Validator, whose provenance check reads the whole utterance and so
+        // disagreed with a grammar that reads one clause.
+        //
+        // Only the UNIT lookahead is bounded. Word compounding still crosses a
+        // comma — "twenty, five minutes of tiktok" is 25 — because that is the
+        // tokenizer's pinned contract and changing it is a deliberate decision
+        // the fuzz campaign already declined to make.
+        var tokens: [String] = []
+        var opensGroup: [Bool] = []
+        for (g, piece) in groups(of: consumed).enumerated() {
+            for (t, token) in tokenize(String(piece)).enumerated() {
+                tokens.append(token)
+                opensGroup.append(g > 0 && t == 0)
+            }
+        }
+
         var i = 0
         while i < tokens.count {
             let tok = tokens[i]
             if let digits = Int(tok) {
-                results.append(digits)
+                if !hundredPoisons(i, tokens, opensGroup) {
+                    results.append(scaled(digits, at: i, in: tokens, opensGroup))
+                }
                 tokens[i] = ""
             }
             i += 1
@@ -58,17 +106,178 @@ public enum NumberParser {
             let tok = tokens[i]
             if let t = tens[tok] {
                 if i + 1 < tokens.count, let u = units[tokens[i + 1]] {
-                    results.append(t + u)
+                    if !hundredPoisons(i + 1, tokens, opensGroup) {
+                        results.append(scaled(t + u, at: i + 1, in: tokens, opensGroup))
+                    }
                     i += 2
                     continue
                 }
-                results.append(t)
+                if !hundredPoisons(i, tokens, opensGroup) {
+                    results.append(scaled(t, at: i, in: tokens, opensGroup))
+                }
             } else if let v = teens[tok] ?? units[tok] {
-                results.append(v)
+                if !hundredPoisons(i, tokens, opensGroup) {
+                    results.append(scaled(v, at: i, in: tokens, opensGroup))
+                }
             }
             i += 1
         }
         return results
+    }
+
+    /// The sentence cut at punctuation, keeping whitespace inside a piece.
+    ///
+    /// `tokenize` cannot answer this — it erases a comma and a space alike —
+    /// and the unit reading needs the difference. Colons stay inside a piece so
+    /// "10:30" survives, exactly as the tokenizer keeps it whole.
+    ///
+    /// THE HYPHEN IS A SPACE HERE, because it is a space to the tokenizer:
+    /// `tokenize` rewrites "-" to " " before it splits, so the grammar's token
+    /// stream for "2-hour" is identical to "2 hour" everywhere else in the
+    /// file. When this predicate treated it as punctuation instead, the two
+    /// spellings diverged in exactly one place — the unit lookahead refused to
+    /// cross the group boundary the hyphen opened — and "give me a 2-hour
+    /// break from tiktok" granted TWO MINUTES where the spaced spelling grants
+    /// 120: the sixty-times-too-small class this file's header claims is
+    /// killed, reachable through the one spelling a phone keyboard favours.
+    /// The comma rationale ("a unit must not bind across ', hours of
+    /// homework'") never applied to a character the tokenizer defines as
+    /// whitespace — the "twenty-five" → 25 contract already depends on it.
+    private static func groups(of text: String) -> [Substring] {
+        text.split(whereSeparator: { c in
+            !(c.isLetter || c.isNumber || c == ":" || c == " " || c == "\t" || c == "-")
+        })
+    }
+
+    /// The units that stand on a number and change what it means. "m" and
+    /// "min" are minutes and so are the identity; the hours are the sixty.
+    ///
+    /// GLUED SPELLINGS ARE DELIBERATELY NOT READ. "20min" and "2h" were split
+    /// here for one round and taken back out: a glued duration is legible
+    /// inside ordinary prose in a way a spaced one is not, so "give me tiktok,
+    /// its 2h until dinner" became a two-hour ask — a sentence that states no
+    /// duration for the door, answered with a grant that drains the pool. The
+    /// spaced spellings carry the same meaning with none of that reach, and
+    /// "20min of youtube" reaches the elliptical ask and is answered "How
+    /// long?", which is a question the user can answer rather than a grant she
+    /// cannot take back.
+    private static let hourUnits: Set<String> = ["h", "hr", "hrs", "hour", "hours"]
+    private static let minuteUnits: Set<String> = ["m", "min", "mins", "minute", "minutes"]
+
+    /// The words a speaker puts BETWEEN a number and its hour word for
+    /// emphasis, and nothing else. "give me 2 whole hours of tiktok" stated
+    /// two hours as plainly as the unadorned spelling, and a lookahead of
+    /// exactly one token read it as 2 — a two-minute grant out of a two-hour
+    /// sentence, the sixty-times-too-small class this file exists to kill,
+    /// and on the cap side a permanent two-minute ceiling ("cap tiktok at 2
+    /// whole hours"). The list is a whitelist and stays one: each entry is an
+    /// adjective that never carries a quantity of its own, so skipping it can
+    /// only connect a number to the unit already standing on it, never invent
+    /// one. It is consulted only when the very next token IS an hour word —
+    /// "20 full of tiktok" reads nothing here.
+    private static let hourIntensifiers: Set<String> = ["whole", "full", "entire"]
+
+    /// `value` with the hours unit standing on it applied.
+    ///
+    /// `at` is the position of the LAST token the number occupies, which is why
+    /// the compound arm passes `i + 1`: "twenty five hours" is 25 × 60, and
+    /// looking one past the "twenty" would find "five" and no unit at all.
+    ///
+    /// Neither multiplier crosses a group boundary — see the comment in
+    /// `allNumbers` for the sentence that cost. The intensifier walk is bounded
+    /// the same way: "for 2 whole, hours later" scales nothing, because the
+    /// comma opens a group between the intensifier and the unit.
+    private static func scaled(_ value: Int, at i: Int, in tokens: [String],
+                               _ opensGroup: [Bool]) -> Int {
+        // At most two tokens past the number — an optional intensifier and the
+        // unit — and never past a group boundary.
+        var end = i + 1
+        while end < tokens.count, end <= i + 2, !opensGroup[end] { end += 1 }
+        if statesAnHour(following: tokens[(i + 1)..<end]) { return saturating(value, times: 60) }
+        return value
+    }
+
+    /// **A HUNDRED IS REFUSED, NOT READ**, and the refusal is the reading.
+    ///
+    /// "one hundred minutes of reddit" used to grant ONE — the tens/units
+    /// tables have no hundred in them, so the leading word won and the rest of
+    /// the number was dropped. Reading it properly was tried and cost more than
+    /// it bought, three separate ways, because the quantity a "hundred" phrase
+    /// states occupies NO SINGLE TOKEN:
+    ///
+    ///   - `capSet` finds its number with a per-token scan, so it went blind to
+    ///     "keep tiktok under a hundred minutes" and rule 7 took the sentence —
+    ///     a GRANT out of a restriction, which is the exact defect the cap
+    ///     feature exists to kill. The digit spelling of the same sentence sets
+    ///     a ceiling.
+    ///   - `numberIsNotMinutes` looks one token past the number, and "hundred"
+    ///     standing there hid the hours unit behind it, so "cap tiktok at two
+    ///     hundred hours" wrote a ceiling instead of declining.
+    ///   - `numberClauseNamesADoor` is per-token too, and went blind the same
+    ///     way.
+    ///
+    /// Each is repairable and none of the repairs is small: they are position
+    /// tests in a grammar that has been wrong about positions before. So the
+    /// word poisons the phrase instead. A number standing next to "hundred"
+    /// yields nothing at all, which makes "give me one hundred minutes of
+    /// reddit" reach the elliptical ask and be answered "How long?" — a
+    /// question the user can answer, where the old reading granted one minute
+    /// and the new one granted a hundred out of "a hundred percent".
+    ///
+    /// People type "100". This costs the spelled-out form and keeps every
+    /// position test in the grammar honest.
+    private static func hundredPoisons(_ i: Int, _ tokens: [String], _ opensGroup: [Bool]) -> Bool {
+        let next = i + 1
+        if next < tokens.count, !opensGroup[next], tokens[next] == "hundred" { return true }
+        return i > 0 && !opensGroup[i] && tokens[i - 1] == "hundred"
+    }
+
+    /// Multiplication that saturates rather than trapping.
+    ///
+    /// THE PARSER MAY NOT CRASH ON A SENTENCE, and a plain `*` here does:
+    /// "give me 999999999999999999 hours of tiktok" is nineteen digits inside
+    /// `Int`, and sixty times it is not. Swift traps on overflow, so the
+    /// multiplier this file added turned a merely absurd sentence into a
+    /// SIGTRAP in the bar — caught by attacking the change, not by the suite,
+    /// because `everyStringCompilesOrFallsSilentAndNeverTraps` fuzzes shapes
+    /// rather than magnitudes.
+    ///
+    /// `Int.max` and not a refusal, because it is the reading that keeps the
+    /// behaviour it already had: an absurd number of MINUTES has always parsed
+    /// and then been clamped to the balance by the Validator, and an absurd
+    /// number of hours is the same sentence with a unit on it. It clamps
+    /// identically, and provenance still holds — the Validator asks this same
+    /// function and gets the same `Int.max` back.
+    private static func saturating(_ value: Int, times factor: Int) -> Int {
+        let (product, overflowed) = value.multipliedReportingOverflow(by: factor)
+        return overflowed ? Int.max : product
+    }
+
+    /// Whether an hours unit stands on a number whose following tokens are
+    /// `following` — "2 hours", "2 hrs", "2 h", and through one intensifier,
+    /// "2 whole hours". The caller passes AT MOST the two tokens its own
+    /// bounds admit (a clause for the guard, a group for the reader), so the
+    /// walk can never reach past a boundary the caller respects.
+    ///
+    /// `internal` so the grammar's cap guard can ask the same question this
+    /// file answers when it reads the number. It used to keep its own list, and
+    /// a reader and its guard that disagree about one token make the guard
+    /// decoration: `allNumbers` learned the spaced "2 h" and the guard's
+    /// inline set had not, so the one spelling it could not read was the one
+    /// that wrote a two-hour ceiling. (The glued "2h" is a different story:
+    /// deliberately read by NEITHER side — see `hourUnits`.) Taking the
+    /// following tokens rather than one keeps the pair agreeing about the
+    /// intensifiers too, or "cap tiktok at 2 whole hours" would be 120 to the
+    /// reader and invisible to the guard — a two-hour ceiling written in the
+    /// vocabulary the guard exists to decline.
+    static func statesAnHour(following: ArraySlice<String>) -> Bool {
+        var it = following.makeIterator()
+        guard var word = it.next() else { return false }
+        if hourIntensifiers.contains(word) {
+            guard let unit = it.next() else { return false }
+            word = unit
+        }
+        return hourUnits.contains(word)
     }
 
     /// The single number an utterance carries, or nil when there are zero or
@@ -105,10 +314,45 @@ public enum NumberParser {
     /// scan of the whole string would call that hour explicit and wave the
     /// guess through.
     public static func statedTime(in utterance: String, assumeEvening: Bool) -> StatedTime? {
+        scanStatedTimes(in: utterance, assumeEvening: assumeEvening, stopAtFirst: true).first
+    }
+
+    /// EVERY clock the sentence states, in order.
+    ///
+    /// `statedTime` answers with the FIRST, which is the right answer for a
+    /// grammar that reads one edge at a time — and the wrong domain for a
+    /// provenance check. "lock me out from 10pm to 7am" states two hours, and a
+    /// widened `setDownHoursEnd(07:00)` is a correct reading of it; asking only
+    /// for the first clock silenced it because 22:00 is not 07:00. The question
+    /// provenance actually asks is "did the user say this hour", and that is
+    /// membership, not identity with the first.
+    public static func statedTimes(in utterance: String, assumeEvening: Bool) -> [TimeOfDay] {
+        scanStatedTimes(in: utterance, assumeEvening: assumeEvening, stopAtFirst: false)
+            .map(\.time)
+    }
+
+    /// One pass over one tokenization, for both readers above.
+    ///
+    /// THE ALL-CLOCKS READER MUST TOKENIZE THE SENTENCE ONCE. Its first
+    /// version re-ran `statedTime` on the string with one leading token
+    /// dropped per iteration — each call re-tokenizing everything that
+    /// remained — so a clock near the END of a long utterance cost O(n²)
+    /// tokenizations and returned thousands of duplicate entries. That is not
+    /// a widener-only path: rule 2 compiles "…night should start at 10" out
+    /// of any prose that mentions the night, and the Validator's provenance
+    /// guard then asked this question of the WHOLE utterance — three thousand
+    /// words of ordinary text ending in that clause hung validation for
+    /// seconds, quadratically worse as the text grows, on hardware slower
+    /// than the machine that measured it. The parser's own huge-input bounds
+    /// never saw it because they stop at `parse`;
+    /// `aHugeUtteranceValidatesInOnePass` now bounds this side too.
+    private static func scanStatedTimes(in utterance: String, assumeEvening: Bool,
+                                        stopAtFirst: Bool) -> [StatedTime] {
         let text = utterance.lowercased()
             .replacingOccurrences(of: "p.m.", with: "pm")
             .replacingOccurrences(of: "a.m.", with: "am")
         let tokens = tokenize(text)
+        var found: [StatedTime] = []
 
         for (i, tok) in tokens.enumerated() {
             // "11pm" arrives as one token — the tokenizer splits on characters
@@ -148,10 +392,11 @@ public enum NumberParser {
                     h += 12
                 }
             }
-            return StatedTime(time: TimeOfDay(hour: h % 24, minute: minute),
-                              meridiemWasStated: stated)
+            found.append(StatedTime(time: TimeOfDay(hour: h % 24, minute: minute),
+                                    meridiemWasStated: stated))
+            if stopAtFirst { return found }
         }
-        return nil
+        return found
     }
 
     /// A token's clock body and its glued-on meridiem, if it carries one:
@@ -167,11 +412,82 @@ public enum NumberParser {
         return (body, suffix)
     }
 
+    /// The separator set, built once.
+    ///
+    /// It used to be a union and an inversion of two Unicode sets, constructed
+    /// inside `tokenize` — and `tokenize` runs several times over the same
+    /// sentence on the hot path (`allNumbers` alone tokenizes an idiom-stripped
+    /// copy, `statedTime` a meridiem-rewritten one, the parser the trimmed one,
+    /// and every clause guard re-asks it a token at a time). Building the set
+    /// per call was measured at the majority of a short sentence's parse. It is
+    /// the same set; it is now computed once.
+    private static let separators: CharacterSet =
+        CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ":")).inverted
+
     static func tokenize(_ text: String) -> [String] {
-        text.lowercased()
-            .replacingOccurrences(of: "-", with: " ")
-            .components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ":")).inverted)
-            .filter { !$0.isEmpty }
+        let lowered = text.lowercased().replacingOccurrences(of: "-", with: " ")
+        guard lowered.contains(where: { apostrophes.contains($0) }) else {
+            return lowered.components(separatedBy: separators).filter { !$0.isEmpty }
+        }
+        return foldingApostrophes(lowered).components(separatedBy: separators).filter { !$0.isEmpty }
+    }
+
+    /// The four spellings of one mark. iOS smart punctuation types U+2019 by
+    /// default, so the "exotic" one is the ordinary one.
+    private static let apostrophes: Set<Character> = ["'", "\u{2019}", "\u{02BC}", "\u{FF07}"]
+
+    /// AN APOSTROPHE SPLITS, WITH ONE EXCEPTION, AND THE EXCEPTION IS THE WHOLE
+    /// POINT.
+    ///
+    /// Splitting on every apostrophe — the original — cut "don't" into
+    /// ["don", "t"], which matches nothing. So every apostrophe entry in
+    /// `negators`, `auxiliaries` and `modals` was unreachable, and "don't cap
+    /// tiktok at 20" wrote the ceiling it refuses while "dont cap tiktok at 20"
+    /// correctly fell silent. iOS smart punctuation types U+2019 by default, so
+    /// the broken spelling was the ordinary one.
+    ///
+    /// The fix is exactly as wide as the defect: **"'t" joins, everything else
+    /// still splits.** The negator family is the entire set of lexemes the
+    /// grammar spells without the mark — dont, cant, wont, isnt, doesnt, arent,
+    /// hasnt, havent, couldnt, shouldnt, wouldnt, mustnt, didnt, wasnt, werent,
+    /// hadnt, aint — and joining "'t" is what makes all of them reachable.
+    ///
+    /// A wider rule was tried and taken back out, and the reason is worth
+    /// keeping. Deleting EVERY apostrophe, or folding a word-final "'s" to its
+    /// base, each fixed the negators and then broke a different word: a clitic
+    /// glued to a door name erased the door ("tiktok'll be capped at 20 a day"
+    /// lost TikTok, and rule 3 then cut the SHARED budget for every app), and
+    /// folding "'s" ate the contracted copula that the report gate reads ("the
+    /// tiktok cap's 20 a day" is a statement of fact and compiled to a ceiling).
+    /// Splitting leaves "tiktok'll" as ["tiktok", "ll"] and "cap's" as
+    /// ["cap", "s"] — the door still names itself, the copula still marks the
+    /// clause, and the orphaned clitic matches nothing, which is the harmless
+    /// direction. A possessive door name needs nothing special either: "hinge's"
+    /// is ["hinge", "s"] and "hinge" is the door.
+    ///
+    /// "1'20" also keeps splitting into two numbers, which is what it is.
+    private static func foldingApostrophes(_ text: String) -> String {
+        let chars = Array(text)
+        var out = String()
+        out.reserveCapacity(chars.count)
+        var i = 0
+        while i < chars.count {
+            guard apostrophes.contains(chars[i]) else {
+                out.append(chars[i])
+                i += 1
+                continue
+            }
+            let before: Character = i > 0 ? chars[i - 1] : " "
+            let after: Character = i + 1 < chars.count ? chars[i + 1] : " "
+            let beyond: Character = i + 2 < chars.count ? chars[i + 2] : " "
+            if before.isLetter, after == "t", !beyond.isLetter, !beyond.isNumber {
+                i += 1                      // "'t" joins: don't -> dont
+            } else {
+                out.append(" ")             // everything else is a boundary
+                i += 1
+            }
+        }
+        return out
     }
 }
 

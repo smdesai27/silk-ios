@@ -46,6 +46,10 @@ public enum SharedStore {
         static let firstRunAt = "silk.firstrun"                // days before it have no score
         static let keyJournal = "silk.key.journal"             // [Date] — every exception spent
         static let undoSeconds = "silk.undo.seconds"           // the take-it-back window
+        static let days = "silk.days"                          // [DayRecord] — closed days, append-only
+        static let daysRevision = "silk.days.rev"              // bumped per append
+        static let daysStamp = "silk.days.stamp"               // proof-of-read, as the ledger has
+        static let heartbeats = "silk.heartbeat"               // [Date] — the daily schedule fired
     }
 
     /// Debug/QA only: wipe everything so onboarding runs again.
@@ -56,6 +60,8 @@ public enum SharedStore {
         for key in ["silk.policy", "silk.ledger", "silk.ledger.stamp",
                     "silk.wall.selection", "silk.door.selections",
                     "silk.attempts", "silk.attempts.last", "silk.attempts.rev",
+                    "silk.days", "silk.days.rev", "silk.days.stamp",
+                    "silk.heartbeat",
                     "silk.pending", "silk.pending.at", "silk.pending.base",
                     "silk.proposal", "silk.firstrun",
                     "silk.key.code", "silk.key.placement", "silk.key.journal",
@@ -162,6 +168,115 @@ public enum SharedStore {
         var ledger = (ledgerStamp() == knownStamp) ? base : loadLedger()
         mutation(&ledger)
         return save(ledger: ledger)
+    }
+
+    // MARK: - Day records (the hero's history)
+
+    // MARK: - Heartbeat (the one liveness signal)
+
+    /// Every instant the permanent daily schedule fired.
+    ///
+    /// Written from the monitor extension, read by the app when it summarises
+    /// a day. This is the only evidence Silk has that the Screen Time
+    /// framework was actually alive rather than silently dead — `standing`
+    /// says the wall is configured, not that anything is running.
+    public static func heartbeats() -> [Date] {
+        decode([Date].self, key: Key.heartbeats) ?? []
+    }
+
+    /// Records a firing of the daily schedule.
+    ///
+    /// Deduped at an hour — UNLESS the Silk day turned between the last beat
+    /// and this one. A launch-time re-arm shortly before the boundary records
+    /// a beat belonging to the closing day; the daemon's genuine boundary
+    /// firing arrives within the hour and must still land, or the new day is
+    /// permanently summarised dead. The rule (and the cap, sized past the
+    /// 2000-record day cap so a full walk can always be vouched for) lives in
+    /// `DayLog.heartbeatLog`, where `swift test` reaches it. Runs inside a
+    /// 6 MB extension, so it stays a decode, a small append and nothing more.
+    public static func recordHeartbeat(at now: Date = Date()) {
+        guard let beats = DayLog.heartbeatLog(heartbeats(), recording: now,
+                                              downHours: loadPolicy()?.downHours)
+        else { return }
+        encode(beats, key: Key.heartbeats)
+    }
+
+    // MARK: - Day records (the hero's history)
+
+    /// Every closed day Silk has summarised, oldest first.
+    public static func dayRecords() -> [DayRecord] {
+        (decode([DayRecord].self, key: Key.days) ?? []).sorted { $0.dayStart < $1.dayStart }
+    }
+
+    /// Moves exactly when a record is appended, so a reader can hold a
+    /// derived number until this integer says otherwise — the same contract
+    /// `attemptsRevision` offers the week chart.
+    public static func daysRevision() -> Int {
+        defaults.integer(forKey: Key.daysRevision)
+    }
+
+    /// The stamp under the current records blob. Required for the same reason
+    /// the ledger has one, and for a sharper one: the compaction gate must
+    /// read a record back before it destroys the grants that record
+    /// summarises, and `SpendIntent` in another process can rewrite the array
+    /// wholesale in between. `UserDefaults` has no compare-and-swap.
+    public static func daysStamp() -> String? {
+        defaults.string(forKey: Key.daysStamp)
+    }
+
+    @discardableResult
+    static func save(dayRecords records: [DayRecord]) -> String {
+        encode(records, key: Key.days)
+        let stamp = UUID().uuidString
+        defaults.set(stamp, forKey: Key.daysStamp)
+        defaults.set(daysRevision() &+ 1, forKey: Key.daysRevision)
+        return stamp
+    }
+
+    /// **The compaction gate.** Summarise every closed day that owes a record,
+    /// persist them, read them back, and report whether compaction may
+    /// proceed.
+    ///
+    /// > No compaction without a record.
+    ///
+    /// `GrantLedger.compact` is destructive — it drops every grant older than
+    /// the current day start — and a day whose grants are gone can never be
+    /// summarised again. So the caller must treat `false` as "do not compact":
+    /// the ledger grows slightly and the next tick self-heals, which is the
+    /// cheap side of the trade.
+    ///
+    /// Records are merged idempotently by `dayStart` and an existing record is
+    /// never overwritten — `observed` is decided at write time and never
+    /// revised, so a re-walk must not be able to change a day's verdict.
+    ///
+    /// Returns `true` when every owed boundary is present in the store after
+    /// the write, including the case where nothing was owed.
+    public static func recordClosedDays(upTo currentDayStart: Date,
+                                        downHours: DownHours,
+                                        ledger: GrantLedger,
+                                        wallStanding: Bool,
+                                        calendar: Calendar = .current) -> Bool {
+        // The gate itself — including the stamp-before-data read order its
+        // proof-of-read depends on — lives in `DayLog.recordClosedDays`,
+        // where `swift test` can pin it against a scripted concurrent writer.
+        // This is only the binding to the live container.
+        DayLog.recordClosedDays(upTo: currentDayStart, downHours: downHours,
+                                ledger: ledger, wallStanding: wallStanding,
+                                calendar: calendar, store: LiveDayRecordStore())
+    }
+
+    /// `SharedStore`'s conformance for the compaction gate, kept as a value
+    /// the gate takes rather than methods it reaches for, so the tests can
+    /// substitute a scripted store.
+    private struct LiveDayRecordStore: DayRecordStore {
+        func dayRecords() -> [DayRecord] { SharedStore.dayRecords() }
+        func daysStamp() -> String? { SharedStore.daysStamp() }
+        // The whole blob, not `attempts(since:)` — DayLog decides
+        // observability partly from whether the blob sits at its cap, and a
+        // filtered slice cannot answer that.
+        func attemptsBlob() -> [Date] { decode([Date].self, key: Key.attempts) ?? [] }
+        func heartbeats() -> [Date] { SharedStore.heartbeats() }
+        func save(dayRecords records: [DayRecord]) { SharedStore.save(dayRecords: records) }
     }
 
     // MARK: - Pending loosening (applies at next day start, or on key tap)
@@ -346,6 +461,16 @@ public enum Wall {
     /// is shared mutable state as far as Swift 6 is concerned. A fresh value
     /// per call is the same name and costs a string copy.
     public static var storeName: ManagedSettingsStore.Name { .init("silk.wall") }
+
+    /// The permanent daily schedule's name, as a raw string so both the app
+    /// (which arms it) and the monitor extension (which answers it) can name
+    /// the same activity without this file importing DeviceActivity.
+    ///
+    /// Deliberately not `relock.*` or `relock2.*`: those are per-grant,
+    /// `repeats: false`, and are stopped and restarted on every spend. This
+    /// one is armed once and left alone, and the monitor must be able to tell
+    /// them apart — a heartbeat firing is a liveness record, not a re-lock.
+    public static let heartbeatActivity = "silk.heartbeat"
 
     /// Every store name Silk could be holding a shield in, including the one it
     /// never means to write. A store's settings outlive the process, the

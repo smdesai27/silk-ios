@@ -169,12 +169,30 @@ public enum Caps {
     /// control that promises to undo one turn. The union of both key sets, so a
     /// cap the proposal CLEARED is restored too; assigning the nil-bearing
     /// subscript removes the key, which is the correct inverse.
+    ///
+    /// AND ONLY WHERE THE TURN'S OWN VALUE IS STILL STANDING. Naming a
+    /// different door was never the only way another hand could get in — a
+    /// later turn can move the SAME door, and then this offer is putting back a
+    /// value nobody is looking at. Say "cap tiktok at 20", then inside the
+    /// window "cap tiktok at 10": undoing the first wrote 20 over the live 10,
+    /// which is a LOOSENING applied instantly, out of a control that promises
+    /// to undo one turn — and it destroyed the second turn's tighten while that
+    /// turn's own pill still stood claiming it could put back 20. Comparing
+    /// against the live map is the whole rule: an offer whose value has been
+    /// overwritten since has nothing of its own left to restore.
+    ///
+    /// `changed` is that answer, and the caller needs it rather than merely
+    /// wanting it: an undo reports whether the restore landed, and "Put back."
+    /// may only be written over one that did. Receipts never lie.
     public static func restoring(_ previous: [UUID: Int], over proposed: [UUID: Int],
-                                 into caps: [UUID: Int]) -> [UUID: Int] {
+                                 into caps: [UUID: Int]) -> (caps: [UUID: Int], changed: Bool) {
         var caps = caps
-        for id in Set(previous.keys).union(proposed.keys) where previous[id] != proposed[id] {
+        var changed = false
+        for id in Set(previous.keys).union(proposed.keys)
+        where previous[id] != proposed[id] && caps[id] == proposed[id] {
             caps[id] = previous[id]
+            changed = true
         }
-        return caps
+        return (caps, changed)
     }
 }

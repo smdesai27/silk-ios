@@ -293,3 +293,157 @@ private let catalogueNames = LaunchCatalog.entries.flatMap(\.names)
                 == .command(.setDoorCap(door: tiktok, minutes: 20)))
     }
 }
+
+// MARK: - The doors the APP actually builds
+
+/// `CatalogueNamesAgainstTheGrammar` above builds its doors as
+/// `Door(name: e.display, aliases: e.names)` and proves that every spelling in
+/// the catalogue spends on its own door. It passed on every one of them while
+/// "give me 10 minutes of ig" answered "Didn't get that." on a real phone —
+/// because the app has never built a door that way. Both creation sites
+/// (`AppModel.addDoor(named:)` and setup's `.limits` step) say
+/// `Door(name: display)`, full stop, and nothing anywhere writes an alias.
+///
+/// So the suite above was asking the grammar a question about doors that do not
+/// exist. This one asks it about the doors that do. It is the same property,
+/// stated over the app's own initializer, and it is the test whose absence let
+/// a shipped product and a green CI disagree for the whole life of the feature.
+@Suite struct CatalogueNamesAgainstTheDoorsTheAppMakes {
+
+    /// A door exactly as the app makes it: a display name and nothing else.
+    private func appState(for e: LaunchCatalog.Entry) -> PolicyState {
+        PolicyState(
+            budgetMinutes: 240,
+            downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
+            doors: [Door(name: e.display)]
+        )
+    }
+
+    @Test func everyCatalogueNameSpendsOnADoorBuiltFromItsDisplayNameAlone() {
+        for e in LaunchCatalog.entries {
+            let s = appState(for: e)
+            for n in e.names where !LaunchCatalog.notDoorTriggers.contains(n) {
+                guard case .command(.spend(let d, let m)) =
+                        DeterministicParser.parse("give me 20 minutes of \(n)", state: s)
+                else {
+                    Issue.record("\"\(n)\" did not spend on a door named \(e.display)")
+                    continue
+                }
+                #expect(d.name == e.display, "\"\(n)\" spent on \(d.name)")
+                #expect(m == 20, "\"\(n)\" spent \(m)")
+            }
+        }
+    }
+
+    /// The tightest sentence in the product must reach the shorthand too. A
+    /// close that cannot hear "block ig" is a wall the user cannot raise in the
+    /// words they use for it.
+    @Test func everyCatalogueNameClosesItsOwnDoor() {
+        for e in LaunchCatalog.entries {
+            let s = appState(for: e)
+            for n in e.names where !LaunchCatalog.notDoorTriggers.contains(n) {
+                guard case .command(.closeDoorToday(let d, _)) =
+                        DeterministicParser.parse("no more \(n) today", state: s)
+                else {
+                    Issue.record("\"\(n)\" did not close a door named \(e.display)")
+                    continue
+                }
+                #expect(d.name == e.display, "\"\(n)\" closed \(d.name)")
+            }
+        }
+    }
+
+    /// And it is the CATALOGUE that supplies them, not a hand-written list that
+    /// can drift: adding a name to an entry makes it parse, with no second edit.
+    @Test func spokenFormsCoverTheCatalogueEntry() {
+        for e in LaunchCatalog.entries {
+            let forms = Set(Door(name: e.display).spokenForms)
+            for n in e.names where !LaunchCatalog.notDoorTriggers.contains(n) {
+                #expect(forms.contains(n), "\(e.display) does not answer to \"\(n)\"")
+            }
+        }
+    }
+
+    /// **AND A NAME THAT IS ORDINARY ENGLISH IS NOT A DOOR TRIGGER.** The
+    /// catalogue's `names` answer "which app do I open", where a loose synonym
+    /// is free because a chip has already been tapped. The grammar asks "did
+    /// this sentence name a door" of every token of arbitrary prose, and there
+    /// it is not free: with "snap" in the grammar's vocabulary, "im about to
+    /// snap, give me 10 minutes" GRANTED ten minutes of Snapchat, "my patience
+    /// snaps after 20 minutes" granted twenty, and "close everything im about
+    /// to snap" shut Snapchat ALONE and left every other door open, because the
+    /// sentence now named a door and the doorful arm of the close rule took it.
+    @Test func anOrdinaryEnglishNameNeverTriggersADoor() {
+        let doors = [Door(name: "Snapchat"), Door(name: "Instagram"),
+                     Door(name: "TikTok"), Door(name: "YouTube")]
+        let s = PolicyState(budgetMinutes: 60,
+                            downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
+                            doors: doors)
+        for text in ["im about to snap give me 10 minutes",
+                     "my patience snaps after 20 minutes",
+                     "give me 20 minutes in a snap",
+                     "i need 15 minutes to make a snap decision",
+                     "cap tiktok at 20 before i snap"] {
+            if case .command(.spend(let d, _)) = DeterministicParser.parse(text, state: s),
+               d.name == "Snapchat" {
+                Issue.record("\"\(text)\" bought Snapchat minutes")
+            }
+        }
+        // The broadest tighten in the product must not collapse to one door.
+        #expect(DeterministicParser.parse("close everything im about to snap", state: s)
+                == .command(.closeAllToday(until: nil)),
+                "an idiom containing \"snap\" narrowed a close over every door to one")
+    }
+
+    /// The shorthand the union exists for is untouched by the exclusion.
+    @Test func theUnambiguousShorthandStillReachesTheGrammar() {
+        let s = PolicyState(budgetMinutes: 60,
+                            downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
+                            doors: [Door(name: "Instagram"), Door(name: "YouTube"),
+                                    Door(name: "Facebook"), Door(name: "X")])
+        for (text, expected) in [("unlock yt for 20", "YouTube"),
+                                 ("give me 20 minutes of yt", "YouTube"),
+                                 ("give me 20 of fb", "Facebook"),
+                                 ("20 minutes of twitter", "X"),
+                                 ("give me 15 minutes of twitter", "X")] {
+            guard case .command(.spend(let d, _)) = DeterministicParser.parse(text, state: s) else {
+                Issue.record("\"\(text)\" did not spend")
+                continue
+            }
+            #expect(d.name == expected, "\"\(text)\" spent on \(d.name)")
+        }
+    }
+
+    /// Snapchat is still reachable by its own name, and a user who wants "snap"
+    /// as her shorthand can still write it into `aliases` herself — which is
+    /// what that field is for.
+    @Test func theExcludedNameStillWorksWhereItIsUnambiguous() {
+        let plain = PolicyState(budgetMinutes: 60,
+                                downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
+                                doors: [Door(name: "Snapchat")])
+        guard case .command(.spend(let d, let m)) =
+                DeterministicParser.parse("give me 10 minutes of snapchat", state: plain) else {
+            Issue.record("Snapchat stopped answering to its own name")
+            return
+        }
+        #expect(d.name == "Snapchat")
+        #expect(m == 10)
+
+        let chosen = PolicyState(budgetMinutes: 60,
+                                 downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
+                                 doors: [Door(name: "Snapchat", aliases: ["snap"])])
+        guard case .command(.spend(let d2, _)) =
+                DeterministicParser.parse("give me 10 minutes of snap", state: chosen) else {
+            Issue.record("a user-written alias stopped working")
+            return
+        }
+        #expect(d2.name == "Snapchat")
+    }
+
+    /// A door whose name is not in the catalogue gains nothing and loses
+    /// nothing — the lookup is total, not a fallback that invents forms.
+    @Test func aDoorOutsideTheCatalogueKeepsItsOwnForms() {
+        #expect(Door(name: "Zzyzx").spokenForms == ["zzyzx"])
+        #expect(Door(name: "Zzyzx", aliases: ["zz"]).spokenForms == ["zzyzx", "zz"])
+    }
+}

@@ -266,8 +266,28 @@ public enum Validator {
             // above: this is the one point every parser passes, so the model's
             // widened paraphrases meet the same answer the deterministic
             // reading does. A guess this expensive must not have a way around.
-            if let stated = NumberParser.statedTime(in: utterance, assumeEvening: false),
-               !stated.meridiemWasStated,
+            //
+            // P3 FIRST, AND THAT ORDER IS THE FIX. The am/pm question below is
+            // keyed to `statedTime(in: utterance)`, so on a sentence carrying no
+            // clock at all it found nothing, asked nothing, and fell straight
+            // through to `ruleChange` — which is to say it protected only the
+            // case where the user DID state the hour, exactly the case that
+            // needed it least. "do something about my mornings" states no time,
+            // is silent in the grammar, and reaches a widener whose `hour` is
+            // only range-checked; a 10:00 end against a 22:00 start is three
+            // more hours of lockdown every night, it reads as a tighten, and a
+            // tighten lands instantly. The guard now REQUIRES a stated hour and
+            // requires it to be the one the command carries — the same reading
+            // rule 2 took, with the same `assumeEvening: false` this edge uses,
+            // so it stays dead code on the grammar path.
+            // MEMBERSHIP, not identity with the first clock. "lock me out from
+            // 10pm to 7am" states two hours and a widened end of 07:00 is a
+            // correct reading of it; asking only for the first silenced every
+            // two-ended window sentence the widener can read.
+            guard NumberParser.statedTimes(in: utterance, assumeEvening: false).contains(end),
+                  let stated = NumberParser.statedTime(in: utterance, assumeEvening: false)
+            else { return .silence }
+            if !stated.meridiemWasStated,
                DownHours(start: state.downHours.start, end: end).length > state.downHours.length {
                 return .refuseSayAmOrPm(at: end)
             }
@@ -302,7 +322,55 @@ public enum Validator {
             // is a loosening that parks, shows on Now, and can be undone.
             return ruleChange(command, state)
 
-        case .setBudget, .setDownHoursStart, .removeDoor:
+        case .setBudget(let minutes):
+            // P3 — provenance, exactly as the spend and setDoorCap arms apply
+            // it, and it belonged here from the day the widener learned the
+            // verb. Dead code on the grammar path: rule 3's number can only
+            // have come from `NumberParser.allNumbers`. Live on the premise
+            // this file rests on — "every command from any parser" — and the
+            // pool is the one field where the model has both the verb and the
+            // number handed to it: `ModelAction` carries `setBudget`, and the
+            // widener's own instructions state the current budget, so any
+            // NUMBERLESS paraphrase ("halve my budget", "my daily limit is way
+            // too high, fix it") is silenced by the grammar, reaches the model,
+            // and can come back with any Int at all. No adversary is required
+            // for that; an adversary makes it worse, and the eval recorded both
+            // halves — an injection landing on setBudget, and minutes invented
+            // "out of the budget I'd mentioned in the prompt"
+            // (docs/market/open-language.md).
+            //
+            // The direction that hurts is the tighten: a raise parks as a
+            // pending, is named on Now and can be undone, while a cut lands
+            // instantly with "N left today." as its only receipt.
+            //
+            // Provenance only, and deliberately not a `> 0` guard beside it:
+            // "0 a day" compiles to `setBudget(0)` on the grammar path today,
+            // and whether the pool may be zeroed is a product question, not a
+            // provenance one. `setDoorCap`'s zero refusal rests on a ceiling of
+            // zero being a permanent close by rule, which the pool is not.
+            guard NumberParser.allNumbers(in: utterance).contains(minutes) else { return .silence }
+            return ruleChange(command, state)
+
+        case .setDownHoursStart(let start):
+            // P3 FOR THE CLOCK. The night's start had no guard of any kind, and
+            // it is a pure tighten when it moves earlier — so it skips the
+            // down-hours defer gate and lands instantly, out of a sentence with
+            // no hour in it. "block me earlier in the evenings" names no time,
+            // falls silent in the grammar (rule 2 needs a readable clock), and
+            // reaches a widener whose `hour` is only range-checked.
+            //
+            // Equality against the READING, not against the digits: rule 2
+            // resolves a bare hour with `assumeEvening: true` on this edge, so
+            // "down hours start at ten" is 22:00 and the number 22 appears
+            // nowhere in the sentence. Asking `allNumbers` for 22 would silence
+            // the canonical sentence; asking `statedTime` the same question the
+            // grammar asked, with the same assumption, makes this dead code on
+            // the grammar path by construction.
+            guard NumberParser.statedTimes(in: utterance, assumeEvening: true).contains(start)
+            else { return .silence }
+            return ruleChange(command, state)
+
+        case .removeDoor:
             return ruleChange(command, state)
         }
     }

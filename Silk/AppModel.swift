@@ -130,6 +130,11 @@ final class AppModel {
         applyPendingIfDayTurned()
         wall.reconcile()
         refreshWallStanding()
+        // Re-armed on every launch rather than once, because the daemon's
+        // activity list is not documented to survive everything that can
+        // happen to it, and arming is a restatement (it stops before it
+        // starts) rather than a second registration.
+        if onboarded { wall.armHeartbeat(downHours: policy.downHours) }
         refreshDoorIcons()
         startClock()
         #if DEBUG
@@ -158,6 +163,10 @@ final class AppModel {
         SharedStore.save(doorSelections: doorSelections)
         refreshDoorIcons(doorSelections)
         wall.reconcile()
+        // First arming: authorization has just been granted, so this is the
+        // earliest point the schedule can take. Until it fires, days record
+        // as unobserved — which is honest, not a bug.
+        wall.armHeartbeat(downHours: downHours)
         onboarded = true
     }
 
@@ -221,6 +230,23 @@ final class AppModel {
     }
 
     // MARK: - Mirror
+
+    /// **Days held** — the accumulating hero, over closed observed days only.
+    ///
+    /// Not yet on screen. `MirrorView` still draws `lastClosedScore`, and the
+    /// swap is deliberately not made here: growth-metaphor §10 puts the
+    /// re-lock device test and the daily heartbeat ahead of every drawing,
+    /// and mirror-continuity §9.5 calls `DayLog.allowance` provisional until
+    /// it is calibrated from a real device day. Reading it now means the
+    /// records accumulate from this build forward, so the calibration has
+    /// data to read when the gate opens.
+    ///
+    /// Repairs the shipped inversion: `100 − attempts − late` has no term for
+    /// granted minutes, so the current hero is strictly higher on a day you
+    /// spent than a day you resisted. This one charges a granted minute.
+    var daysHeld: Int {
+        DayLog.daysHeld(SharedStore.dayRecords())
+    }
 
     /// A day is scored once, when it closes, so the hero prefers the last
     /// closed day and holds it. `nil` before there is a closed day to read:
@@ -448,7 +474,11 @@ final class AppModel {
 
         var outcome = DeterministicParser.parse(utterance, state: policy)
         if outcome == .silence {
-            outcome = await SilkModelParser.parse(utterance, state: policy)
+            // The one unbounded leg of this function, and it is bounded now:
+            // `SilkModelParser.deadline` is two seconds, after which the
+            // widener answers silence and the turn lands "Didn't get that."
+            // rather than drawing "…" for as long as the model feels like it.
+            outcome = await SilkModelParser.shared.parse(utterance, state: policy)
         }
 
         let beat: Duration = .milliseconds(480)
@@ -692,8 +722,12 @@ final class AppModel {
     private func dropAsk(_ turn: ConversationModel.Turn.ID) {
         conversation.drop(turn)
         // Clears the thread and lifts the stage in one move — there is nothing
-        // left in it to preserve.
-        conversation.focused = false
+        // left in it to preserve. Through `blur()` rather than by writing the
+        // shadow, so that a SECOND turn still in flight keeps the dim it is
+        // being read over: this path drops one ask, and a teardown that took
+        // another turn's receipt with it would be the bug `blur()` exists for,
+        // arriving through the one door that used to bypass it.
+        conversation.blur()
     }
 
     /// She is back. A wait she left long enough ago is gone; the rest resume
@@ -1017,20 +1051,48 @@ final class AppModel {
                 // because the commit below retires the selection of any door
                 // the policy no longer holds. (Settings' own removal undo is
                 // surgical for the first half of that reason.)
+                //
+                // AND ONLY WHILE THIS TURN'S OWN VALUE IS STILL STANDING.
+                // "Somewhere else" was never the only other hand: a later
+                // sentence can move the SAME field, and then putting back is
+                // not undoing this turn, it is overwriting a newer one. Say
+                // "budget 30" and then, inside the window, "budget 20", and
+                // tapping the older pill wrote 40 over the live 20 — a
+                // LOOSENING applied instantly, which canon forbids (saying
+                // "budget 40" out loud would have parked until tomorrow) — and
+                // it destroyed the second tighten with no receipt, while the
+                // second turn's pill still stood offering to put back 30. Same
+                // shape for the night window, and `Caps.restoring` now states
+                // the same rule for ceilings where a test can reach it.
+                //
+                // The interleaved variant is the same defect arriving faster:
+                // one sentence on the widener's path and one on the grammar's
+                // land in the opposite order from the one they were typed in.
+                //
+                // The ledger path has had `ledgerGeneration` for this since it
+                // shipped; the policy path was waived, and this is the waiver
+                // being paid.
                 var restored = self.policy
-                if proposed.budgetMinutes != previous.budgetMinutes {
+                var restoredSomething = false
+                if proposed.budgetMinutes != previous.budgetMinutes,
+                   self.policy.budgetMinutes == proposed.budgetMinutes {
                     restored.budgetMinutes = previous.budgetMinutes
+                    restoredSomething = true
                 }
-                if proposed.downHours != previous.downHours {
+                if proposed.downHours != previous.downHours,
+                   self.policy.downHours == proposed.downHours {
                     restored.downHours = previous.downHours
+                    restoredSomething = true
                 }
                 // Per key, for the same reason the budget and window clauses are
                 // per field: the window runs up to five minutes with Settings
                 // usable underneath, so a wholesale restore would erase a cap
                 // set on a different door in between. `Caps.restoring` states
                 // that rule where it can be tested; here it is one call.
-                restored.doorCaps = Caps.restoring(previous.doorCaps, over: proposed.doorCaps,
-                                                   into: restored.doorCaps)
+                let caps = Caps.restoring(previous.doorCaps, over: proposed.doorCaps,
+                                          into: restored.doorCaps)
+                restored.doorCaps = caps.caps
+                restoredSomething = restoredSomething || caps.changed
                 var selections = SharedStore.loadDoorSelections()
                 var returning: [Door] = []
                 for door in dropped {
@@ -1058,10 +1120,17 @@ final class AppModel {
                 if !returning.isEmpty { SharedStore.save(doorSelections: selections) }
                 self.commit()
                 for door in returning { self.restateRelockLayers(for: door) }
-                // A policy restore has no generation to expire under: the
-                // per-field surgery above always has something true to put
-                // back, so the receipt it earns is always earned.
-                return true
+                // A policy restore CAN expire, and this is how it says so. The
+                // per-field surgery above no longer "always has something true
+                // to put back": a later turn that moved the same field owns it
+                // now, and every clause declines rather than writing a value
+                // nobody asked for. When they all decline there is nothing to
+                // report, and `ConversationModel.undo` answers that by dropping
+                // the pill and LEAVING THE REPLY — the sentence keeps stating
+                // what actually happened, and the turn is not marked undone,
+                // because it was not. Exactly what the ledger's own offers have
+                // always done under `ledgerGeneration`.
+                return restoredSomething || !returning.isEmpty
             })
 
         case .loosen:
@@ -1387,8 +1456,14 @@ final class AppModel {
         }
         // The landing report is the thread's concern — its pill rewrites the
         // reply to a receipt, and only a landed restore may earn one. A toast
-        // dismisses on tap either way and rewrites nothing, and the policy
-        // undos that ride here always land, so the report is dropped.
+        // dismisses on tap either way and rewrites nothing, so it has nothing
+        // to do with the answer and drops it.
+        //
+        // It is no longer true that a policy undo always lands: since a later
+        // turn moving the same field expires the older offer, this `_ =` is
+        // discarding a real Bool rather than a formality. That is still correct
+        // HERE — a toast has no receipt to protect — and it is worth knowing
+        // the difference, because the thread's pill does and reads it.
         toasts.show(reply, undo: undo.map { u in { _ = u() } })
     }
 
@@ -2061,6 +2136,33 @@ final class AppModel {
         guard compactedDayStart != start else { return }
         compactedDayStart = start
         syncLedgerIfStale()
+        // The day turned, which is also the one moment the heartbeat's anchor
+        // could have moved under it — down hours are the boundary. Restating
+        // it here keeps the schedule pinned to the boundary the records are
+        // being cut on.
+        wall.armHeartbeat(downHours: policy.downHours)
+
+        // No compaction without a record. `compact` drops every grant older
+        // than `start`, and a day whose grants are gone can never be
+        // summarised again — so every closed day must be written AND read
+        // back before anything is dropped. A boundary that fails to record
+        // holds the sweep entirely: the ledger grows slightly and the next
+        // tick self-heals, which is much the cheaper side of the trade.
+        //
+        // One guard, two compactions. The `persist(reapplying:)` below only
+        // runs if the compaction above it did, so both sit behind this.
+        guard SharedStore.recordClosedDays(
+            upTo: start,
+            downHours: policy.downHours,
+            ledger: ledger,
+            wallStanding: policy.wallEnabled && wall.standing == .up
+        ) else {
+            // Not swept. Clear the marker so the next tick retries rather
+            // than treating this day as done.
+            compactedDayStart = nil
+            return
+        }
+
         var compacted = ledger
         compacted.compact(dayStart: start)
         // Written back only when something was dropped, so a quiet day's
