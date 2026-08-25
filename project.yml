@@ -37,11 +37,14 @@ settings:
 
   configs:
     # XcodeGen's target presets otherwise inject the legacy "iPhone Developer"
-    # into Release too, which pins a development cert on the archive path.
+    # into Release too. Development, not Distribution: with automatic signing,
+    # pinning Distribution contradicts the style and fails every build and
+    # archive outright — Xcode signs archives with Development and re-signs at
+    # export. The pin's only job is overriding the legacy preset name.
     Debug:
       CODE_SIGN_IDENTITY: "Apple Development"
     Release:
-      CODE_SIGN_IDENTITY: "Apple Distribution"
+      CODE_SIGN_IDENTITY: "Apple Development"
       # Release only: -file-prefix-map remaps debug, coverage and index info as
       # well as #file, so in Debug it costs real debuggability and buys nothing
       # (a Debug binary is never shipped).
@@ -69,7 +72,7 @@ targets:
         Debug:
           CODE_SIGN_IDENTITY: "Apple Development"
         Release:
-          CODE_SIGN_IDENTITY: "Apple Distribution"
+          CODE_SIGN_IDENTITY: "Apple Development"
     sources: [Silk, Shared]
     dependencies:
       - package: SilkCore
@@ -109,7 +112,7 @@ targets:
         Debug:
           CODE_SIGN_IDENTITY: "Apple Development"
         Release:
-          CODE_SIGN_IDENTITY: "Apple Distribution"
+          CODE_SIGN_IDENTITY: "Apple Development"
     sources: [SilkMonitor, Shared]
     dependencies:
       - package: SilkCore
@@ -141,7 +144,7 @@ targets:
         Debug:
           CODE_SIGN_IDENTITY: "Apple Development"
         Release:
-          CODE_SIGN_IDENTITY: "Apple Distribution"
+          CODE_SIGN_IDENTITY: "Apple Development"
     sources: [SilkShield, Shared]
     dependencies:
       - package: SilkCore
@@ -173,7 +176,7 @@ targets:
         Debug:
           CODE_SIGN_IDENTITY: "Apple Development"
         Release:
-          CODE_SIGN_IDENTITY: "Apple Distribution"
+          CODE_SIGN_IDENTITY: "Apple Development"
     sources: [SilkShieldAction, Shared]
     dependencies:
       - package: SilkCore
