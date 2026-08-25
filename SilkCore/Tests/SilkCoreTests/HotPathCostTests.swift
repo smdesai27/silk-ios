@@ -106,18 +106,33 @@ private let sentence = "give me 20 minutes of instagram"
     /// GRAMMAR adds on top: the substring scans, the clause index when a rule
     /// asks for one, the door matching, the number reading.
     ///
-    /// Measured at ~51 tokenizations per parse in a debug build. The bound is
-    /// 150, which is generous on purpose: this arm is the coarse one, and its
-    /// job is to refuse the shape of change that adds another whole-utterance
-    /// scan to the front of the ladder for every sentence behind it. The
-    /// absolute backstops below are what hold the felt cost.
+    /// Measured at ~51 tokenizations per parse when this file was written,
+    /// and ~96 today — the grammar grew, and a ratio's headroom erodes
+    /// silently when its bound stands still. The bound is 3x the measured
+    /// figure, generous on purpose: this arm is the coarse one, and its job
+    /// is to refuse the shape of change that TRIPLES the parse — another
+    /// whole-utterance pass for every sentence behind it — not to hold the
+    /// felt cost, which the absolute backstops below own. At the old 150 the
+    /// healthy ~96 sat 1.5x from the line, and a full parallel `swift test`
+    /// crossed it once in eighteen runs.
     @Test func aShortSentenceParsesInAFewTokenizations() {
+        // Short windows and many rounds — `fastest`'s own rule, applied to a
+        // ratio whose arms are ASYMMETRIC. At 20 iterations per round the
+        // parse arm was a ~6 ms window against the tokenize arm's ~0.1 ms,
+        // and interleaving cannot cancel contention across that gap: the
+        // short arm finds a quiet slice while every long window stays
+        // contended, and only the numerator inflates. Three iterations per
+        // round puts both windows in the same regime (measured: the healthy
+        // ratio is unchanged); forty rounds gives each minimum forty chances
+        // at a quiet slice. A real regression slows every window, however
+        // short.
         let (parse, tokenize) = fastestPair(
-            { for _ in 0..<20 { _ = DeterministicParser.parse(sentence, state: state) } },
-            { for _ in 0..<20 { _ = NumberParser.tokenize(sentence) } }
+            rounds: 40,
+            { for _ in 0..<3 { _ = DeterministicParser.parse(sentence, state: state) } },
+            { for _ in 0..<3 { _ = NumberParser.tokenize(sentence) } }
         )
         let r = ratio(parse, to: tokenize)
-        #expect(r < 150, "the parse costs \(String(format: "%.1f", r)) tokenizations")
+        #expect(r < 300, "the parse costs \(String(format: "%.1f", r)) tokenizations")
     }
 
     /// **AND THE ABSOLUTE BACKSTOP**, which is a claim about the machine and is

@@ -36,6 +36,13 @@ struct SpendIntent: AppIntent {
     /// save. The interleave test writes here so the race is forced rather
     /// than hoped for: the window is otherwise a few microseconds of CPU.
     nonisolated(unsafe) static var beforeGrantSave: (() -> Void)?
+
+    /// The sweep's wall-standing read, forcible from tests. The simulator
+    /// returns `.up` unconditionally from `WallController.standing`, so the
+    /// half of the `wallStanding` conjunction this intent owes `summarise`
+    /// — authorized, but shielding nothing — is unreachable there without
+    /// this. Same shape as `WallController.testForceArmed`.
+    nonisolated(unsafe) static var testForceWallUp: Bool?
     #endif
 
     /// Idempotency: a repeat invocation inside the same grant window re-reads
@@ -109,14 +116,24 @@ struct SpendIntent: AppIntent {
                 $0.record(grant)
             })
 
-            let (armed, wallIsDown) = await MainActor.run { () -> (Bool, Bool) in
+            let (armed, wallIsDown, wallUp) = await MainActor.run { () -> (Bool, Bool, Bool) in
                 let wall = WallController()
                 guard wall.arm(door: door, until: relockAt) else {
                     // Read on the same hop that failed: the refusal has to
                     // agree with the row Now will show on the next launch.
-                    return (false, wall.standing != .up)
+                    return (false, wall.standing != .up, false)
                 }
-                return (true, false)
+                // Read `standing` on the hop that armed, for the sweep below.
+                // Arm succeeding is NOT the same fact: `startMonitoring`
+                // throws only on missing authorization, and a per-door arm
+                // carries no tokens when the wall selection is empty — so arm
+                // succeeds while `standing == .needsSelection` and the wall
+                // shields nothing.
+                var up = wall.standing == .up
+                #if DEBUG
+                if let forced = Self.testForceWallUp { up = forced }
+                #endif
+                return (true, false, up)
             }
 
             guard armed else {
@@ -151,10 +168,13 @@ struct SpendIntent: AppIntent {
 
             // The day-turn sweep, moved here from ahead of the validator. This
             // is the only point where the intent knows both things a record
-            // needs: a grant has just been minted, and a schedule armed
-            // against a wall that was standing — `arm` cannot succeed
-            // otherwise, which is what makes `wallStanding` honest here rather
-            // than assumed.
+            // needs: a grant has just been minted, and the wall's standing was
+            // READ on the very hop that armed — read, never inferred from the
+            // arm succeeding, which proves only authorization. `wallStanding`
+            // below is the full conjunction `DayLog.summarise` documents and
+            // `AppModel.compactLedgerIfDayTurned` passes; anything less and
+            // the same day gets opposite verdicts depending on which process
+            // sweeps first, and the first write is permanent.
             //
             // Record, then compact, and only compact if every closed day
             // recorded. A background-only user can go days without the app's
@@ -166,7 +186,7 @@ struct SpendIntent: AppIntent {
             if SharedStore.recordClosedDays(upTo: sweepStart,
                                             downHours: policy.downHours,
                                             ledger: swept,
-                                            wallStanding: policy.wallEnabled) {
+                                            wallStanding: policy.wallEnabled && wallUp) {
                 var compacted = swept
                 compacted.compact(dayStart: sweepStart)
                 // Written back only when something was dropped — a quiet pass

@@ -48,6 +48,7 @@ private func freshPolicy(budget: Int = 40,
     SharedStore.wipeAll()
     SpendIntent.lastDialog = ""
     SpendIntent.beforeGrantSave = nil
+    SpendIntent.testForceWallUp = nil
     WallController.testForceArmed = nil
     let door = doors?.first ?? Door(name: "Instagram")
     let roster = doors ?? [door]
@@ -63,6 +64,7 @@ private func freshModel(budget: Int = 40, doors: [Door]) -> AppModel {
     SharedStore.wipeAll()
     SpendIntent.lastDialog = ""
     SpendIntent.beforeGrantSave = nil
+    SpendIntent.testForceWallUp = nil
     WallController.testForceArmed = nil
     let model = AppModel()
     model.completeSetup(doors: doors,
@@ -199,6 +201,50 @@ private func settle(within seconds: Double = 3.0,
                 "today's grant was swept with yesterday")
         #expect(SharedStore.ledgerStamp() != stampBefore,
                 "the sweep re-encoded nothing")
+    }
+
+    @Test func theSweepRecordsAnUnshieldingWallAsUnobserved() async throws {
+        // The sweep's `wallStanding` is the full conjunction —
+        // `policy.wallEnabled && WallController.standing == .up` — exactly as
+        // `AppModel.compactLedgerIfDayTurned` passes it. It used to pass
+        // `wallEnabled` alone, on the theory that arm cannot succeed over a
+        // downed wall; but arm succeeds over an EMPTY wall selection
+        // (`.needsSelection` — startMonitoring checks authorization and
+        // nothing else), so a Siri spend sweeping before the app's next
+        // launch would permanently record observed:true for a day the app's
+        // own sweep would have recorded observed:false. First write wins and
+        // is never revised: the day's verdict must come from the state, not
+        // from which process swept first.
+        let door = freshPolicy()
+        let policy = SharedStore.loadPolicy()!
+        let now = Date.now
+        let dayStart = DayBoundary.dayStart(now: now, downHours: policy.downHours)
+        // The boundary the bootstrap walk emits when no records exist yet.
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: dayStart)!
+
+        // Yesterday must be a day only `wallStanding` can sink: sane span,
+        // attempts blob nowhere near its cap, and a heartbeat inside it so
+        // the liveness term holds.
+        var ledger = GrantLedger()
+        ledger.record(Grant(door: door, minutes: 20,
+                            issuedAt: yesterday.addingTimeInterval(60),
+                            expiresAt: yesterday.addingTimeInterval(21 * 60)))
+        SharedStore.save(ledger: ledger)
+        SharedStore.recordHeartbeat(at: yesterday.addingTimeInterval(120))
+
+        WallController.testForceArmed = true
+        SpendIntent.testForceWallUp = false   // authorized, nothing selected
+        defer {
+            WallController.testForceArmed = nil
+            SpendIntent.testForceWallUp = nil
+        }
+
+        _ = try await performSpend(door: door.name, minutes: 15)
+
+        let record = SharedStore.dayRecords().first { $0.dayStart == yesterday }
+        #expect(record != nil, "the sweep did not record the owed day at all")
+        #expect(record?.observed == false,
+                "the intent credited a day the wall shielded nothing — the sweep is passing half the wallStanding contract")
     }
 
     @Test func aBiggerAskOverALiveGrantRestatesViaTheIntent() async throws {
