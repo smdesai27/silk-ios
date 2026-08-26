@@ -740,6 +740,217 @@ private final class ScriptedDayStore: DayRecordStore, @unchecked Sendable {
     }
 }
 
+// MARK: - The compaction frontier
+//
+// The gate's `true` green-lights `compact(dayStart: currentDayStart)` in both
+// callers. When the user moves when down hours end, the record chain stays
+// anchored at the OLD boundary's time-of-day while `currentDayStart` comes
+// from the live policy — and the old-anchored day closes AFTER the live
+// boundary sweeps. Nothing is owed at that sweep, so the old gate said true,
+// and compaction destroyed the still-unsummarised day's grants; the day was
+// later recorded with grantedMinutes: 0, permanently. "No compaction without
+// a record" now means what it says: never past the frontier.
+
+@Suite struct TheGateNeverBlessesCompactionPastAnUnsummarisedDay {
+
+    private func record(_ start: Date, observed: Bool = true) -> DayRecord {
+        DayRecord(dayStart: start, grantedMinutes: 0, reaches: 0,
+                  lateReaches: 0, observed: observed)
+    }
+
+    @Test func aBoundaryMovedEarlierHoldsTheSweepInsteadOfDestroyingTheDay() {
+        // The probe's exact shape: records anchored 07:00 (newest summarises
+        // the day that ended Jun 21 07:00), a grant spent Jun 21 14:00,
+        // down-hours end moved to 05:00. At the Jun 22 05:00 sweep the
+        // old-anchored Jun 21 day runs until Jun 22 07:00 — nothing is owed,
+        // and the old gate answered true with no record written, emptying the
+        // ledger of the very grant Jun 21's summary needs.
+        let store = ScriptedDayStore(records: [record(at(6, 19, 7)),
+                                               record(at(6, 20, 7))],
+                                     beats: [at(6, 20, 7), at(6, 21, 7)])
+        var ledger = GrantLedger()
+        ledger.record(Grant(door: Door(name: "Instagram"), minutes: 30,
+                            issuedAt: at(6, 21, 14), expiresAt: at(6, 21, 14, 30)))
+
+        let ok = DayLog.recordClosedDays(upTo: at(6, 22, 5), downHours: night,
+                                         ledger: ledger, wallStanding: true,
+                                         calendar: cal, store: store)
+        #expect(ok == false)
+        // And no verdict was invented for the day still in progress.
+        #expect(!store.records.contains { $0.dayStart == at(6, 21, 7) })
+    }
+
+    @Test func aBoundaryMovedLaterHoldsTheSweepTheSameWay() {
+        // The other direction: records anchored 05:00, boundary now 07:00.
+        // The Jun 21 05:00 day is summarised (fully elapsed), but the
+        // Jun 22 05:00 day — two hours of which precede the sweep — is not,
+        // and compacting to Jun 22 07:00 would cut into it.
+        let store = ScriptedDayStore(records: [record(at(6, 20, 5)),
+                                               record(at(6, 21, 5))],
+                                     beats: [at(6, 21, 5), at(6, 22, 5)])
+        let ok = DayLog.recordClosedDays(upTo: at(6, 22, 7), downHours: night,
+                                         ledger: GrantLedger(), wallStanding: true,
+                                         calendar: cal, store: store)
+        #expect(ok == false)
+    }
+
+    @Test func aMatchedAnchorStillCompactsAtEveryBoundary() {
+        // The common case must not pay for the moved one: chain and policy
+        // agree, yesterday lands, the frontier IS the current day start.
+        let store = ScriptedDayStore(records: [record(at(6, 8, 7))],
+                                     beats: [at(6, 9, 7)])
+        let ok = DayLog.recordClosedDays(upTo: at(6, 10, 7), downHours: night,
+                                         ledger: GrantLedger(), wallStanding: true,
+                                         calendar: cal, store: store)
+        #expect(ok == true)
+    }
+
+    @Test func theFrontierIsTheNewestClosedDaysOwnEnd() {
+        // Newest record Jun 20 07:00 → its day ended Jun 21 07:00, and that
+        // is as far as any compaction may reach, however far ahead the live
+        // boundary sits.
+        #expect(DayLog.compactionFrontier(recorded: [at(6, 19, 7), at(6, 20, 7)],
+                                          upTo: at(6, 22, 5), calendar: cal) == at(6, 21, 7))
+
+        // Matched anchors clamp to the day start itself…
+        #expect(DayLog.compactionFrontier(recorded: [at(6, 21, 7)],
+                                          upTo: at(6, 22, 7), calendar: cal) == at(6, 22, 7))
+        // …and with nothing summarised, nothing may be dropped.
+        #expect(DayLog.compactionFrontier(recorded: [], upTo: at(6, 22, 7),
+                                          calendar: cal) == .distantPast)
+        // A future-dated record is not a closed day and moves no frontier.
+        #expect(DayLog.compactionFrontier(recorded: [at(6, 25, 7)],
+                                          upTo: at(6, 22, 7), calendar: cal) == .distantPast)
+    }
+}
+
+// MARK: - The forward clock
+//
+// Clock manipulation is an expected input for a screen-time lock. A clock
+// rolled forward makes `currentDayStart` a fabrication: the old walk owed
+// every not-yet-happened day up to it, wrote each as a permanent ring,
+// green-lit compaction of every live grant, and — once the clock was
+// corrected — left the fabricated records standing to satisfy the walk as
+// real time reached them, so honestly-lived days scored 0 forever.
+
+@Suite struct AForwardClockCannotFabricatePermanentDays {
+
+    private func record(_ start: Date, observed: Bool = true) -> DayRecord {
+        DayRecord(dayStart: start, grantedMinutes: 0, reaches: 0,
+                  lateReaches: 0, observed: observed)
+    }
+
+    @Test func daysBeyondEverySignOfLifeAreNotSummarised() {
+        // Real history through Jun 9; the clock claims it is Jun 20. The days
+        // between exist only in the clock's imagination — no heartbeat, no
+        // attempt reaches them — so they stay owed, and the gate holds
+        // compaction instead of destroying every live grant against a fake
+        // day start.
+        let store = ScriptedDayStore(records: [record(at(6, 8, 7))],
+                                     beats: [at(6, 9, 7)])
+        let ok = DayLog.recordClosedDays(upTo: at(6, 20, 7), downHours: night,
+                                         ledger: GrantLedger(), wallStanding: true,
+                                         calendar: cal, store: store)
+        #expect(ok == false)
+        // Jun 9 had a beat at its start — the world provably reached it — so
+        // its record lands; nothing past the evidence is written.
+        #expect(store.records.contains { $0.dayStart == at(6, 9, 7) })
+        #expect(store.records.allSatisfy { $0.dayStart <= at(6, 9, 7) })
+    }
+
+    @Test func theVouchedDaysStillLandWhileTheRestWait() {
+        // Evidence through Jun 11 vouches for Jun 9, 10 and 11 (their starts
+        // are at or before the newest beat); Jun 12…19 wait for real time.
+        let store = ScriptedDayStore(records: [record(at(6, 8, 7))],
+                                     beats: [at(6, 9, 7), at(6, 10, 7), at(6, 11, 7)])
+        _ = DayLog.recordClosedDays(upTo: at(6, 20, 7), downHours: night,
+                                    ledger: GrantLedger(), wallStanding: true,
+                                    calendar: cal, store: store)
+        for day in [at(6, 9, 7), at(6, 10, 7), at(6, 11, 7)] {
+            #expect(store.records.contains { $0.dayStart == day })
+        }
+        #expect(!store.records.contains { $0.dayStart >= at(6, 12, 7) })
+    }
+
+    @Test func fabricatedRecordsArePurgedOnceTheClockIsCorrected() {
+        // Records for Jun 12…14 were written while the clock was ahead; the
+        // clock now reads Jun 10. Left standing, each would satisfy the walk
+        // the moment real time reached it, and the user's actual Jun 12 would
+        // score off hours that never existed. The gate deletes them, so those
+        // days are summarised from real counts when they genuinely close.
+        let store = ScriptedDayStore(records: [record(at(6, 8, 7)),
+                                               record(at(6, 12, 7)),
+                                               record(at(6, 13, 7)),
+                                               record(at(6, 14, 7))],
+                                     beats: [at(6, 9, 7)])
+        let ok = DayLog.recordClosedDays(upTo: at(6, 10, 7), downHours: night,
+                                         ledger: GrantLedger(), wallStanding: true,
+                                         calendar: cal, store: store)
+        #expect(ok == true)
+        #expect(store.records.contains { $0.dayStart == at(6, 9, 7) })
+        #expect(!store.records.contains { $0.dayStart >= at(6, 10, 7) })
+    }
+
+    @Test func purgingFabricationsIsNotARevision() {
+        // "Summarised once, never revised" protects verdicts on days that
+        // happened. A real day's record — even a ring — survives the purge
+        // untouched; only records dated at or past the current day start go.
+        let realRing = record(at(6, 9, 7), observed: false)
+        let store = ScriptedDayStore(records: [record(at(6, 8, 7)), realRing,
+                                               record(at(6, 15, 7))],
+                                     beats: [at(6, 9, 7)])
+        _ = DayLog.recordClosedDays(upTo: at(6, 10, 7), downHours: night,
+                                    ledger: GrantLedger(), wallStanding: true,
+                                    calendar: cal, store: store)
+        let jun9 = store.records.first { $0.dayStart == at(6, 9, 7) }
+        #expect(jun9?.observed == false)
+        #expect(!store.records.contains { $0.dayStart == at(6, 15, 7) })
+    }
+}
+
+// MARK: - The heartbeat log under a forward clock
+//
+// One beat recorded while the clock was set forward mutes the log after the
+// correction: every genuine firing is a "negative interval" against it and
+// returns nil, so every honestly-lived day until real time passes the fake
+// beat is summarised dead — permanently, because observed is never revised.
+
+@Suite struct AFutureDatedBeatCannotMuteTheLog {
+
+    @Test func theNextGenuineFiringDropsTheFakeBeatAndRecords() {
+        // A beat 90 days ahead (the game-time-cheat shape): the daemon's next
+        // real firing must both heal the log and land, or the day it fired
+        // for rings despite the framework being demonstrably alive.
+        let fake = at(9, 10, 7)
+        let beats = DayLog.heartbeatLog([at(6, 10, 7), fake], recording: at(6, 11, 7),
+                                        downHours: night, calendar: cal)
+        #expect(beats == [at(6, 10, 7), at(6, 11, 7)])
+
+        // And it is load-bearing: the healed log marks the real day observed.
+        let healed = summarise(heartbeats: beats ?? [], dayStart: at(6, 11, 7))
+        let muted = summarise(heartbeats: [at(6, 10, 7)], dayStart: at(6, 11, 7))
+        #expect(healed.observed == true)
+        #expect(muted.observed == false)
+    }
+
+    @Test func aHealIsWorthAWriteEvenWhenTheFiringItselfDedupes() {
+        // The firing restates a beat half an hour old — normally nil — but
+        // returning nil here would leave the fake beat standing forever. The
+        // trimmed log must land.
+        let beats = DayLog.heartbeatLog([at(6, 10, 12), at(9, 10, 7)],
+                                        recording: at(6, 10, 12, 30),
+                                        downHours: night, calendar: cal)
+        #expect(beats == [at(6, 10, 12)])
+    }
+
+    @Test func aBeatMerelyMinutesAheadIsJitterNotDamage() {
+        // The pinned small-backwards case is untouched: a beat inside the
+        // dedupe window heals by itself within the hour, and stays.
+        #expect(DayLog.heartbeatLog([at(6, 10, 12)], recording: at(6, 10, 11, 30),
+                                    downHours: night, calendar: cal) == nil)
+    }
+}
+
 // MARK: - The hero and the record are one formula
 
 /// Mirror's numbers come from here now: a closed day draws `DayRecord.score`,

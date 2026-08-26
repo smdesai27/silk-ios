@@ -102,20 +102,33 @@ public struct GrantLedger: Codable, Sendable, Equatable {
 
     // MARK: - Reading the day
 
-    public func spentMinutes(dayStart: Date) -> Int {
-        grants.filter { $0.issuedAt >= dayStart }.reduce(0) { $0 + $1.minutes }
+    /// The day's spend is the day's grants: issued at or after `dayStart` AND
+    /// before the next boundary. The window's far edge is not pedantry — a
+    /// grant minted while the device clock was transiently forward carries a
+    /// future `issuedAt`, and under the old open-ended filter it satisfied
+    /// `issuedAt >= dayStart` on EVERY subsequent real day, re-debiting the
+    /// same minutes from the budget daily until real time caught up with it.
+    /// Clipped to the day, a phantom grant charges only the day it claims to
+    /// belong to, exactly as `DayLog.grantedMinutes` already clips.
+    public func spentMinutes(dayStart: Date, calendar: Calendar = .current) -> Int {
+        let dayEnd = DayBoundary.nextDayStart(after: dayStart, calendar: calendar)
+        return grants.filter { $0.issuedAt >= dayStart && $0.issuedAt < dayEnd }
+            .reduce(0) { $0 + $1.minutes }
     }
 
-    public func remainingMinutes(budget: Int, dayStart: Date) -> Int {
-        max(0, budget - spentMinutes(dayStart: dayStart))
+    public func remainingMinutes(budget: Int, dayStart: Date, calendar: Calendar = .current) -> Int {
+        max(0, budget - spentMinutes(dayStart: dayStart, calendar: calendar))
     }
 
     /// What one door has drawn from the pool today. Derived from `grants`, like
     /// the shared spend, so restoring a ledger value restores every door's
     /// remaining for free — which is why the grant and close undo paths need no
-    /// cap clause at all.
-    public func spentMinutes(doorID: UUID, dayStart: Date) -> Int {
-        grants.filter { $0.doorID == doorID && $0.issuedAt >= dayStart }.reduce(0) { $0 + $1.minutes }
+    /// cap clause at all. Windowed to the day for the same reason the shared
+    /// spend is.
+    public func spentMinutes(doorID: UUID, dayStart: Date, calendar: Calendar = .current) -> Int {
+        let dayEnd = DayBoundary.nextDayStart(after: dayStart, calendar: calendar)
+        return grants.filter { $0.doorID == doorID && $0.issuedAt >= dayStart && $0.issuedAt < dayEnd }
+            .reduce(0) { $0 + $1.minutes }
     }
 
     /// What is left under one door's own ceiling. `cap` is non-optional on
@@ -128,8 +141,9 @@ public struct GrantLedger: Codable, Sendable, Equatable {
     /// what the door has already spent reads 0 at once and does not cut short a
     /// running grant — the same precedent a budget cut already sets, and the
     /// same reason closing an app early refunds nothing.
-    public func remainingMinutes(cap: Int, doorID: UUID, dayStart: Date) -> Int {
-        max(0, cap - spentMinutes(doorID: doorID, dayStart: dayStart))
+    public func remainingMinutes(cap: Int, doorID: UUID, dayStart: Date,
+                                 calendar: Calendar = .current) -> Int {
+        max(0, cap - spentMinutes(doorID: doorID, dayStart: dayStart, calendar: calendar))
     }
 
     /// Whether a close currently binds this door: recorded this Silk day, and
@@ -166,8 +180,17 @@ public struct GrantLedger: Codable, Sendable, Equatable {
 
     /// Drop everything before the previous day; history beyond the Mirror week
     /// lives in its own store, not the hot ledger.
-    public mutating func compact(dayStart: Date) {
-        grants.removeAll { $0.expiresAt < dayStart }
+    ///
+    /// A grant issued at or past the day's END goes with the history: it was
+    /// minted under a clock that has since been corrected, and it belongs to a
+    /// day that has not happened. Kept, its expiry stays forever ahead of every
+    /// sweep — the row is immortal — and when the fake window finally arrives,
+    /// months on, it goes active and drops the wall for a spend nobody
+    /// remembers making. Nothing legitimate is in that region: every honest
+    /// grant is issued at some `now` inside the day being swept.
+    public mutating func compact(dayStart: Date, calendar: Calendar = .current) {
+        let dayEnd = DayBoundary.nextDayStart(after: dayStart, calendar: calendar)
+        grants.removeAll { $0.expiresAt < dayStart || $0.issuedAt >= dayEnd }
         closedToday = closedToday.filter { $0.value >= dayStart }
         closedUntil = closedUntil.filter { closedToday[$0.key] != nil }
     }

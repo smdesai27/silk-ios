@@ -121,3 +121,65 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
         #expect(ledger.nextTransition(after: now) == nil)
     }
 }
+
+// MARK: - The phantom grant
+//
+// A grant minted while the device clock was transiently forward carries a
+// future issuedAt/expiresAt. Under the open-ended spend filter it satisfied
+// `issuedAt >= dayStart` on EVERY subsequent real day — the same minutes
+// deducted from the budget again each morning — and `compact` kept the row
+// forever because its expiry never fell behind a day start. One Siri spend
+// during a time-cheat evening cost the whole budget daily for months, with
+// nothing short of wipeAll able to remove it.
+
+@Suite struct AGrantFromADayThatNeverHappenedCannotSpendForever {
+
+    /// Ninety real days after the fake evening, the phantom must charge
+    /// nothing — the spend is the day's spend, not "everything issued since".
+    @Test func aFutureIssuedGrantDebitsNoRealDay() {
+        let phantom = grant(instagram, from: at(10, 28, 20), to: at(10, 28, 20, 30))
+        var ledger = GrantLedger()
+        ledger.record(phantom)
+
+        for now in [at(7, 30, 9), at(8, 15, 12), at(9, 1, 7, 30)] {
+            let start = dayStart(now)
+            #expect(ledger.spentMinutes(dayStart: start) == 0)
+            #expect(ledger.remainingMinutes(budget: 60, dayStart: start) == 60)
+            #expect(ledger.spentMinutes(doorID: instagram.id, dayStart: start) == 0)
+            #expect(ledger.remainingMinutes(cap: 30, doorID: instagram.id,
+                                            dayStart: start) == 30)
+        }
+    }
+
+    /// And the row itself is mortal: the day-turn sweep drops a grant issued
+    /// past the day's end, so the zombie can never lie in wait to go active —
+    /// and drop the wall — when its fake window finally arrives.
+    @Test func compactionDropsTheFutureIssuedRow() {
+        let phantom = grant(instagram, from: at(10, 28, 20), to: at(10, 28, 20, 30))
+        var ledger = GrantLedger()
+        ledger.record(phantom)
+
+        ledger.compact(dayStart: dayStart(at(7, 30, 9)))
+
+        #expect(ledger.grants.isEmpty)
+        #expect(ledger.nextTransition(after: at(7, 30, 9)) == nil)
+    }
+
+    /// The boundary of the rule: everything issued inside the sweeping day —
+    /// including a grant still running into tomorrow — is an honest row and
+    /// survives, and still counts.
+    @Test func todaysOwnGrantsAreNotPhantoms() {
+        let now = at(7, 30, 22)
+        let start = dayStart(now)
+        var ledger = GrantLedger()
+        ledger.record(grant(instagram, from: at(7, 30, 9), to: at(7, 30, 9, 20)))
+        // Issued late tonight, expiring after tomorrow's boundary.
+        ledger.record(grant(tiktok, from: at(7, 30, 21, 50), to: at(7, 31, 7, 20)))
+
+        ledger.compact(dayStart: start)
+
+        #expect(ledger.grants.count == 2)
+        #expect(ledger.spentMinutes(dayStart: start) > 0)
+        #expect(ledger.openDoors(at: now, dayStart: start) == [tiktok.id])
+    }
+}

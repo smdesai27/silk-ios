@@ -339,27 +339,92 @@ public enum DayLog {
     public static func heartbeatLog(_ beats: [Date], recording now: Date,
                                     downHours: DownHours?,
                                     calendar: Calendar = .current) -> [Date]? {
-        if let last = beats.last, now.timeIntervalSince(last) < heartbeatDedupe {
+        // Self-heal a beat written under a clock that has since been corrected.
+        // A stored beat further ahead of `now` than the dedupe window cannot be
+        // jitter — it is a firing stamped by a forward-set clock, and left in
+        // place it silences every genuine firing until real time passes it
+        // (any real `now` is a "negative interval" against it), ringing every
+        // honestly-lived day permanently. `missingBoundaries` already refuses
+        // future-dated records; the beat log gets the same discipline. A beat
+        // merely inside the window stays: the small-backwards case below is
+        // pinned and heals by itself within the hour.
+        var healed = beats
+        healed.removeAll { $0.timeIntervalSince(now) >= heartbeatDedupe }
+        let didHeal = healed.count != beats.count
+
+        if let last = healed.last, now.timeIntervalSince(last) < heartbeatDedupe {
             // A clock that went backwards is also in here (negative interval);
             // dropping it keeps the log ordered.
             guard now > last, let downHours,
                   DayBoundary.dayStart(now: now, downHours: downHours, calendar: calendar)
                     != DayBoundary.dayStart(now: last, downHours: downHours, calendar: calendar)
-            else { return nil }
+            // A restatement is not worth a write — but a heal always is, or
+            // the corrected log never lands and the fake beat stands forever.
+            else { return didHeal ? healed : nil }
         }
-        var out = beats
-        out.append(now)
-        if out.count > heartbeatCap { out.removeFirst(out.count - heartbeatCap) }
-        return out
+        healed.append(now)
+        if healed.count > heartbeatCap { healed.removeFirst(healed.count - heartbeatCap) }
+        return healed
     }
 
     // MARK: The compaction gate
 
+    /// The oldest instant a compaction may cut at: the end of the newest
+    /// summarised closed day, clamped to `currentDayStart`.
+    ///
+    /// The record chain is anchored at the OLDEST record's time-of-day while
+    /// `currentDayStart` comes from the live policy, and the moment the user
+    /// moves when down hours end the two disagree. An old-anchored day then
+    /// closes *after* the live boundary sweeps, and `compact(dayStart:
+    /// currentDayStart)` would destroy that still-unsummarised day's grants —
+    /// it would later be recorded with `grantedMinutes: 0`, permanently
+    /// ("summarised once, never revised"). Compaction may only ever reach the
+    /// frontier this returns; with no summarised past day at all, nothing may
+    /// be dropped (`.distantPast`).
+    public static func compactionFrontier(recorded: Set<Date>,
+                                          upTo currentDayStart: Date,
+                                          calendar: Calendar = .current) -> Date {
+        guard let newest = recorded.filter({ $0 < currentDayStart }).max() else {
+            return .distantPast
+        }
+        return min(currentDayStart,
+                   DayBoundary.nextDayStart(after: newest, calendar: calendar))
+    }
+
     /// **The compaction gate.** Summarise every closed day that owes a record,
     /// persist it through `store`, read it back, and report whether compaction
-    /// may proceed.
+    /// may proceed — to `currentDayStart`, which is what both callers pass to
+    /// `compact(dayStart:)`.
     ///
     /// > No compaction without a record.
+    ///
+    /// Three refusals guard that rule, beyond the read-back proof itself:
+    ///
+    /// **Never past the frontier.** A `true` here green-lights
+    /// `compact(dayStart: currentDayStart)`, so it may only be said when
+    /// `compactionFrontier` has reached `currentDayStart` — every day before
+    /// the cut is summarised. When the record chain's anchor lags the live
+    /// boundary (down-hours end moved, timezone travel), the gate answers
+    /// `false` and the ledger grows a little instead: the cheaper side of the
+    /// trade, exactly as a record that failed to land is treated.
+    ///
+    /// **Never a day the world has not vouched for.** Under a forward-set
+    /// clock, `currentDayStart` is a fabrication and the walk would owe every
+    /// day between real time and the fake instant — each written as a
+    /// permanent ring, evicting real history at the cap and green-lighting
+    /// destruction of every live grant. So a boundary is summarised only when
+    /// some recorded instant — a heartbeat or an attempt — sits at or past it:
+    /// proof the world reached that day. With no evidence at all (a fresh
+    /// install bootstrapping its first ring) the walk proceeds; the days the
+    /// evidence cannot vouch for stay owed, which holds compaction.
+    ///
+    /// **Never keep a record from a day that has not happened.** A stored
+    /// record dated at or past `currentDayStart` was written under a clock
+    /// since corrected. Left standing, it satisfies the walk the moment real
+    /// time reaches it, and the day the user actually lives through scores
+    /// off hours that never existed. Deleting it revises no verdict — there
+    /// was no day to have a verdict on — so it is purged here, and the real
+    /// day is summarised from real counts when it genuinely closes.
     ///
     /// Lives here — pure, over an injected store — so the write-ordering
     /// protocol below is testable from `swift test` with a scripted
@@ -385,31 +450,59 @@ public enum DayLog {
         let owed = missingBoundaries(recorded: Set(before.map(\.dayStart)),
                                      upTo: currentDayStart,
                                      calendar: calendar)
-        guard !owed.isEmpty else { return true }
 
-        // The whole blob, not a filtered slice — `summarise` decides
-        // observability partly from whether the blob sits at its cap, and a
-        // filtered slice cannot answer that.
-        let blob = store.attemptsBlob()
-        let beats = store.heartbeats()
+        // A record dated at or past today was written under a clock since
+        // corrected; purging it is part of any save this pass makes.
+        let fabricated = before.contains { $0.dayStart >= currentDayStart }
 
-        let fresh = owed.map { boundary in
-            summarise(dayStart: boundary, downHours: downHours,
-                      grants: ledger.grants, attempts: blob,
-                      heartbeats: beats,
-                      wallStanding: wallStanding, calendar: calendar)
+        var fresh: [DayRecord] = []
+        if !owed.isEmpty {
+            // The whole blob, not a filtered slice — `summarise` decides
+            // observability partly from whether the blob sits at its cap, and a
+            // filtered slice cannot answer that.
+            let blob = store.attemptsBlob()
+            let beats = store.heartbeats()
+
+            // The corroboration horizon: the newest instant anything was
+            // actually recorded happening. A day past every sign of life is a
+            // day only the device clock claims occurred — its verdict waits,
+            // and compaction waits with it. No evidence at all is the fresh
+            // install writing its first ring, and walks unbounded.
+            let evidence = (blob + beats).max()
+            let vouched = evidence.map { horizon in owed.filter { $0 <= horizon } }
+                ?? owed
+
+            fresh = vouched.map { boundary in
+                summarise(dayStart: boundary, downHours: downHours,
+                          grants: ledger.grants, attempts: blob,
+                          heartbeats: beats,
+                          wallStanding: wallStanding, calendar: calendar)
+            }
         }
 
-        // If another process wrote between our read and now, our copy is
-        // stale and saving it wholesale would erase their records. Re-read and
-        // merge onto what stands instead.
-        let base = (store.daysStamp() == stampAtRead) ? before : store.dayRecords()
-        store.save(dayRecords: merge(existing: base, adding: fresh))
+        if !fresh.isEmpty || fabricated {
+            // If another process wrote between our read and now, our copy is
+            // stale and saving it wholesale would erase their records. Re-read
+            // and merge onto what stands instead. Future-dated records are
+            // dropped from the base before the merge, so the cap can never
+            // evict a real day in favour of a fabricated one.
+            let base = (store.daysStamp() == stampAtRead) ? before : store.dayRecords()
+            let standing = base.filter { $0.dayStart < currentDayStart }
+            store.save(dayRecords: merge(existing: standing, adding: fresh))
+        }
 
         // Proof, not hope: re-read and confirm. A record that did not land
-        // must hold the compaction, or its grants go with it.
-        let after = Set(store.dayRecords().map(\.dayStart))
-        return owed.allSatisfy { after.contains($0) }
+        // must hold the compaction, or its grants go with it. (Nothing owed
+        // and nothing to purge is a true without a write, as ever.)
+        let after = (fresh.isEmpty && !fabricated) ? before : store.dayRecords()
+        let afterStarts = Set(after.map(\.dayStart))
+        guard owed.allSatisfy({ afterStarts.contains($0) }) else { return false }
+
+        // And never past the frontier: every owed day landing is not enough
+        // when the chain's newest closed day ends after the cut the callers
+        // will make.
+        return compactionFrontier(recorded: afterStarts, upTo: currentDayStart,
+                                  calendar: calendar) >= currentDayStart
     }
 }
 
