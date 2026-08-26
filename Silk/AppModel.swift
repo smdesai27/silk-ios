@@ -2180,28 +2180,39 @@ final class AppModel {
         wall.armHeartbeat(downHours: policy.downHours)
 
         // No compaction without a record. `compact` drops every grant older
-        // than `start`, and a day whose grants are gone can never be
+        // than its cut, and a day whose grants are gone can never be
         // summarised again — so every closed day must be written AND read
-        // back before anything is dropped. A boundary that fails to record
-        // holds the sweep entirely: the ledger grows slightly and the next
-        // tick self-heals, which is much the cheaper side of the trade.
-        //
-        // One guard, two compactions. The `persist(reapplying:)` below only
-        // runs if the compaction above it did, so both sit behind this.
-        guard SharedStore.recordClosedDays(
+        // back before anything is dropped. The cut is therefore the
+        // FRONTIER the records themselves vouch for, not `start`: cutting at
+        // `start` only when the gate said yes deferred compaction *forever*
+        // in a permanently-moved-boundary regime (the frontier trails the
+        // live boundary by a couple of hours every single day), while the
+        // frontier compacts exactly as far as the summarised chain reaches —
+        // the same instant when the anchors agree, a day behind when not.
+        let recorded = SharedStore.recordClosedDays(
             upTo: start,
             downHours: policy.downHours,
             ledger: ledger,
             wallStanding: policy.wallEnabled && wall.standing == .up
-        ) else {
-            // Not swept. Clear the marker so the next tick retries rather
-            // than treating this day as done.
+        )
+        if !recorded {
+            // Days are still owed past the frontier. Clear the marker so the
+            // next tick retries rather than treating this day as done.
             compactedDayStart = nil
-            return
         }
 
+        // The cut runs only when the frontier's own day reaches past `now`:
+        // `compact` treats a grant issued at or past the cut day's end as a
+        // phantom, and a frontier lagging real time (a long absence, a
+        // forward-set clock holding the walk) must not eat a grant minted
+        // today.
+        let cut = DayLog.compactionFrontier(
+            recorded: Set(SharedStore.dayRecords().map(\.dayStart)),
+            upTo: start)
+        guard DayBoundary.nextDayStart(after: cut) > now else { return }
+
         var compacted = ledger
-        compacted.compact(dayStart: start)
+        compacted.compact(dayStart: cut)
         // Written back only when something was dropped, so a quiet day's
         // boundary re-encodes nothing.
         guard compacted != ledger else { return }
@@ -2210,8 +2221,8 @@ final class AppModel {
         // swept before this write stays honest because of it: a stamp race
         // cannot skip the sweep, only re-run the compaction over the fresh
         // ledger, which drops nothing an external writer landed (compaction
-        // only sheds entries spent before this day began).
-        persist(reapplying: { $0.compact(dayStart: start) })
+        // only sheds entries spent before the frontier).
+        persist(reapplying: { $0.compact(dayStart: cut) })
     }
 
     private func persist(reapplying mutation: ((inout GrantLedger) -> Void)? = nil) {

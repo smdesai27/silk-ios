@@ -190,24 +190,41 @@ struct SpendIntent: AppIntent {
             // the same day gets opposite verdicts depending on which process
             // sweeps first, and the first write is permanent.
             //
-            // Record, then compact, and only compact if every closed day
-            // recorded. A background-only user can go days without the app's
-            // clock running, so this is the one sweep those days will get; if
-            // it cannot summarise them it must not destroy them either.
+            // Record, then compact — and compact only to the FRONTIER the
+            // records vouch for, never to the live day start itself. A
+            // background-only user can go days without the app's clock
+            // running, so this is the one sweep those days will get; if it
+            // cannot summarise them it must not destroy them either. Cutting
+            // at `sweepStart` only when the gate said yes deferred compaction
+            // *forever* in a permanently-moved-boundary regime (the frontier
+            // trails the live boundary by a couple of hours every single
+            // day); cutting at the frontier compacts exactly as far as the
+            // summarised chain reaches, which is the same instant when the
+            // anchors agree and a day behind when they do not.
+            //
+            // The cut runs only when the frontier's own day reaches past
+            // `now`: `compact` treats a grant issued at or past the cut day's
+            // end as a phantom, and a frontier lagging real time (a long
+            // absence, a forward-set clock holding the walk) must not eat the
+            // grant this very intent just minted.
             let sweepStart = DayBoundary.dayStart(now: now, downHours: policy.downHours)
             let sweepStamp = SharedStore.ledgerStamp()
             let swept = SharedStore.loadLedger()
-            if SharedStore.recordClosedDays(upTo: sweepStart,
-                                            downHours: policy.downHours,
-                                            ledger: swept,
-                                            wallStanding: policy.wallEnabled && wallUp) {
+            _ = SharedStore.recordClosedDays(upTo: sweepStart,
+                                             downHours: policy.downHours,
+                                             ledger: swept,
+                                             wallStanding: policy.wallEnabled && wallUp)
+            let cut = DayLog.compactionFrontier(
+                recorded: Set(SharedStore.dayRecords().map(\.dayStart)),
+                upTo: sweepStart)
+            if DayBoundary.nextDayStart(after: cut) > now {
                 var compacted = swept
-                compacted.compact(dayStart: sweepStart)
+                compacted.compact(dayStart: cut)
                 // Written back only when something was dropped — a quiet pass
                 // re-encodes nothing — and stamped, as every ledger write is.
                 if compacted != swept {
                     SharedStore.save(ledger: swept, knownStamp: sweepStamp,
-                                     applying: { $0.compact(dayStart: sweepStart) })
+                                     applying: { $0.compact(dayStart: cut) })
                 }
             }
 

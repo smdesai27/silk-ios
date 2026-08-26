@@ -369,8 +369,8 @@ public enum DayLog {
 
     // MARK: The compaction gate
 
-    /// The oldest instant a compaction may cut at: the end of the newest
-    /// summarised closed day, clamped to `currentDayStart`.
+    /// The oldest instant a compaction may cut at: the end of the newest day
+    /// in the *unbroken* summarised chain, clamped to `currentDayStart`.
     ///
     /// The record chain is anchored at the OLDEST record's time-of-day while
     /// `currentDayStart` comes from the live policy, and the moment the user
@@ -381,14 +381,88 @@ public enum DayLog {
     /// ("summarised once, never revised"). Compaction may only ever reach the
     /// frontier this returns; with no summarised past day at all, nothing may
     /// be dropped (`.distantPast`).
+    ///
+    /// Walked from the oldest record, not read off the newest: a hole behind
+    /// the newest record — a day the self-healing walk still owes — is a day
+    /// whose grants no record summarises, and a frontier past it would let the
+    /// callers (which now compact to this frontier, gate or no gate) destroy
+    /// them. The frontier stops at the first missing boundary.
     public static func compactionFrontier(recorded: Set<Date>,
                                           upTo currentDayStart: Date,
                                           calendar: Calendar = .current) -> Date {
-        guard let newest = recorded.filter({ $0 < currentDayStart }).max() else {
-            return .distantPast
+        let past = recorded.filter { $0 < currentDayStart }
+        guard let oldest = past.min() else { return .distantPast }
+        var frontier = DayBoundary.nextDayStart(after: oldest, calendar: calendar)
+        while frontier < currentDayStart, past.contains(frontier) {
+            let next = DayBoundary.nextDayStart(after: frontier, calendar: calendar)
+            guard next > frontier else { break }   // a boundary that cannot advance
+            frontier = next
         }
-        return min(currentDayStart,
-                   DayBoundary.nextDayStart(after: newest, calendar: calendar))
+        return min(frontier, currentDayStart)
+    }
+
+    // MARK: The corroboration horizon
+
+    /// Evidence further than this past the last trusted instant is a claim,
+    /// not a chain. Twice the longest legitimate Silk day, so no honest
+    /// combination of DST, timezone travel and a missed firing can open it:
+    /// a live daemon beats every day, and even a beat lost to a crash leaves
+    /// the next one within two day-lengths of the one before.
+    public static let evidenceGap: TimeInterval = 2 * sameSpan.max
+
+    /// The newest evidence instant the chain can vouch for, or nil when no
+    /// evidence is trusted at all.
+    ///
+    /// Evidence — heartbeats and attempts, taken together — is trusted only
+    /// when it chains: each instant within `evidenceGap` of the last trusted
+    /// one, anchored at the newest summarised day's end (`anchor`). An
+    /// instant past the gap opens an *untrusted segment*: nothing in it is
+    /// believed until the segment itself spans `sameSpan.min` — two chained
+    /// daily beats — at which point the whole segment (and the gap behind it)
+    /// is vouched for and the chain resumes from its end.
+    ///
+    /// Why: the daemon fires once at whatever boundary the clock claims, so a
+    /// forward-set clock plants exactly ONE beat at the fake day's start.
+    /// Under a bare `max()` that single beat was the newest evidence, vouched
+    /// for the entire fabricated walk, and green-lit destroying every live
+    /// grant. One isolated instant can be a lie; two instants a real day
+    /// apart require the daemon to have genuinely lived through a day — which
+    /// is also exactly what a real long absence produces on its second day
+    /// back, so a genuine gap resumes after two beats while a clock blip
+    /// never does.
+    ///
+    /// With no anchor (no summarised past day) every instant is trusted —
+    /// the fresh-install bootstrap keeps its behavior.
+    public static func corroborationHorizon(evidence: [Date],
+                                            anchoredAt anchor: Date?) -> Date? {
+        let sorted = evidence.sorted()
+        guard let newest = sorted.last else { return nil }
+        guard let anchor else { return newest }
+
+        var trusted = anchor          // the gap baseline
+        var horizon: Date?            // newest trusted evidence instant
+        var segment: (first: Date, last: Date)?   // post-gap, not yet believed
+        for instant in sorted {
+            if let open = segment {
+                if instant.timeIntervalSince(open.last) <= evidenceGap {
+                    if instant.timeIntervalSince(open.first) >= sameSpan.min {
+                        trusted = instant     // the segment matured: a real day
+                        horizon = instant     // was lived past the gap
+                        segment = nil
+                    } else {
+                        segment = (open.first, instant)
+                    }
+                } else {
+                    segment = (instant, instant)   // the old blip never matured
+                }
+            } else if instant.timeIntervalSince(trusted) <= evidenceGap {
+                trusted = max(trusted, instant)
+                horizon = instant
+            } else {
+                segment = (instant, instant)
+            }
+        }
+        return horizon
     }
 
     /// **The compaction gate.** Summarise every closed day that owes a record,
@@ -413,10 +487,14 @@ public enum DayLog {
     /// day between real time and the fake instant — each written as a
     /// permanent ring, evicting real history at the cap and green-lighting
     /// destruction of every live grant. So a boundary is summarised only when
-    /// some recorded instant — a heartbeat or an attempt — sits at or past it:
-    /// proof the world reached that day. With no evidence at all (a fresh
-    /// install bootstrapping its first ring) the walk proceeds; the days the
-    /// evidence cannot vouch for stay owed, which holds compaction.
+    /// some TRUSTED instant — a heartbeat or an attempt on the corroboration
+    /// chain (`corroborationHorizon`) — sits at or past it: proof the world
+    /// reached that day. The daemon's own firing at the fake boundary does
+    /// not qualify: an instant isolated past `evidenceGap` corroborates
+    /// nothing until a second one a real day later joins it. With no evidence
+    /// at all (a fresh install bootstrapping its first ring) the walk
+    /// proceeds; the days the evidence cannot vouch for stay owed, which
+    /// holds compaction.
     ///
     /// **Never keep a record from a day that has not happened.** A stored
     /// record dated at or past `currentDayStart` was written under a clock
@@ -463,14 +541,27 @@ public enum DayLog {
             let blob = store.attemptsBlob()
             let beats = store.heartbeats()
 
-            // The corroboration horizon: the newest instant anything was
-            // actually recorded happening. A day past every sign of life is a
+            // The corroboration horizon: the newest instant the evidence
+            // CHAIN vouches for — not the newest instant recorded, because
+            // the daemon stamps one beat at whatever boundary the clock
+            // claims, and a single far-future instant must corroborate
+            // nothing (`corroborationHorizon`). A day past the horizon is a
             // day only the device clock claims occurred — its verdict waits,
             // and compaction waits with it. No evidence at all is the fresh
             // install writing its first ring, and walks unbounded.
-            let evidence = (blob + beats).max()
-            let vouched = evidence.map { horizon in owed.filter { $0 <= horizon } }
-                ?? owed
+            let evidence = blob + beats
+            let anchor = before.lazy.map(\.dayStart)
+                .filter { $0 < currentDayStart }.max()
+                .map { DayBoundary.nextDayStart(after: $0, calendar: calendar) }
+            let vouched: [Date]
+            if evidence.isEmpty {
+                vouched = owed
+            } else if let horizon = corroborationHorizon(evidence: evidence,
+                                                         anchoredAt: anchor) {
+                vouched = owed.filter { $0 <= horizon }
+            } else {
+                vouched = []   // evidence exists and none of it is trusted
+            }
 
             fresh = vouched.map { boundary in
                 summarise(dayStart: boundary, downHours: downHours,

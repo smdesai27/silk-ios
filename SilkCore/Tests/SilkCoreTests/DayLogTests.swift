@@ -822,6 +822,15 @@ private final class ScriptedDayStore: DayRecordStore, @unchecked Sendable {
         #expect(DayLog.compactionFrontier(recorded: [at(6, 25, 7)],
                                           upTo: at(6, 22, 7), calendar: cal) == .distantPast)
     }
+
+    @Test func theFrontierStopsAtTheFirstHoleNotTheNewestRecord() {
+        // Jun 6 and Jun 7 are still owed; a frontier read off the newest
+        // record (Jun 9) would let the callers — which now compact to the
+        // frontier whether or not the gate said yes — destroy the hole's
+        // grants before any record summarises them.
+        #expect(DayLog.compactionFrontier(recorded: [at(6, 5, 7), at(6, 8, 7)],
+                                          upTo: at(6, 10, 7), calendar: cal) == at(6, 6, 7))
+    }
 }
 
 // MARK: - The forward clock
@@ -905,6 +914,110 @@ private final class ScriptedDayStore: DayRecordStore, @unchecked Sendable {
         let jun9 = store.records.first { $0.dayStart == at(6, 9, 7) }
         #expect(jun9?.observed == false)
         #expect(!store.records.contains { $0.dayStart == at(6, 15, 7) })
+    }
+}
+
+// MARK: - The corroboration horizon
+//
+// The residual destruction arm: the daemon fires once at whatever boundary
+// the clock claims, so a forward-set clock plants exactly ONE beat at the
+// fake day's start. Under a bare `max()` over the evidence that single beat
+// was the newest sign of life, vouched for the entire fabricated walk (ten
+// permanent rings, real history evicted at the cap), the gate said yes, and
+// `compact(dayStart: fakeDay)` destroyed every live grant — a repeatable
+// full-budget refill. Evidence isolated past `evidenceGap` must corroborate
+// nothing until a second instant a real day later joins it.
+
+@Suite struct AnIsolatedFutureBeatCorroboratesNothing {
+
+    private func record(_ start: Date, observed: Bool = true) -> DayRecord {
+        DayRecord(dayStart: start, grantedMinutes: 0, reaches: 0,
+                  lateReaches: 0, observed: observed)
+    }
+
+    @Test func theDaemonsOwnFiringAtTheFakeBoundaryUnlocksNothing() {
+        // Real history through Jun 8, real beats through Jun 9, a live grant
+        // spent Jun 9 14:00 — and the clock rolled forward to Jun 19, where
+        // the daemon dutifully stamped one beat at the fake boundary.
+        let fakeStart = at(6, 19, 7)
+        let store = ScriptedDayStore(records: [record(at(6, 7, 7)),
+                                               record(at(6, 8, 7))],
+                                     beats: [at(6, 8, 7), at(6, 9, 7), fakeStart])
+        var ledger = GrantLedger()
+        ledger.record(Grant(door: Door(name: "Instagram"), minutes: 30,
+                            issuedAt: at(6, 9, 14), expiresAt: at(6, 9, 14, 30)))
+
+        let ok = DayLog.recordClosedDays(upTo: fakeStart, downHours: night,
+                                         ledger: ledger, wallStanding: true,
+                                         calendar: cal, store: store)
+
+        // The gate never blesses the fabricated walk…
+        #expect(ok == false)
+        // …the gap days are not summarised (no rings, no cap eviction)…
+        #expect(!store.records.contains { $0.dayStart > at(6, 9, 7) })
+        // …while Jun 9, vouched by its own real beat, still lands.
+        #expect(store.records.contains { $0.dayStart == at(6, 9, 7) })
+
+        // And the live grant survives the callers' protocol: they compact to
+        // the frontier, and only when the frontier's own day reaches past
+        // now — under the fake clock it cannot, so nothing is dropped.
+        let cut = DayLog.compactionFrontier(
+            recorded: Set(store.records.map(\.dayStart)),
+            upTo: fakeStart, calendar: cal)
+        #expect(cut == at(6, 10, 7))
+        var compacted = ledger
+        if DayBoundary.nextDayStart(after: cut, calendar: cal) > at(6, 19, 10) {
+            compacted.compact(dayStart: cut, calendar: cal)
+        }
+        #expect(compacted.grants.count == 1)
+    }
+
+    @Test func aGenuineAbsenceResumesAfterTwoChainedDailyBeats() {
+        // A month dark, then the daemon genuinely lives through two days.
+        // The second beat matures the post-gap segment: the whole absence is
+        // summarised (rings), the observed days score, and the gate says yes.
+        let store = ScriptedDayStore(records: [record(at(6, 8, 7))],
+                                     beats: [at(6, 9, 7), at(7, 9, 7), at(7, 10, 7)])
+        let ok = DayLog.recordClosedDays(upTo: at(7, 11, 7), downHours: night,
+                                         ledger: GrantLedger(), wallStanding: true,
+                                         calendar: cal, store: store)
+        #expect(ok == true)
+        let jun20 = store.records.first { $0.dayStart == at(6, 20, 7) }
+        #expect(jun20?.observed == false)   // a ring, not an invention
+        let jul9 = store.records.first { $0.dayStart == at(7, 9, 7) }
+        #expect(jul9?.observed == true)
+    }
+
+    @Test func theFirstDayBackAloneHoldsTheSweep() {
+        // One beat past the gap is indistinguishable from the fake-boundary
+        // stamp, so nothing past the gap is owed yet and compaction holds;
+        // tomorrow's beat resumes the walk.
+        let store = ScriptedDayStore(records: [record(at(6, 8, 7))],
+                                     beats: [at(6, 9, 7), at(7, 9, 7)])
+        let ok = DayLog.recordClosedDays(upTo: at(7, 10, 7), downHours: night,
+                                         ledger: GrantLedger(), wallStanding: true,
+                                         calendar: cal, store: store)
+        #expect(ok == false)
+        #expect(!store.records.contains { $0.dayStart > at(6, 9, 7) })
+    }
+
+    @Test func theHorizonItself() {
+        let anchor = at(6, 9, 7)
+        // A chained instant advances the horizon; an isolated one does not.
+        #expect(DayLog.corroborationHorizon(evidence: [at(6, 9, 7), at(6, 19, 7)],
+                                            anchoredAt: anchor) == at(6, 9, 7))
+        // A lone far instant — beat or attempt — is trusted nowhere at all.
+        #expect(DayLog.corroborationHorizon(evidence: [at(6, 19, 7)],
+                                            anchoredAt: anchor) == nil)
+        // A post-gap segment shorter than a day never matures…
+        #expect(DayLog.corroborationHorizon(evidence: [at(6, 19, 7), at(6, 19, 12)],
+                                            anchoredAt: anchor) == nil)
+        // …but two instants a real day apart do, and vouch to their end.
+        #expect(DayLog.corroborationHorizon(evidence: [at(6, 19, 7), at(6, 20, 7)],
+                                            anchoredAt: anchor) == at(6, 20, 7))
+        // No anchor is the fresh install: every instant is trusted, as before.
+        #expect(DayLog.corroborationHorizon(evidence: [at(6, 19, 7)],
+                                            anchoredAt: nil) == at(6, 19, 7))
     }
 }
 
