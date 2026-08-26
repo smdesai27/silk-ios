@@ -55,11 +55,19 @@ struct SpendIntent: AppIntent {
             return answer(SpendDialog.silence)   // unknown door: silence, not an error
         }
 
-        var ledger = SharedStore.loadLedger()
+        // The stamp is read before the blob it proves — the proof-of-read
+        // works in that direction only (the DayLog.recordClosedDays doctrine;
+        // the sweep below reads the same way). Blob-first, a main-actor write
+        // landing between the two reads — the user closing a door at the bar —
+        // hands this intent the pre-close blob under the post-close stamp: the
+        // grant save's compare then "passes" and persists the pre-close blob
+        // wholesale, silently erasing the close. Stamp-first, that same write
+        // makes the compare fail toward reload-merge, and both writes stand.
         // `let` since the day-turn sweep moved off this path: nothing between
         // here and the grant save writes the ledger, so the stamp read here is
         // still the one that save must compare against.
         let stamp = SharedStore.ledgerStamp()
+        var ledger = SharedStore.loadLedger()
         let now = Date()
 
         // The day-turn sweep USED to run here, and could not stay: at this

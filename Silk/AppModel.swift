@@ -115,8 +115,17 @@ final class AppModel {
         let saved = SharedStore.loadPolicy()
         self.onboarded = saved != nil
         self.policy = saved ?? AppModel.defaultPolicy
-        self.ledger = SharedStore.loadLedger()
+        // Stamp before the blob it proves, as every stamp reader must
+        // (`syncLedgerIfStale`, the Spend intent, DayLog.recordClosedDays).
+        // Read blob-first, a SpendIntent save landing between the two — Siri
+        // grant, then cold launch, causally adjacent — seats the pre-grant
+        // blob under the post-grant stamp: `syncLedgerIfStale` then never
+        // reloads, and the first `persist` writes the stale copy wholesale,
+        // erasing the grant. Stamp-first, the worst a write in the gap yields
+        // is a fresh blob under an old stamp, which the next compare reads as
+        // stale and re-syncs.
         self.ledgerStamp = SharedStore.ledgerStamp()
+        self.ledger = SharedStore.loadLedger()
         self.slot = PendingSlot(pending: SharedStore.loadPendingLoosening(),
                                 baseline: SharedStore.loadPendingBaseline())
         self.undoSeconds = SharedStore.loadUndoSeconds()
