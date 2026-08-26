@@ -104,8 +104,16 @@ public enum DeterministicParser {
             // the setter must never disagree about which edge this is, or a
             // stated 7 becomes 19:00 and then lands on the end.
             let edgeIsStart = isStart(text)
+            // A STATED MERIDIEM IS STATED. "at 3 in the morning" names its
+            // half of the day as surely as "3 am" does, and the evening
+            // assumption exists only for hours that named none — a guess must
+            // never override a statement, or "quiet at 3 in the morning" is
+            // one careless flag from a 15:00 start. The phrase outranks the
+            // edge's assumption in both directions: a stated morning stays a
+            // morning, and a stated evening reads as one even on the end
+            // edge, where the bare-hour assumption is a morning.
             if let t = NumberParser.timeOfDay(in: strip(text, of: "down hours"),
-                                              assumeEvening: edgeIsStart),
+                                              assumeEvening: statedDayHalf(text) ?? edgeIsStart),
                // THE HOUR'S OWN CLAUSE MUST BE ABOUT THE WINDOW. The setter
                // used to fire on a window word ANYWHERE in the sentence plus
                // the first hour-shaped number anywhere else, so ordinary prose
@@ -1999,9 +2007,24 @@ public enum DeterministicParser {
     /// and safe as one for the family's usual reason: each entry can only
     /// SUBTRACT a grant or a ceiling, and a subtraction is a silence that
     /// reaches the widener.
-    private static let habitIrregulars: Set<String> = ["spent", "lost", "blew",
-                                                       "took", "went",
-                                                       "got", "ate", "gave"]
+    ///
+    /// EXTENDED WITH THE CONSUMING CLASS after "insta stole 25 minutes from
+    /// me" spent 25 real minutes: the door stood as SUBJECT of a finite past
+    /// verb, and this list was the only thing that could know "stole" was
+    /// one. The regular "ed" spellings (wasted, drained, killed…) ride along
+    /// for the class's legibility even though the suffix test already reads
+    /// them; the irregulars (stole, drank, threw…) are the entries doing the
+    /// work. THE STRUCTURAL RULE IS THE EVENTUAL FIX: a door as subject
+    /// followed by any finite past-tense verb that is not an ask verb is a
+    /// report, list or no list — but finite past tense is exactly the thing
+    /// English marks irregularly, so until a morphology can read "stole"
+    /// without a list, the list is the honest spelling of the rule.
+    private static let habitIrregulars: Set<String> = [
+        "spent", "lost", "blew", "took", "went", "got", "ate", "gave",
+        "stole", "steals", "stolen", "drank", "drunk", "burnt", "burned",
+        "wasted", "killed", "drained", "sucked", "chewed", "swallowed",
+        "robbed", "threw", "thrown", "dumped",
+    ]
 
     /// Whether the door is named as a TOPIC rather than as the subject of a
     /// predicate — the habitual shape's own question. "tiktok 20 a day" puts a
@@ -2352,6 +2375,30 @@ public enum DeterministicParser {
            ahead.contains(where: { isHabitParticiple(t[$0]) }) {
             return true
         }
+        // A DOOR AS SUBJECT with its consuming verb standing directly on it
+        // is the app reporting what it did with her day — and that shape can
+        // reach here with an EMPTY `ahead`, because when the quantity lives
+        // in no token ("insta stole AN HOUR from me": the article idiom
+        // carries the 60), no number anchors and the door itself is the
+        // anchor, so the participle scan above has nothing to walk. The
+        // structural rule — a door as subject followed by a finite non-ask
+        // verb is a report — is asked of the one position English puts the
+        // predicate: the token after the door's own name. A door followed by
+        // anything else ("tiktok for an hour", "tiktok, 10 pls") predicates
+        // nothing and still grants.
+        if !asks, numberAt == nil, anchor == clause.lowerBound {
+            var predicateAt = anchor + 1
+            // A two-token door ("the gram") keeps its second word.
+            if predicateAt < clause.upperBound,
+               door(t[anchor] + " " + t[predicateAt], in: state) != nil {
+                predicateAt += 1
+            }
+            if predicateAt < clause.upperBound,
+               isHabitParticiple(t[predicateAt])
+                || (auxiliaries.contains(t[predicateAt]) && !modals.contains(t[predicateAt])) {
+                return true
+            }
+        }
         // A finite verb ahead of the quantity with no ask verb ahead of it is
         // a description: "tiktok premium IS like 9 dollars", "the youtube ad
         // WAS 30 seconds long". An ask verb ahead re-marks the mood — "its
@@ -2579,11 +2626,15 @@ public enum DeterministicParser {
     /// The stated hour of a close — whatever parses as a clock time after
     /// "until"/"till". Bare hours read as evenings ("until 9" is 9 PM): a close
     /// is a promise about the rest of today, and today's mornings are behind
-    /// her. An explicit "9 am" still wins, exactly as it does for down hours.
+    /// her. An explicit "9 am" still wins, exactly as it does for down hours —
+    /// and so does a spelled half of the day: "until 6 in the morning" states
+    /// its morning, and reading it as 18:00 would LIFT the close twelve hours
+    /// early against the sentence's own words.
     private static func restUntil(in text: String) -> TimeOfDay? {
         for marker in [" until ", " till ", " til "] {
             guard let r = text.range(of: marker) else { continue }
-            return NumberParser.timeOfDay(in: String(text[r.upperBound...]), assumeEvening: true)
+            let rest = String(text[r.upperBound...])
+            return NumberParser.timeOfDay(in: rest, assumeEvening: statedDayHalf(rest) ?? true)
         }
         return nil
     }
@@ -2670,6 +2721,25 @@ public enum DeterministicParser {
         }
         guard mentionsWindow else { return false }
         if statesAVolition(t, clause: clause) { return true }
+        // AN INTENSIFIER'S "so" OPENS NO FRESH BREATH. The clause splitter
+        // cuts at "so" for what a purpose clause prevents (NumberParser's
+        // clauseOpeners disclose the cost), and the cut strands "was so quiet
+        // at 3 in the morning" as a subject-less clause the scan below cannot
+        // refuse — the "it was" that owns it stands on the far side of the
+        // boundary. When the token directly before the boundary is a copula
+        // or linking verb ("it WAS so quiet", "it GETS so quiet", "the house
+        // GOT so quiet"), the "so" is a degree word and this clause is that
+        // verb's own predicate: a description of somebody's night, never an
+        // instruction to Silk's — the description in the previous clause owns
+        // this one. The subject/past-auxiliary refusal scan is extended
+        // across the boundary by construction: the licensing verb IS the
+        // finite verb such a scan exists to find, so the answer is foregone
+        // and stated directly. A discourse "so" ("ok so bedtime at 10") has
+        // no copula in front of it and still sets.
+        if t[clause.lowerBound] == "so", clause.lowerBound > 0,
+           intensifierHosts.contains(t[clause.lowerBound - 1]) {
+            return false
+        }
         return !(clause.lowerBound..<hourAt).contains { i in
             // A subject describes somebody's evening; a PAST-tense auxiliary
             // describes a former one ("bedtime WAS 9 when i was a kid" must
@@ -2690,6 +2760,56 @@ public enum DeterministicParser {
         "was", "wasnt", "wasn't", "were", "werent", "weren't",
         "had", "hadnt", "hadn't", "did", "didnt", "didn't", "been",
     ]
+
+    /// The copulas and linking verbs that host an intensifier "so" — the word
+    /// standing directly before the "so" boundary when "so quiet" is a degree
+    /// phrase rather than a purpose clause. Read only by the window gate above,
+    /// and only to REFUSE a setter, so an entry can never move an edge; a wrong
+    /// entry costs a silence that falls to the query arms, which read the
+    /// window back. "s" is the contracted copula the tokenizer orphans from
+    /// "it's"; the negative contractions ride along because "it wasnt so quiet
+    /// at 3" is the same recollection with the polarity flipped.
+    private static let intensifierHosts: Set<String> = [
+        "is", "isnt", "isn't", "was", "wasnt", "wasn't",
+        "are", "arent", "aren't", "were", "werent", "weren't",
+        "am", "be", "been", "being", "s",
+        // The subject+copula contractions the tokenizer leaves whole when
+        // typed without their apostrophe: "its so quiet at 3".
+        "its", "thats", "im", "hes", "shes", "youre", "theyre",
+        "get", "gets", "got", "getting", "gotten",
+        "feel", "feels", "felt", "feeling",
+        "seem", "seems", "seemed", "sound", "sounds", "sounded",
+        "look", "looks", "looked", "stay", "stays", "stayed",
+        "goes", "went", "grew", "turned",
+    ]
+
+    /// A spelled half of the day STANDING ON AN HOUR, or nil when the sentence
+    /// ties none to one. "at 3 in the morning" states its meridiem as surely
+    /// as "3 am" does, and the evening assumption — a guess that exists only
+    /// for hours that named no half — must never override it. true is the
+    /// evening half, false the morning, matching the `assumeEvening` flag
+    /// this feeds.
+    ///
+    /// THE PHRASE MUST FOLLOW THE HOUR IT NAMES, which is why this reads
+    /// tokens rather than testing a substring anywhere in the sentence. A
+    /// substring test tied "bedtime at 10, i walked in the morning" to the
+    /// 10 — a 10 AM start, a twenty-one-hour night, out of a remark about a
+    /// walk. English puts the phrase directly after its hour ("3 in the
+    /// morning", "half past 9 in the morning"), so the tie is adjacency:
+    /// the token before the phrase must itself read as a clock hour.
+    private static func statedDayHalf(_ text: String) -> Bool? {
+        let t = NumberParser.tokenize(text)
+        for i in t.indices where i > 0 && readsAsHour(t[i - 1]) {
+            if t[i] == "in", i + 2 < t.count, t[i + 1] == "the" {
+                if t[i + 2].hasPrefix("morning") { return false }
+                if t[i + 2].hasPrefix("afternoon") || t[i + 2].hasPrefix("evening") {
+                    return true
+                }
+            }
+            if t[i] == "at", i + 1 < t.count, t[i + 1] == "night" { return true }
+        }
+        return nil
+    }
 
     /// Whether a token is one NumberParser would read as a clock hour. isStart
     /// asks the reader itself instead of restating its rules, because the two

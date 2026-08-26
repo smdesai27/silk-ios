@@ -128,6 +128,87 @@ private func budget(_ utterance: String) -> Int? {
         #expect(!movesAnEdge(utterance), "\"\(utterance)\" moved a window edge")
     }
 
+    /// The intensifier's "so" is a clause boundary to the splitter, so the
+    /// hour's clause arrived subject-less: "it was so quiet at 3 in the
+    /// morning" passed the ownership gate on the stranded "quiet", and the
+    /// evening assumption read its 3 as a 15:00 down-hours start — out of a
+    /// sentence about last night. The copula standing directly before the
+    /// "so" is what proves the clause a description, wherever the splitter
+    /// cut it.
+    @Test(arguments: [
+        "it was so quiet at 3 in the morning",
+        "its so quiet at 3 in the morning",
+        "the house got so quiet at 3",
+        "i got home and it was so quiet at 2",
+        "everything was so quiet at 4 am",
+        "it gets so quiet here at 2",
+        "the office was so quiet at 4 i left early",
+        "it wasnt so quiet at 3",
+        "man it was so quiet at 3 in the morning",
+        "the gym was so quiet at 6",
+        "felt so quiet at 4",
+        "the streets were so quiet at 5 am on my run",
+    ])
+    func anIntensifiedDescriptionMovesNoEdge(_ utterance: String) {
+        #expect(!movesAnEdge(utterance), "\"\(utterance)\" moved a window edge")
+    }
+
+    /// A stated meridiem is stated: "in the morning" outranks the evening
+    /// assumption exactly as "am" does — on the setter, and on a close's
+    /// "until", where the evening reading would LIFT the close twelve hours
+    /// early against the sentence's own words.
+    @Test func aStatedMorningIsNeverReadAsEvening() {
+        #expect(parse("quiet time at 6 in the morning")
+                == .command(.setDownHoursStart(TimeOfDay(hour: 6))))
+        #expect(parse("quiet hours start at 9 in the morning")
+                == .command(.setDownHoursStart(TimeOfDay(hour: 9))))
+        guard case .command(.closeDoorToday(let d, let until))
+            = parse("no more insta until 6 in the morning") else {
+            Issue.record("\"no more insta until 6 in the morning\" dropped the close")
+            return
+        }
+        #expect(d.name == "Instagram")
+        #expect(until == TimeOfDay(hour: 6))
+    }
+
+    /// The stated half works in both directions: an evening named on the end
+    /// edge or after a close's "until" reads as the evening it says.
+    @Test func aStatedEveningIsStatedToo() {
+        #expect(parse("quiet time at 9 in the evening")
+                == .command(.setDownHoursStart(TimeOfDay(hour: 21))))
+        #expect(parse("down hours till 7 in the morning")
+                == .command(.setDownHoursEnd(TimeOfDay(hour: 7))))
+        guard case .command(.closeDoorToday(_, let evening))
+            = parse("block insta until 7 in the evening"),
+            case .command(.closeDoorToday(_, let night))
+            = parse("no more tiktok until 9 at night") else {
+            Issue.record("a close with a stated evening was dropped")
+            return
+        }
+        #expect(evening == TimeOfDay(hour: 19))
+        #expect(night == TimeOfDay(hour: 21))
+    }
+
+    /// The tie is adjacency: a meridiem phrase standing on some OTHER part of
+    /// the sentence must not re-aim the stated hour. A substring test read
+    /// this as a 10 AM start — a twenty-one-hour night out of a remark about
+    /// a walk.
+    @Test func aStrandedMorningPhraseDoesNotReaimTheHour() {
+        #expect(parse("bedtime at 10, i walked in the morning")
+                == .command(.setDownHoursStart(TimeOfDay(hour: 22))))
+    }
+
+    /// A discourse "so" has no copula in front of it, and still sets — and so
+    /// does a description in one breath with a setter in the next.
+    @Test func aDiscourseSoStillSets() {
+        #expect(parse("ok so bedtime at 10")
+                == .command(.setDownHoursStart(TimeOfDay(hour: 22))))
+        #expect(parse("so quiet hours start at 9")
+                == .command(.setDownHoursStart(TimeOfDay(hour: 21))))
+        #expect(parse("night was so long, quiet time at 10")
+                == .command(.setDownHoursStart(TimeOfDay(hour: 22))))
+    }
+
     /// The setters keep their whole inventory: the window's name shares the
     /// hour's breath in every one of them.
     @Test func theCanonicalSettersStillLand() {
@@ -164,6 +245,46 @@ private func budget(_ utterance: String) -> Int? {
     ])
     func aReportOfScreenTimeOpensNothing(_ utterance: String) {
         #expect(parse(utterance) == .silence, "\"\(utterance)\" opened a door")
+    }
+
+    /// The door as SUBJECT of a consuming verb is the app reporting what it
+    /// did with her day. `habitIrregulars` was a closed list without the
+    /// consuming class, so "insta stole 25 minutes from me" spent 25 real
+    /// minutes; and when the quantity lives in no token ("an hour"), no
+    /// number anchors at all, the participle scan had nothing to walk, and
+    /// the verb standing directly on the door went unread.
+    @Test(arguments: [
+        "insta stole 25 minutes from me",
+        "insta stole an hour from me",
+        "insta steals 25 minutes from me every day",
+        "tiktok ate an hour of my afternoon",
+        "insta is stealing an hour of my day",
+        "tiktok drained 40 minutes of my day",
+        "youtube sucked 30 minutes out of my evening",
+        "tiktok robbed me of 20 minutes",
+        "insta threw away 45 minutes of my mornings",
+        "the gram stole an hour from me",
+        "tiktok took an hour of my day",
+        "insta gave me 20 minutes of joy",
+        "insta drank my whole evening, 30 minutes gone",
+        "insta killed 20 minutes for me while i waited",
+    ])
+    func aConsumingReportOpensNothing(_ utterance: String) {
+        #expect(parse(utterance) == .silence, "\"\(utterance)\" opened a door")
+    }
+
+    /// The refusal stays as narrow as the report shape: a door followed by
+    /// anything that is not its own predicate still grants, and a consuming
+    /// word in an earlier breath — or a trailing one — does not poison the
+    /// ask.
+    @Test func theAsksBesideTheConsumingClassStillLand() {
+        #expect(spend("insta for an hour")?.1 == 60)
+        #expect(spend("insta for an hour")?.0 == "Instagram")
+        #expect(spend("insta, an hour please")?.1 == 60)
+        #expect(spend("can i get an hour of tiktok, it stole my heart")?.1 == 60)
+        let got = spend("i drank so much coffee, give me 20 minutes of tiktok")
+        #expect(got?.0 == "TikTok" && got?.1 == 20,
+                "the ask after the coffee report -> \(String(describing: got))")
     }
 
     /// The hot path is the floor. Fragments, chatter tails, ask verbs, request
