@@ -105,7 +105,23 @@ public enum DeterministicParser {
             // stated 7 becomes 19:00 and then lands on the end.
             let edgeIsStart = isStart(text)
             if let t = NumberParser.timeOfDay(in: strip(text, of: "down hours"),
-                                              assumeEvening: edgeIsStart) {
+                                              assumeEvening: edgeIsStart),
+               // THE HOUR'S OWN CLAUSE MUST BE ABOUT THE WINDOW. The setter
+               // used to fire on a window word ANYWHERE in the sentence plus
+               // the first hour-shaped number anywhere else, so ordinary prose
+               // moved a window edge: "work was quiet so i left at 4" set a
+               // 4 PM start (a fifteen-hour night, instant, because longer is
+               // tighter), "the baby went down at 7, quiet night finally" a
+               // 7 PM one, and "pretty quiet day, i finished 20 pages of my
+               // book" — "finished" reading as an end marker — a 20:00 END
+               // against a 22:00 start, a twenty-two-hour lockdown out of a
+               // sentence about a book. The prototype lists bedtime/quiet as
+               // QUERY triggers; the setter arm was the widening, and the gate
+               // narrows it back to the sentences that put the window's own
+               // name in the same breath as the hour. A refused sentence falls
+               // to the query arms below, which read the window back — a
+               // harmless read, never a moved edge.
+               windowOwnsTheStatedHour(clauses()) {
                 // An end stated as a bare hour may be ambiguous in a way that
                 // costs the user hours of lockdown, but that is the Validator's
                 // to refuse: it is the one point every parser passes, and the
@@ -268,6 +284,19 @@ public enum DeterministicParser {
                 || aCeilingLeadsADoorWithNoNumber(clauses(), state: state) {
                 return .silence
             }
+            // A REPORT IS NOT AN INSTRUCTION, and a REFUSAL IS NOT ONE EITHER —
+            // the discipline the cap family already has, extended to the pool's
+            // own fallback. This arm used to fire on "a day"/"daily" plus any
+            // single number with no mood gate and no negator scan, so doorless
+            // chatter rewrote the shared allowance: "i smoke 5 a day, trying to
+            // quit" cut the day to five minutes, "my daily standup ran 45
+            // minutes again" set 45, and "i would never allow 60 a day" wrote
+            // the very number it refuses — every one an instant tighten whose
+            // only receipt is "N left today.". The gate is the same shape as
+            // `capSet`'s: silence terminates, and the widener (which owns
+            // `setBudget` behind the Validator's provenance) gets the sentence
+            // instead of the pool losing it.
+            if describesRatherThanSetsThePool(clauses(), state: state) { return .silence }
             return .command(.setBudget(minutes: n))
         }
 
@@ -376,6 +405,33 @@ public enum DeterministicParser {
         if let d = door, let n = number, !windowMention {
             guard spendClauseFunds(d, clauses(), state: state) else { return .silence }
             guard !aRefusalNamesTheDoor(d, clauses(), state: state) else { return .silence }
+            // AND A NEGATOR ON THE OPENING VERB IS THE SAME REFUSAL. "dont
+            // open tiktok for 20 minutes" is the plainest way to type one, and
+            // the noun scan above cannot see it — while the close rule vetoes
+            // itself on the opener token, so nothing else claimed the sentence
+            // and the refused app was opened for exactly the refused minutes.
+            guard !aNegatorRefusesTheAsk(clauses()) else { return .silence }
+            // A STATED DEADLINE IS NOT A DURATION. "give me tiktok till 7"
+            // asks for the app until a CLOCK; reading the 7 as seven minutes
+            // debits the pool on a reading no human shares, and the re-ask
+            // after those minutes double-debits the day. The close side reads
+            // the same words as a clock ("block tiktok until 9"); the grant
+            // side cannot state a deadline, so it stays silent rather than
+            // misread one.
+            guard !theNumberIsADeadline(clauses()) else { return .silence }
+            // SECONDS ARE NOT MINUTES. "give me 30 seconds of insta" granted
+            // thirty MINUTES — sixty times the stated ask, the mirror of the
+            // "2 hours -> 2 minutes" class the number reader exists to kill.
+            // The domain cannot hold a fraction of a minute, so the path
+            // declines the unit the way the cap rule declines hours.
+            guard !theNumberStatesSeconds(clauses()) else { return .silence }
+            // AND A REPORT IS NOT AN ASK — the gate the cap family has had
+            // since `reportsRatherThanSets`, extended to the one rule where
+            // the wrong answer is the unrecoverable direction: "i watched
+            // tiktok for 45 minutes at lunch" was answered with an open door
+            // and a debited pool, and the parse being non-silent meant the
+            // widener never saw it.
+            guard !reportsRatherThanSpends(clauses(), state: state) else { return .silence }
             return .command(.spend(door: d, minutes: n))
         }
 
@@ -638,7 +694,8 @@ public enum DeterministicParser {
     private static let trailingParticles: Set<String> = ["anymore", "please", "today",
                                                           "tonight", "thanks",
                                                           "fr", "frfr", "ngl", "rn",
-                                                          "tho", "lol", "lmao", "tbh"]
+                                                          "tho", "lol", "lmao", "tbh",
+                                                          "pls", "plz", "tops"]
 
     /// The auxiliaries and copulas, contractions included. A finite verb is what
     /// turns a request into a REPORT — "no limit on tiktok" asks for one to go,
@@ -817,10 +874,99 @@ public enum DeterministicParser {
     static func namesThePool(_ index: NumberParser.ClauseIndex) -> Bool {
         let tokens = index.tokens
         guard let pool = tokens.firstIndex(of: "budget") else { return false }
+        // "budget" AS AN ADJECTIVE NAMES NO POOL. "we stayed at a budget hotel
+        // for 3 nights" and "my budget phone died 2 times today" put the exact
+        // token ahead of a number in one clause — the whole of the old test —
+        // and cut the day's allowance to the count of nights or crashes,
+        // instantly. The pool's own sentence CONTINUES from its noun: with a
+        // preposition ("budget of 40", "set the budget to 25", "budget for the
+        // day"), a finite verb ("my budget is 30", "my tiktok budget should be
+        // 25"), the number itself ("daily budget 60"), or nothing at all
+        // ("im on a budget"). A "budget" trailed by an ordinary noun is
+        // modifying that noun, and the number belongs to whatever the noun is
+        // doing — the sentence falls to the fallback's mood gate below like
+        // any other period-word sentence.
+        if let clause = index.clauseRange(containing: pool), pool + 1 < clause.upperBound {
+            let next = tokens[pool + 1]
+            let continues = ceilingPrepositions.contains(next)
+                || phrasePrepositions.contains(next)
+                || auxiliaries.contains(next) || negators.contains(next)
+                || !NumberParser.allNumbers(in: next).isEmpty
+            if !continues { return false }
+        }
         let anchor = tokens.firstIndex(where: { !NumberParser.allNumbers(in: $0).isEmpty })
             ?? tokens.firstIndex(of: "hour")
         guard let anchor else { return true }
         return pool < anchor && index.sameClause(pool, anchor)
+    }
+
+    /// Whether the pool's fallback sentence is prose ABOUT a daily quantity
+    /// rather than an instruction stating one — rule 3's mood gate, asked of
+    /// the clause holding the number (or, for the token-less idioms, the
+    /// idiom's own "hour", exactly as `namesThePool` anchors them).
+    ///
+    /// The discipline is `capSet`'s, but the tests are its own, because the
+    /// pool's canonical setters speak words the cap gate refuses: "make IT 30 a
+    /// day" carries a pronoun the cap gate reads as a subject, "40 a day IS
+    /// what i already have" carries a copula after its number, and "i told my
+    /// friends ID DO 30 a day" opens with the flattest report frame there is —
+    /// all three are pinned setters. So the gate reads only what stands BEFORE
+    /// the number, and reads it narrowly:
+    ///
+    ///  - a NEGATOR ahead of the number refuses the allowance it names ("i
+    ///    would never allow 60 a day", "no way im doing 90 a day"), with the
+    ///    "no more than" carve-out the cap scan already makes;
+    ///  - a FIRST-PERSON COMMITMENT is a command however it opens: "id"/"ill"
+    ///    anywhere ahead ("i told my friends id do 30 a day"), or "let"/"lets"
+    ///    leading the clause ("lets do 30 a day from now on");
+    ///  - a REQUEST MODAL ahead (no wh-word) and a VOLITION keep their
+    ///    exemptions, exactly as in `reportsRatherThanSets`;
+    ///  - then a spoken SUBJECT or wh-word leading the clause is a report ("i
+    ///    smoke 5 a day", "we stayed at a budget hotel for 3 nights"); a
+    ///    DETERMINER leading a clause that predicates something is one ("my
+    ///    daily standup ran 45 minutes again" — while the fragment "an hour a
+    ///    day" predicates nothing and stays a setter); and a FINITE non-modal
+    ///    verb ahead of the number is a description ("the budget flight was 45
+    ///    dollars").
+    private static func describesRatherThanSetsThePool(_ index: NumberParser.ClauseIndex,
+                                                       state: PolicyState) -> Bool {
+        let t = index.tokens
+        let anchor = t.indices.first(where: { !NumberParser.allNumbers(in: t[$0]).isEmpty })
+            ?? t.firstIndex(of: "hour")
+        guard let anchor, let clause = index.clauseRange(containing: anchor),
+              let first = clause.first
+        else { return false }
+        let ahead = clause.lowerBound..<anchor
+        let refused = ahead.contains { i in
+            guard negators.contains(t[i]) else { return false }
+            return !(t[i] == "no" && i + 2 < clause.upperBound
+                     && t[i + 1] == "more" && t[i + 2] == "than")
+        }
+        if refused { return true }
+        if ahead.contains(where: { t[$0] == "id" || t[$0] == "ill" }) { return false }
+        if t[first] == "let" || t[first] == "lets" { return false }
+        if !ahead.contains(where: { whWords.contains(t[$0]) }),
+           ahead.contains(where: { requestModals.contains(t[$0]) }) { return false }
+        if statesAVolition(t, clause: clause) { return false }
+        if subjects.contains(t[first]) || whWords.contains(t[first]) { return true }
+        if determiners.contains(t[first]), !predicatesNothing(t, clause: clause, state: state) {
+            return true
+        }
+        // A participle ahead of the number heads a report with its subject
+        // elided: "rent DROPPED 5 a day" and "SPENT 40 a day on apps once"
+        // state facts, not allowances.
+        if ahead.contains(where: { isHabitParticiple(t[$0]) }) { return true }
+        // A finite verb ahead of the number describes; but only when what it
+        // predicates is not the allowance's own vocabulary. "daily limits are
+        // 20" is a pinned setter whose subject IS the rule; "the budget
+        // flight was 45 dollars" predicates of a flight.
+        guard ahead.contains(where: { auxiliaries.contains(t[$0]) && !modals.contains(t[$0]) })
+        else { return false }
+        return !ahead.allSatisfy { i in
+            auxiliaries.contains(t[i]) || isNounPhraseWord(t, i, state: state)
+                || capNouns.contains(t[i]) || capQuantifiers.contains(t[i])
+                || t[i].hasPrefix("budget")
+        }
     }
 
     /// Whether one token could stand inside a ceiling's own noun phrase. See
@@ -1244,7 +1390,22 @@ public enum DeterministicParser {
             // ("remove the 20 minute tiktok cap"); a number outside belongs to
             // something else, which means the clause is doing two things and
             // this rule may not answer for both.
-            guard everyNumberLiesInside(phrase, index, clause: clause) else { return nil }
+            //
+            // AND THE REFUSAL TERMINATES, which is this family's own doctrine
+            // ("a cap-shaped sentence this cannot resolve must never keep
+            // walking, because what it walks into is SPEND") applied to the
+            // one guard that was still declining. The subtractive lowering
+            // puts its amount OUTSIDE the phrase — "take 20 off my tiktok
+            // limit" finds off…limit and the 20 stands ahead of it — so the
+            // decline walked the ladder into rule 7 and a request to LOWER a
+            // restriction was answered by debiting 20 minutes and taking the
+            // wall down on the app being restricted. "knock 10 off the tiktok
+            // cap" and "shave 15 off my instagram limit" are the same shape.
+            // The grammar cannot write the subtraction (it does not know the
+            // old ceiling's number is not the sentence's); silence reaches the
+            // widener, which per §5.7 can produce no cap and no grant out of
+            // this either.
+            guard everyNumberLiesInside(phrase, index, clause: clause) else { return .silence }
             return .command(.setDoorCap(door: d, minutes: nil))
         }
     }
@@ -1331,7 +1492,26 @@ public enum DeterministicParser {
                 // those two: it is the same question asked of every OTHER word
                 // in between, and a word that cannot stand inside a noun phrase
                 // says the negator's phrase ended before the ceiling did.
-                governs = !(i + 1..<h).contains { j in
+                // AND THE NEGATOR'S PHRASE MUST BE WHAT THE CLAUSE IS SAYING,
+                // not an emphatic trailing it. "No cap" is slang for "no lie",
+                // and a full predicate ahead of it makes it the tail of a
+                // chatter sentence, never a clearing request: "ngl tiktok
+                // ruined my sleep no cap", "fr tiktok got me no cap", "me and
+                // tiktok no cap" and "lowkey addicted to tiktok no cap" all
+                // removed the very ceiling the user set on the app, because
+                // the report gate only recognizes subjects from its pronoun
+                // and auxiliary lists and Gen-Z filler openers are on neither.
+                // The deliberate clearings keep their shapes: "no cap on
+                // tiktok" leads its clause, "tiktok no cap" has only the door
+                // ahead, and "uncap tiktok no cap" has a remover — so the
+                // words before the negator must all be ones a clearing's own
+                // span can hold (the noun-phrase whitelist plus the removers),
+                // and a word that cannot ("ruined", "got", "addicted") says
+                // the clause already said something else.
+                let emphatic = (clause.lowerBound..<i).contains { j in
+                    !isNounPhraseWord(t, j, state: state) && !capRemovers.contains(t[j])
+                }
+                governs = !emphatic && !(i + 1..<h).contains { j in
                     determiners.contains(t[j])
                         || door(t[j], in: state) != nil
                         || (j + 1 < clause.upperBound && door(t[j] + " " + t[j + 1], in: state) != nil)
@@ -1671,6 +1851,28 @@ public enum DeterministicParser {
         // so an unrecognised word declines.
         if periodPhrase(t, in: clause), numbers.count == 1, !t.contains("budget"),
            doorIsATopic(t, clause: clause, doorAt: doorAt, state: state) {
+            // A PARTICIPLE HEADING THE CLAUSE IS A HABIT REPORT WITH ITS
+            // SUBJECT ELIDED, NOT A RULE. `doorIsATopic` answers yes
+            // unconditionally when the door does not lead, and the mood gate
+            // below only sees subjects from the pronoun lists — so "checking
+            // tiktok 50 times a day" and "scrolling tiktok 45 minutes a day
+            // lately" compiled the complaint's own number as standing policy,
+            // where "she checks instagram 40 times a day" was rightly silent:
+            // one elided "i was" was the whole difference. English heads an
+            // imperative with a BASE verb ("make my instagram 15 min a day");
+            // a gerund or past participle heads a description. Terminating
+            // silence, not a decline, for the family's usual reason — a
+            // decline walks onward, and the sentence still names a door and a
+            // number.
+            if doorAt != clause.lowerBound,
+               isHabitParticiple(t[clause.lowerBound])
+                || phrasePrepositions.contains(t[clause.lowerBound]) {
+                // A phrase preposition heads the same report — "ON tiktok 90
+                // minutes a day lately" — never a command; every pinned
+                // habitual setter leads with its door, its number, its
+                // determiner or a base verb.
+                return .silence
+            }
             shaped = true
         }
         guard shaped else { return nil }
@@ -1779,6 +1981,28 @@ public enum DeterministicParser {
         capQuantifiers.contains(t[i]) || t[i] == "at"
     }
 
+    /// Whether a word is shaped like the head of a habit report — a gerund or
+    /// a past participle. Morphology, used for the same narrow purpose
+    /// `door(_:in:)` uses it (a suffix read off a token, never a substring),
+    /// and fenced by the grammar's own verb lists so that "need" (an ask verb
+    /// that happens to end in "ed") is never mistaken for one.
+    private static func isHabitParticiple(_ w: String) -> Bool {
+        guard !askVerbs.contains(w), !volitions.contains(w), !capNouns.contains(w),
+              !capRemovers.contains(w) else { return false }
+        if habitIrregulars.contains(w) { return true }
+        return (w.count > 4 && w.hasSuffix("ing")) || (w.count > 3 && w.hasSuffix("ed"))
+    }
+
+    /// The irregular pasts of consuming — the verbs a report of screen time
+    /// conjugates without the "ed" the suffix test reads: "spent 45 minutes on
+    /// tiktok", "lost 2 hours to insta", "took 45 minutes of my day". A list,
+    /// and safe as one for the family's usual reason: each entry can only
+    /// SUBTRACT a grant or a ceiling, and a subtraction is a silence that
+    /// reaches the widener.
+    private static let habitIrregulars: Set<String> = ["spent", "lost", "blew",
+                                                       "took", "went",
+                                                       "got", "ate", "gave"]
+
     /// Whether the door is named as a TOPIC rather than as the subject of a
     /// predicate — the habitual shape's own question. "tiktok 20 a day" puts a
     /// door and a daily quantity side by side and nothing else; "tiktok takes 30
@@ -1856,6 +2080,24 @@ public enum DeterministicParser {
                                        "tonight", "morning", "evening", "afternoon"]
         for i in clause where !NumberParser.allNumbers(in: t[i]).isEmpty {
             if i > clause.lowerBound, boundaries.contains(t[i - 1]) { return true }
+            // "N TIMES a day" is a COUNT of occurrences, not a count of
+            // minutes — "checking tiktok 50 times a day" is a habit report,
+            // and writing its 50 as a fifty-minute ceiling turned a
+            // self-flagellating complaint into a parked five-fold RAISE
+            // against the ten-minute cap in state. "times" is not a unit
+            // anywhere in this grammar, so the number it modifies is a
+            // quantity of nothing this rule can write.
+            if i + 1 < clause.upperBound, t[i + 1] == "times" || t[i + 1] == "time" {
+                return true
+            }
+            // A SECONDS unit is sixty times smaller than the domain's own
+            // unit, and a ceiling of a fraction of a minute cannot be
+            // written; "cap tiktok at 30 seconds" declines exactly as the
+            // hours arm below declines, and for the same directional reason.
+            if NumberParser.statesSeconds(
+                following: t[min(i + 1, clause.upperBound)..<min(i + 3, clause.upperBound)]) {
+                return true
+            }
             // The abbreviated meridiem, as its two tokens. "9 a day" is not one:
             // the "a" has to be followed by the "m".
             if i + 2 < clause.upperBound, t[i + 1] == "p" || t[i + 1] == "a", t[i + 2] == "m" {
@@ -1952,6 +2194,234 @@ public enum DeterministicParser {
             if nounNegators.contains(t[head - 1]) { return true }
         }
         return false
+    }
+
+    /// Whether a negator stands on the OPENING VERB — the other spelling of a
+    /// refusal, and the one `aRefusalNamesTheDoor` cannot see. "dont open
+    /// tiktok for 20 minutes", "do not unlock reddit for 45 minutes" and
+    /// "never let me open instagram for 30 minutes" are pure refusals; each
+    /// opened the refused door and debited the pool, because the negated verb
+    /// is an opener token, the close rule vetoes itself on it, and nothing
+    /// else claimed the sentence.
+    ///
+    /// ADJACENCY, exactly as the noun scan reads its negator: "dont GIVE",
+    /// "not UNLOCK", "never LET". A negator further off is governing something
+    /// else — "dont close instagram, just give me 10" negates the CLOSE and
+    /// still grants.
+    ///
+    /// The one carve-out is the bounded ask, and it is pinned: "dont give me
+    /// MORE THAN 10 of tiktok" negates the exceeding, not the giving, and the
+    /// "more than" standing between the verb and the end of its clause is
+    /// what says so.
+    private static func aNegatorRefusesTheAsk(_ index: NumberParser.ClauseIndex) -> Bool {
+        let t = index.tokens
+        for i in t.indices where negators.contains(t[i]) {
+            // "ever" is the one word English glues between the negator and the
+            // verb it strengthens — "dont EVER open tiktok" — and skipping it
+            // can only widen a refusal, never a grant.
+            var verbAt = i + 1
+            if verbAt < t.count, t[verbAt] == "ever" { verbAt += 1 }
+            guard verbAt < t.count, askVerbs.contains(t[verbAt]),
+                  let clause = index.clauseRange(containing: i), clause.contains(verbAt)
+            else { continue }
+            // The bounded-ask carve is scoped to the immediate "dont": "dont
+            // give me more than 10 of tiktok" negates the exceeding. "NEVER
+            // open insta for more than 20 minutes" is a standing rule, and
+            // granting its 20 is the wrong answer twice over — so the durative
+            // negators keep the refusal and the sentence goes to the widener.
+            let immediate = t[i] == "dont" || t[i] == "don't"
+                || (t[i] == "not" && i > t.startIndex && t[i - 1] == "do")
+            let bounded = immediate && (i + 1..<clause.upperBound).dropLast().contains {
+                t[$0] == "more" && t[$0 + 1] == "than"
+            }
+            if !bounded { return true }
+        }
+        return false
+    }
+
+    /// Whether the sentence's number is the object of "until"/"till"/"til" —
+    /// a deadline, which the grant side has no way to honor. Rule 7 read
+    /// "give me tiktok till 7" as a SEVEN-MINUTE grant while the close rule
+    /// reads the identical words as a clock ("block tiktok until 9" closes
+    /// until 9 PM): two directions of one idiom under two theories. The grant
+    /// side stays silent instead — silence reaches the widener, and a
+    /// misread deadline debits the pool twice (once for the seven minutes,
+    /// once for the re-ask after them).
+    private static func theNumberIsADeadline(_ index: NumberParser.ClauseIndex) -> Bool {
+        let t = index.tokens
+        let deadlineMarkers: Set<String> = ["until", "untill", "till", "til"]
+        return t.indices.contains { i in
+            i > t.startIndex && deadlineMarkers.contains(t[i - 1])
+                && !NumberParser.allNumbers(in: t[i]).isEmpty
+        }
+    }
+
+    /// Whether a seconds unit stands on any number in the sentence. The unit
+    /// lexicon and the intensifier walk both belong to `NumberParser`, so the
+    /// question is asked there — see `statesSeconds` for why the guard and
+    /// the reader must be one reading.
+    private static func theNumberStatesSeconds(_ index: NumberParser.ClauseIndex) -> Bool {
+        let t = index.tokens
+        for i in t.indices where !NumberParser.allNumbers(in: t[i]).isEmpty {
+            guard let clause = index.clauseRange(containing: i) else { continue }
+            let upper = min(i + 3, clause.upperBound)
+            guard i + 1 < upper else { continue }
+            if NumberParser.statesSeconds(following: t[(i + 1)..<upper]) { return true }
+        }
+        return false
+    }
+
+    /// Whether the clause a spend would read is a REPORT or incidental prose
+    /// rather than an ask — rule 7's mood gate, anchored exactly where
+    /// `spendClauseFunds` anchors (the sentence's first number token, or the
+    /// first door for the token-less idiom quantities).
+    ///
+    /// The corpus dictates how lenient the ask side must stay, and the gate is
+    /// built against its pinned rows rather than against a theory: "hey so i
+    /// was thinking maybe like 10 minutes of reddit would be nice" grants (the
+    /// request modal marks the ask), "my friend said give me an hour of
+    /// tiktok" grants (an ask verb with no finite verb anywhere), and "reddit
+    /// ten ok bye love you" grants (door and number adjacent, chatter
+    /// trailing). What it refuses is the shapes with report evidence standing
+    /// BEFORE the quantity or a finite verb in the clause:
+    ///
+    ///  - a spoken SUBJECT ahead of the number: "i watched tiktok for 45
+    ///    minutes at lunch", "i wasted 2 hours on instagram today";
+    ///  - a FINITE non-modal verb in the clause: "tiktok premium is like 9
+    ///    dollars", "…give me 20 minutes of tiktok IS what i always type"
+    ///    (the quoted-speech frame's own copula);
+    ///  - a DETERMINER heading a clause with no ask verb whose opening is not
+    ///    one noun phrase: "my screen time says 55 minutes of youtube";
+    ///  - an AUXILIARY or wh-word heading the clause: a question is never a
+    ///    grant;
+    ///  - and a clause that names NO door funds the grant only as an ask verb
+    ///    or a bare fragment — "just give me 10", "20 minutes tops", "ten" —
+    ///    never as arbitrary prose: "meet me at 5, then we can doomscroll
+    ///    tiktok" granted five minutes off a meeting time.
+    private static func reportsRatherThanSpends(_ index: NumberParser.ClauseIndex,
+                                                state: PolicyState) -> Bool {
+        let t = index.tokens
+        let numberAt = t.indices.first { !NumberParser.allNumbers(in: t[$0]).isEmpty }
+        let anchor = numberAt
+            ?? t.indices.first { i in
+                door(t[i], in: state) != nil
+                    || (i + 1 < t.count && door(t[i] + " " + t[i + 1], in: state) != nil)
+            }
+        guard let anchor, let clause = index.clauseRange(containing: anchor),
+              let first = clause.first
+        else { return false }
+        let ahead = clause.lowerBound..<anchor
+        // A request modal marks the ask, unless a wh-word ahead makes the
+        // sentence a question — the same exemption `reportsRatherThanSets`
+        // carries, read over the whole clause because the pinned ask puts its
+        // "would" after the quantity ("…10 minutes of reddit would be nice").
+        if !ahead.contains(where: { whWords.contains(t[$0]) }),
+           clause.contains(where: { requestModals.contains(t[$0]) }) { return false }
+        if statesAVolition(t, clause: clause) { return false }
+        let asks = clause.contains { askVerbs.contains(t[$0]) }
+        // QUOTED SPEECH: a speech verb ahead of the quantity is somebody
+        // else's sentence being reported — but only the RESUMING frame proves
+        // it. "my friend said give me 20 minutes of tiktok is what i always
+        // type" closes its quote with a copula and is silenced; "my friend
+        // said give me an hour of tiktok" never resumes, reads as the user
+        // adopting the ask, and stays the corpus's pinned grant.
+        if ahead.contains(where: { speechVerbs.contains(t[$0]) }),
+           clause.contains(where: { auxiliaries.contains(t[$0]) && !modals.contains(t[$0]) }) {
+            return true
+        }
+        // A spoken subject ahead of the quantity is a report — unless an ask
+        // verb shares the clause: "ive hit my limit give me 20 of tiktok" is
+        // commentary and then an ask, and the ask wins.
+        if !asks, ahead.contains(where: { subjects.contains(t[$0]) }) { return true }
+        // A subject standing DIRECTLY ON an ask verb has conjugated it: "she
+        // LET me have tiktok for 30 minutes yesterday" reports somebody's
+        // permission, and the ask-verb exemption above must not launder it.
+        // The volitional asks ("i want", "i need") keep their own exemption,
+        // and the first-person futures ("ill have 20 of tiktok") are asks by
+        // construction.
+        if ahead.contains(where: { i in
+            subjects.contains(t[i]) && t[i] != "ill" && t[i] != "id"
+                && i + 1 < clause.upperBound && askVerbs.contains(t[i + 1])
+                && !volitions.contains(t[i + 1])
+        }) { return true }
+        // A PARTICIPLE ahead of the quantity with no ask verb ahead is a
+        // habit report with its subject elided: "spent 45 minutes on tiktok
+        // ugh", "wasted an hour on insta again". An ask verb ahead re-marks
+        // the mood ("just finished homework give me 20 of tiktok" grants).
+        if !ahead.contains(where: { askVerbs.contains(t[$0]) }),
+           ahead.contains(where: { isHabitParticiple(t[$0]) }) {
+            return true
+        }
+        // A finite verb ahead of the quantity with no ask verb ahead of it is
+        // a description: "tiktok premium IS like 9 dollars", "the youtube ad
+        // WAS 30 seconds long". An ask verb ahead re-marks the mood — "its
+        // been a rough day GIMME fifteen minutes of insta" grants.
+        if ahead.contains(where: { auxiliaries.contains(t[$0]) && !modals.contains(t[$0]) }),
+           !ahead.contains(where: { askVerbs.contains(t[$0]) }) {
+            return true
+        }
+        if whWords.contains(t[first]) || auxiliaries.contains(t[first]) { return true }
+        // A determiner heading an ask-less clause must open one noun phrase
+        // running to the quantity ("The Gram ten") — "my screen time says 55
+        // minutes of youtube" does not. Only asked when a NUMBER token
+        // anchors: the article idioms ("an hour and a half of tiktok") hold
+        // their quantity in no token and their own words are not phrase
+        // vocabulary.
+        if let numberAt, numberAt == anchor, determiners.contains(t[first]), !asks,
+           !(min(clause.lowerBound + 1, anchor)..<anchor)
+            .allSatisfy({ isNounPhraseWord(t, $0, state: state) }) {
+            return true
+        }
+        if case .none = doors(in: clause, of: index, state: state) {
+            if asks { return false }
+            return !spendFragment(t, clause: clause, state: state)
+        }
+        return false
+    }
+
+    /// The verbs that report somebody's words. Read only by the quoted-speech
+    /// arm above, and only to REFUSE a grant, so an entry can never widen what
+    /// spends.
+    private static let speechVerbs: Set<String> = [
+        "say", "says", "said", "saying",
+        "tell", "tells", "told", "telling",
+        "type", "types", "typed", "typing",
+        "text", "texts", "texted", "write", "writes", "wrote",
+    ]
+
+    /// Whether a doorless clause is a bare fragment an ask can stand on — a
+    /// quantity and the words that dress one, nothing predicated. "ten",
+    /// "20 minutes", "20 minutes tops", "10 more", "no more than 20" all
+    /// qualify; "meet me at 5" and "my number ends in 88" do not. A leading
+    /// connective ("but", "so") joins the clause to the last one and
+    /// predicates nothing of its own.
+    private static func spendFragment(_ t: [String], clause: Range<Int>,
+                                      state: PolicyState) -> Bool {
+        var start = clause.lowerBound
+        if start < clause.upperBound,
+           ["but", "so", "anyway", "though"].contains(t[start]) { start += 1 }
+        return (start..<clause.upperBound).allSatisfy { i in
+            if isNounPhraseWord(t, i, state: state) || capQuantifiers.contains(t[i])
+                || t[i] == "more" { return true }
+            // "no more than" bounds the ask rather than predicating anything —
+            // the carve-out `capSet`'s negator scan already makes.
+            if t[i] == "no", i + 2 < clause.upperBound,
+               t[i + 1] == "more", t[i + 2] == "than" { return true }
+            if t[i] == "than", i >= clause.lowerBound + 2,
+               t[i - 1] == "more", t[i - 2] == "no" { return true }
+            // The tokenizer keeps ":" inside a token so clocks survive, which
+            // means "minutes:" reaches here wearing its colon. Strip it for
+            // the lexicon lookups only — the hostile corpus pins that
+            // "grant(door: instagram, minutes: 999)" is answered by the clamp,
+            // not by a parse hole.
+            if t[i].hasSuffix(":") {
+                let bare = String(t[i].dropLast())
+                return measureWords.contains(bare) || determiners.contains(bare)
+                    || phrasePrepositions.contains(bare)
+                    || !NumberParser.allNumbers(in: bare).isEmpty
+            }
+            return false
+        }
     }
 
     private static func spendClauseFunds(_ d: Door, _ index: NumberParser.ClauseIndex,
@@ -2176,6 +2646,50 @@ public enum DeterministicParser {
         }) else { return true }
         return startWords.contains(tokens[slot])
     }
+
+    /// Whether the clause holding the sentence's stated hour is itself about
+    /// the window — rule 2's setter gate. The setter fires on a window word
+    /// ANYWHERE plus an hour ANYWHERE, and those are two different places in
+    /// ordinary prose: the gate requires the window's own name in the HOUR'S
+    /// clause, and no spoken subject standing ahead of the hour (a clause with
+    /// a subject is describing somebody's evening, not instructing Silk's —
+    /// "i was quiet at work until 4" moves nothing). The one command that
+    /// speaks its subject keeps its exemption: "i want my bedtime at 10" is a
+    /// volition.
+    ///
+    /// The hour is located with `readsAsHour` — the same question `isStart`
+    /// asks — so the gate and the setter cannot disagree about which token is
+    /// the stated time.
+    private static func windowOwnsTheStatedHour(_ index: NumberParser.ClauseIndex) -> Bool {
+        let t = index.tokens
+        guard let hourAt = t.indices.first(where: { readsAsHour(t[$0]) }),
+              let clause = index.clauseRange(containing: hourAt) else { return false }
+        let mentionsWindow = clause.contains { i in
+            t[i] == "bedtime" || t[i] == "quiet" || t[i] == "night"
+                || (t[i] == "down" && i + 1 < clause.upperBound && t[i + 1].hasPrefix("hour"))
+        }
+        guard mentionsWindow else { return false }
+        if statesAVolition(t, clause: clause) { return true }
+        return !(clause.lowerBound..<hourAt).contains { i in
+            // A subject describes somebody's evening; a PAST-tense auxiliary
+            // describes a former one ("bedtime WAS 9 when i was a kid" must
+            // not tighten tonight's, while the pinned "bedtime IS 10 tonight"
+            // still sets); and a participle that is not one of the window's
+            // own edge markers is the same recollection ("my bedtime USED to
+            // be 10" — "starting"/"ending" stay commands).
+            subjects.contains(t[i]) || pastAuxiliaries.contains(t[i])
+                || (isHabitParticiple(t[i]) && !t[i].hasPrefix("start")
+                    && !t[i].hasPrefix("end") && !t[i].hasPrefix("finish"))
+        }
+    }
+
+    /// The auxiliaries that put a clause in the past — the tense that turns a
+    /// window sentence into a recollection. A subset of `auxiliaries` so the
+    /// two lists cannot disagree about what a word is.
+    private static let pastAuxiliaries: Set<String> = [
+        "was", "wasnt", "wasn't", "were", "werent", "weren't",
+        "had", "hadnt", "hadn't", "did", "didnt", "didn't", "been",
+    ]
 
     /// Whether a token is one NumberParser would read as a clock hour. isStart
     /// asks the reader itself instead of restating its rules, because the two

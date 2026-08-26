@@ -164,6 +164,17 @@ public enum NumberParser {
     private static let hourUnits: Set<String> = ["h", "hr", "hrs", "hour", "hours"]
     private static let minuteUnits: Set<String> = ["m", "min", "mins", "minute", "minutes"]
 
+    /// The seconds units, read by the GUARDS and deliberately not by the
+    /// reader. `allNumbers` scales hours because an hour is sixty of the
+    /// domain's own unit; a second is a sixtieth of one, and no consumer of
+    /// this file can hold a fraction of a minute — so "30 seconds of youtube"
+    /// must not put 30 in a domain whose every consumer means minutes. That
+    /// was the mirror of the "2 hours -> 2 minutes" class the header above
+    /// records: a grant SIXTY TIMES the stated ask, in the loosening
+    /// direction. The spend and cap paths decline a seconds unit the way
+    /// `numberIsNotMinutes` declines hours, and silence reaches the widener.
+    private static let secondUnits: Set<String> = ["second", "seconds", "sec", "secs"]
+
     /// The words a speaker puts BETWEEN a number and its hour word for
     /// emphasis, and nothing else. "give me 2 whole hours of tiktok" stated
     /// two hours as plainly as the unadorned spelling, and a lookahead of
@@ -280,6 +291,21 @@ public enum NumberParser {
         return hourUnits.contains(word)
     }
 
+    /// Whether a seconds unit stands on a number whose following tokens are
+    /// `following` — "30 seconds", "30 secs", and through one intensifier,
+    /// "30 whole seconds". The same shape as `statesAnHour` and answered here
+    /// for the same reason: a guard that reads a unit differently from the
+    /// file that owns the unit lexicon is a guard with a hole in it.
+    static func statesSeconds(following: ArraySlice<String>) -> Bool {
+        var it = following.makeIterator()
+        guard var word = it.next() else { return false }
+        if hourIntensifiers.contains(word) {
+            guard let unit = it.next() else { return false }
+            word = unit
+        }
+        return secondUnits.contains(word)
+    }
+
     /// The single number an utterance carries, or nil when there are zero or
     /// several. Two numbers is ambiguity, and compilers don't guess.
     public static func singleNumber(in utterance: String) -> Int? {
@@ -329,6 +355,22 @@ public enum NumberParser {
     public static func statedTimes(in utterance: String, assumeEvening: Bool) -> [TimeOfDay] {
         scanStatedTimes(in: utterance, assumeEvening: assumeEvening, stopAtFirst: false)
             .map(\.time)
+    }
+
+    /// Every clock the sentence states, WITH each hour's own am/pm provenance.
+    ///
+    /// `statedTimes` answers the membership question and deliberately drops the
+    /// flags; the Validator's am/pm guard then re-fetched the flag from
+    /// `statedTime` — the sentence's FIRST clock — and read the wrong hour's
+    /// provenance: "lock me out from 10pm to 10" matched its bare trailing 10
+    /// for membership and then took the explicit 10pm's flag, so the question
+    /// the guard exists to ask ("10am or 10pm?") was never asked and a
+    /// twelve-hour night landed instantly. The doc on `statedTime` already
+    /// states the rule — the flag belongs to the hour that was matched, not to
+    /// the sentence — and this is the reading that lets a caller honor it.
+    public static func statedTimesDetailed(in utterance: String,
+                                           assumeEvening: Bool) -> [StatedTime] {
+        scanStatedTimes(in: utterance, assumeEvening: assumeEvening, stopAtFirst: false)
     }
 
     /// One pass over one tokenization, for both readers above.

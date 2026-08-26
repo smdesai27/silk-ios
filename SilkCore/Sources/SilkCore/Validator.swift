@@ -284,8 +284,23 @@ public enum Validator {
             // 10pm to 7am" states two hours and a widened end of 07:00 is a
             // correct reading of it; asking only for the first silenced every
             // two-ended window sentence the widener can read.
-            guard NumberParser.statedTimes(in: utterance, assumeEvening: false).contains(end),
-                  let stated = NumberParser.statedTime(in: utterance, assumeEvening: false)
+            //
+            // AND THE FLAG BELONGS TO THE MATCHED CLOCK, NOT TO THE SENTENCE.
+            // Membership was checked against every clock and the meridiem flag
+            // was then taken from `statedTime` — the FIRST clock — so "lock me
+            // out from 10pm to 10" with a widened end of 10:00 borrowed the
+            // explicit 10pm's provenance for a bare trailing 10: the am/pm
+            // question this guard exists to ask was skipped, and a night
+            // lengthened from 9 to 12 hours landed instantly, because a longer
+            // night is a tighten and tightens do not wait. `NumberParser`'s own
+            // doc states the rule ("the flag belongs to the hour that was
+            // matched, not to the sentence"); reading the matched clock's own
+            // StatedTime is what honors it. Two-clock window sentences are the
+            // widener's canonical input, so this is the live path, not a
+            // belt.
+            guard let stated = NumberParser.statedTimesDetailed(in: utterance,
+                                                                assumeEvening: false)
+                .first(where: { $0.time == end })
             else { return .silence }
             if !stated.meridiemWasStated,
                DownHours(start: state.downHours.start, end: end).length > state.downHours.length {
