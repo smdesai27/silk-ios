@@ -1621,23 +1621,23 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(clearsCap(utterance) == nil, "\"\(utterance)\" cleared a cap")
     }
 
-    // FINDING(n12) — the gerund-led clause has no slot for any report gate
-    // to read. "capping" was admitted to `capNouns` (ROUND 3, n8) with the
-    // doc promise that the reports stay reports — and every report scan
-    // reads only what stands AHEAD of the phrase, while the finite-verb
-    // test reads only `auxiliaries`. A clause that LEADS with the gerund
-    // puts its report evidence ("never worked for me", "would free up my
-    // budget") entirely behind the number, where no gate looks — so a
-    // past-efficacy report and a weighed hypothetical both write standing
-    // policy. EXECUTED on this tip:
-    //   "capping tiktok at 20 never worked for me"     -> setDoorCap(TikTok, 20)
-    //   "capping tiktok at 20 would free up my budget" -> setDoorCap(TikTok, 20)
-    // (medium — a report writes a ceiling; the pool is untouched and no
-    // grant fires.)
-    // @Test func aGerundLedReportWritesNoCeiling() {
-    //     #expect(parse("capping tiktok at 20 never worked for me") == .silence)
-    //     #expect(parse("capping tiktok at 20 would free up my budget") == .silence)
-    // }
+    /// FINDING n12, promoted. The gerund-led clause had no slot for any
+    /// report gate to read: every report scan reads only what stands AHEAD
+    /// of the phrase and the finite-verb test reads only `auxiliaries`, so
+    /// a clause that LEADS with the admitted gerund put its evidence
+    /// ("never worked for me", "would free up my budget") entirely behind
+    /// the number, where no gate looked — a past-efficacy report and a
+    /// weighed hypothetical both wrote standing policy. A clause-leading
+    /// cap gerund is a SUBJECT now — the habitual arm's own doctrine, "a
+    /// gerund heads a description" — and a tail after its number that
+    /// cannot belong to the ceiling's own noun phrase is a predicate: a
+    /// report, terminating. The polite inversion keeps its set (the gerund
+    /// does not lead it, pinned above), and the evidence-free spellings
+    /// keep their fragment reading.
+    @Test func aGerundLedReportWritesNoCeiling() {
+        #expect(parse("capping tiktok at 20 never worked for me") == .silence)
+        #expect(parse("capping tiktok at 20 would free up my budget") == .silence)
+    }
 
     /// The n9 "actually" transparency composes with the spokenDeclines
     /// inventory, not just with "no": the politely-asked question is
@@ -1646,21 +1646,20 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(parse("could you cap reddit at 30? actually nah") == .silence)
     }
 
-    // FINDING(n13) — the answer slot's transparent-adverb inventory is one
-    // word deep. The declined-question veto (ROUND 3, n9) admits "actually"
-    // and nothing else, so its allSatisfy breaks on the nearest neighbours
-    // and the veto lifts: "honestly no" and "probably not" both answer the
-    // question no — 'honestly' is already a transparent adverb to the
-    // report scans elsewhere, 'not' is in nounNegators — and the refused
-    // ceiling is written. n3/n9 one adverb over, on the exact seam their
-    // fix narrowed. EXECUTED on this tip:
-    //   "should i cap tiktok at 20? honestly no"  -> setDoorCap(TikTok, 20)
-    //   "should i cap tiktok at 20? probably not" -> setDoorCap(TikTok, 20)
-    // (medium — a self-declined question writes standing policy.)
-    // @Test func aTransparentAdverbNeighbourStillAnswersNo() {
-    //     #expect(parse("should i cap tiktok at 20? honestly no") == .silence)
-    //     #expect(parse("should i cap tiktok at 20? probably not") == .silence)
-    // }
+    /// FINDING n13, promoted. The answer slot's transparent-adverb
+    /// inventory was one word deep — the declined-question veto admitted
+    /// "actually" and nothing else, so its allSatisfy broke on the nearest
+    /// neighbours and the veto lifted: "honestly no" and "probably not"
+    /// both answered the question no and wrote the refused ceiling — n3/n9
+    /// one adverb over, on the exact seam their fix narrowed. The slot now
+    /// reads `answerSlotAdverbs`, a closed four-word inventory instead of
+    /// one token; the clause must still CONTAIN a decline (the bare
+    /// trailing "actually" still sets, pinned in round 3), and an entry
+    /// there can only ever subtract a written ceiling.
+    @Test func aTransparentAdverbNeighbourStillAnswersNo() {
+        #expect(parse("should i cap tiktok at 20? honestly no") == .silence)
+        #expect(parse("should i cap tiktok at 20? probably not") == .silence)
+    }
 }
 
 @Suite struct CapsAdversarialRound4DeterminerPardon {
@@ -1693,25 +1692,21 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(parse(utterance, capped) == .silence, "\"\(utterance)\" compiled to policy")
     }
 
-    // FINDING(n16) — the demonstrative's subject seat starves the sincere
-    // imperative. `subjects` holds "that" for the report gates, and
-    // `reportsRatherThanAsks`' ahead-scan reads it as a spoken subject even
-    // where it is opening the ceiling's own phrase after an imperative
-    // verb: "set THAT 20 minute cap on tiktok" dies as a report one
-    // determiner over from the pinned canonical setter "set a 15 minute
-    // cap on instagram". (The n5 fix already rules "that" a determiner
-    // between a recipient door and its trailing cap noun; the mirror slot
-    // before the number has no such reading, and the leading "set" breaks
-    // `predicatesNothing`, so the bare fragment's escape cannot save it.)
-    // EXECUTED on this tip:
-    //   "set that 20 minute cap on tiktok" -> silence
-    //     (expected setDoorCap(TikTok, 20))
-    // (low — a starved setter; terminating, direction-safe, reaches the
-    // widener.)
-    // @Test func aDemonstrativeOnTheCeilingsOwnPhraseStillSets() {
-    //     #expect(setsCap("set that 20 minute cap on tiktok")
-    //             .map { $0 == ("TikTok", 20) } == true)
-    // }
+    /// FINDING n16, promoted. The demonstrative's subject seat starved the
+    /// sincere imperative: `subjects` holds "that" for the report gates,
+    /// and `reportsRatherThanAsks`' ahead-scan read it as a spoken subject
+    /// even where it opens the ceiling's own phrase after an imperative
+    /// verb — "set that 20 minute cap on tiktok" died as a report one
+    /// determiner over from the pinned canonical setter. A demonstrative
+    /// standing IMMEDIATELY on the phrase is its opener now — the n5 and
+    /// n6 pardons' own word in the mirror slot — and only there: one slot
+    /// back it keeps its subject reading ("that caps tiktok at 20" is
+    /// still a report), and a clause it LEADS still answers to the
+    /// determiner test.
+    @Test func aDemonstrativeOnTheCeilingsOwnPhraseStillSets() {
+        #expect(setsCap("set that 20 minute cap on tiktok")
+                .map { $0 == ("TikTok", 20) } == true)
+    }
 }
 
 @Suite struct CapsAdversarialRound4RecipientFrames {
@@ -1861,39 +1856,41 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(clearsCap(utterance) == nil, "\"\(utterance)\" cleared a cap")
     }
 
-    // FINDING(n14) — the attribution gate is keyed to `speechVerbs`, and
-    // the dominant spoken quotative contains none of them: "he was like
-    // [set my budget to 40]" reports somebody's words through "was like",
-    // so `poolStatementIsAttributed` sees no speech verb ahead of the
-    // number and the shortcut writes the quoted allowance — n10 one verb
-    // over. The trailing clearing is correctly parked (the FINDING 11
-    // pool-claim veto holds); the pool write is the defect. EXECUTED on
-    // this tip (capped state):
-    //   "he was like set my budget to 40, no cap on tiktok" -> setBudget(40)
-    // (medium — a quoted allowance writes the pool.)
-    // @Test func theQuotativeReportsWordsAsSurelyAsASpeechVerb() {
-    //     #expect(parse("he was like set my budget to 40, no cap on tiktok", capped)
-    //             == .silence)
-    //     #expect(clearsCap("he was like set my budget to 40, no cap on tiktok") == nil)
-    // }
+    /// FINDING n14, promoted. The attribution gate was keyed to
+    /// `speechVerbs`, and the dominant spoken quotative contains none of
+    /// them: "he was like [set my budget to 40]" reports somebody's words
+    /// through "was like", so `poolStatementIsAttributed` saw no speech
+    /// verb ahead of the number and the shortcut wrote the quoted allowance
+    /// — n10 one verb over. The copula-particle quotatives ("was/were
+    /// like", "be all") and "goes" are in the gate's inventory now, with
+    /// the pair barred from standing directly ON the number so the
+    /// approximation hedge ("my budget was like 40") keeps its own setter.
+    /// The trailing clearing was correctly parked throughout (the FINDING
+    /// 11 pool-claim veto held); the pool write was the defect, and both
+    /// prongs now fail closed at once.
+    @Test func theQuotativeReportsWordsAsSurelyAsASpeechVerb() {
+        #expect(parse("he was like set my budget to 40, no cap on tiktok", capped)
+                == .silence)
+        #expect(clearsCap("he was like set my budget to 40, no cap on tiktok") == nil)
+    }
 
-    // FINDING(n15) — the attribution stands one breath back and no pool
-    // gate can see it. "my notes say tiktok - 20 a day": the spaced hyphen
-    // is a clause dash (FINDING 8's seam), so the quantity lands in a
-    // doorless breath; "say" IS a `speechVerbs` entry, but
-    // `poolStatementIsAttributed` guards only rule 3's shortcut (no pool
-    // noun here) and `describesRatherThanSetsThePool` reads only the
-    // number's own clause — while the bare-door-topic veto (FINDING 8)
-    // requires the prior breath to hold nothing beyond the door's name,
-    // and "my notes say" is three words more. A quoted per-app note CUTS
-    // the shared pool to 20, instantly. EXECUTED on this tip:
-    //   "my notes say tiktok - 20 a day" -> setBudget(20)
-    // (medium — the round's worst write: a report cuts the standing pool,
-    // though the direction is the tighten side.)
-    // @Test func aQuotedNoteNeverCutsThePool() {
-    //     #expect(parse("my notes say tiktok - 20 a day") == .silence)
-    //     #expect(budgetOf("my notes say tiktok - 20 a day") == nil)
-    // }
+    /// FINDING n15, promoted. The attribution stood one breath back where
+    /// no pool gate could see it: the spaced hyphen in "my notes say tiktok
+    /// - 20 a day" is a clause dash (FINDING 8's seam), so the quantity
+    /// landed in a doorless breath — "say" IS a `speechVerbs` entry, but
+    /// `poolStatementIsAttributed` guards only rule 3's shortcut (no pool
+    /// noun here), `describesRatherThanSetsThePool` reads only the number's
+    /// own clause, and the bare-door-topic veto required the prior breath
+    /// to hold nothing beyond the door's name — and a quoted per-app note
+    /// CUT the shared pool to 20, instantly. The veto now reads the
+    /// attributed spelling of its own shape: a speech verb in the prior
+    /// breath whose tail is nothing but the door's name quotes that door as
+    /// the number's topic, and the pool does not move on it. The door with
+    /// a predicate of its own keeps releasing the pool move, pinned above.
+    @Test func aQuotedNoteNeverCutsThePool() {
+        #expect(parse("my notes say tiktok - 20 a day") == .silence)
+        #expect(budgetOf("my notes say tiktok - 20 a day") == nil)
+    }
 
     /// ADJUDICATED AGAINST THE STARVATION ATTACKER, who expected the
     /// reissued command to land: the n10 gate is deliberately
@@ -1934,7 +1931,14 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 //
 // Forty-two probes pinned green; five seams genuinely failed (seven
 // sentences), each left as a commented FINDING block beside the rule it
-// breaks:
+// breaks. All five were fixed in the ROUND 5 pass and their probes promoted
+// live beside their seams ("FINDING nX, promoted") — the clause-leading
+// gerund speaks its subject and the tail behind its number is read as the
+// predicate it is, the answer slot grows a closed adverb inventory, the
+// copula quotative joins the pool's attribution gate and the quoted note
+// reaches the bare-door-topic veto across the dash, and the demonstrative
+// standing directly on the ceiling's own phrase is a determiner at last.
+// The list below stands as the record of what the round found:
 //
 //  n12 the report gates all read AHEAD of the phrase and the finite-verb
 //      test reads only `auxiliaries`, so a clause that LEADS with the
