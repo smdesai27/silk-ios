@@ -1308,23 +1308,25 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(parse(utterance) == .silence, "\"\(utterance)\" moved policy")
     }
 
-    // FINDING(n11) — the polite CLEARING declines by disclosed design
-    // (`reportsRatherThanAsks` reads a fronted request modal as a plain
-    // auxiliary; no exemption on the clearing side, per its own comment) —
-    // and then shape one reads the clearing's quoted premodifier as a
-    // proposal: "cap" leads "tiktok" with the 20 ahead of it (leadsTheDoor),
-    // nothing intervenes, the fronted modal buys the requestModals
-    // exemption, and the sentence WRITES the very ceiling it asked to
-    // remove. The bare spelling ("take the 20 minute cap off tiktok") is
-    // pinned to clear — twice, in StressTests. ADJUDICATED: the attacker
-    // expected the clearing to land; the clearing-side starvation is the
-    // design's own trade, so the expected outcome is the terminating
-    // silence — the WRITE is the defect. (medium)
-    //   "can you take the 20 minute cap off tiktok" -> capSet(TikTok, 20); expected .silence
-    // @Test func aPoliteClearingIsNeverClaimedAsASet() {
-    //     #expect(parse("can you take the 20 minute cap off tiktok", capped) == .silence)
-    //     #expect(setsCap("can you take the 20 minute cap off tiktok") == nil)
-    // }
+    /// FINDING n11, promoted. The polite clearing declines by disclosed
+    /// design (`reportsRatherThanAsks` reads a fronted request modal as a
+    /// plain auxiliary; no exemption on the clearing side, per its own
+    /// comment) — and then shape one read the clearing's quoted premodifier
+    /// as a proposal: "cap" led "tiktok" with the 20 ahead, the fronted
+    /// modal bought the requestModals exemption, and the sentence WROTE the
+    /// very ceiling it asked to remove. A capRemover standing between the
+    /// cap noun and the door now terminates shape one — the "off" says the
+    /// ceiling is being moved OFF the door, not aimed at it — and the bare
+    /// spelling ("take the 20 minute cap off tiktok") keeps its clearing,
+    /// pinned twice in StressTests, because `capCleared` claims it before
+    /// shape one ever runs. ADJUDICATED: the attacker expected the clearing
+    /// to land; the clearing-side starvation is the design's own trade, so
+    /// the pinned outcome is the terminating silence — the WRITE was the
+    /// defect.
+    @Test func aPoliteClearingIsNeverClaimedAsASet() {
+        #expect(parse("can you take the 20 minute cap off tiktok", capped) == .silence)
+        #expect(setsCap("can you take the 20 minute cap off tiktok") == nil)
+    }
 }
 
 @Suite struct CapsAdversarialRound3SetterShapes {
@@ -1360,58 +1362,68 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
                 "\"\(row.utterance)\" -> \(String(describing: got))")
     }
 
-    // FINDING(n5) — the dative arm's boundary scan reads the demonstrative
-    // "that" as a second-predicate boundary: `subjects` holds it for the
-    // report gates, but between recipient-door and cap noun it is a
-    // DETERMINER opening the ceiling's own phrase, exactly as "a" does — the
-    // arm's own doc says determiners are not boundaries here, and "that" is
-    // in `determiners` too. The termination is withheld, the decline walks
-    // into rule 7's give-door-number hot path, and a request to RESTRICT the
-    // app funds twenty minutes of it: the FINDING 3 inversion, resurrected
-    // through the third demonstrative. (high)
-    //   "give tiktok that 20 minute cap we talked about" -> SPEND(TikTok, 20); expected .silence, above all never a grant
-    // @Test func aDemonstrativeMayNotResurrectTheDativeGrant() {
-    //     #expect(parse("give tiktok that 20 minute cap we talked about") == .silence)
-    //     #expect(spend("give tiktok that 20 minute cap we talked about") == nil)
-    // }
+    /// FINDING n5, promoted. The dative arm's boundary scan read the
+    /// demonstrative "that" as a second-predicate boundary: `subjects` holds
+    /// it for the report gates, but between recipient-door and cap noun it
+    /// is a DETERMINER opening the ceiling's own phrase, exactly as "a" is —
+    /// the termination was withheld, the decline walked into rule 7's
+    /// give-door-number hot path, and a request to RESTRICT the app funded
+    /// twenty minutes of it: the FINDING 3 inversion, resurrected through
+    /// the third demonstrative. A subject that is also a determiner is now
+    /// the ceiling's own phrase opener in this one scan; "i", "you" and "we"
+    /// keep their boundary reading, so the real-second-predicate declines
+    /// stand.
+    @Test func aDemonstrativeMayNotResurrectTheDativeGrant() {
+        #expect(parse("give tiktok that 20 minute cap we talked about") == .silence)
+        #expect(spend("give tiktok that 20 minute cap we talked about") == nil)
+    }
 
-    // FINDING(n6) — shape one's `intervenes` scan reads a determiner ahead
-    // of the NUMBER as a predicate boundary (the FINDINGS 1-2 skip pardons
-    // only a determiner standing immediately on the DOOR), the shape dies,
-    // `capSet` returns nil rather than terminating, and the ladder answers a
-    // restriction with rule 7's grant — a clause carrying a cap lexeme aimed
-    // at a door ending in SPEND, the direction repo law forbids outright.
-    // ("an" is no negator, so the n2 reach rightly stays out of "an even
-    // 20"; the determiner boundary is the whole defect.) (high)
-    //   "cap tiktok at a strict 20" -> SPEND(TikTok, 20); expected capSet(TikTok, 20) — at minimum, never a grant
-    //   "cap tiktok at an even 20"  -> SPEND(TikTok, 20); expected capSet(TikTok, 20) — at minimum, never a grant
-    // @Test func aDeterminerOnTheNumberNeverKillsTheShapeIntoAGrant() {
-    //     #expect(spend("cap tiktok at a strict 20") == nil)
-    //     #expect(spend("cap tiktok at an even 20") == nil)
-    // }
+    /// FINDING n6, promoted. Shape one's `intervenes` scan read a determiner
+    /// ahead of the NUMBER as a predicate boundary (the FINDINGS 1-2 skip
+    /// pardons only a determiner standing immediately on the DOOR), the
+    /// shape died, `capSet` returned nil rather than terminating, and the
+    /// ladder answered a restriction with rule 7's grant — a clause carrying
+    /// a cap lexeme aimed at a door ending in SPEND, the direction repo law
+    /// forbids outright. A determiner within two tokens of the number now
+    /// opens the number's own phrase — two and no more, so "the tiktok cap
+    /// my mom set is 20" keeps its boundary — and both round-number idioms
+    /// compile to the set they state. ("an" is no negator, so the n2 reach
+    /// rightly stays out of "an even 20"; the determiner boundary was the
+    /// whole defect.)
+    @Test func aDeterminerOnTheNumberNeverKillsTheShapeIntoAGrant() {
+        #expect(setsCap("cap tiktok at a strict 20").map { $0 == ("TikTok", 20) } == true)
+        #expect(setsCap("cap tiktok at an even 20").map { $0 == ("TikTok", 20) } == true)
+        #expect(spend("cap tiktok at a strict 20") == nil)
+        #expect(spend("cap tiktok at an even 20") == nil)
+    }
 
-    // FINDING(n7) — a trailing cap noun behind a NON-ask verb matches
-    // nothing: leadsTheNumber and leadsTheDoor both fail (the noun trails
-    // number and door alike), the dative arm keys on `askVerbs` and "set" is
-    // not one, so no cap arm ever runs — and the clause, carrying a cap
-    // lexeme aimed at a door, walks to rule 7 and SPENDS. The FINDING 3 / n4
-    // proposal, one verb over. (high)
-    //   "set tiktok to a 20 minute cap" -> SPEND(TikTok, 20); expected capSet(TikTok, 20) — at minimum, never a grant
-    // @Test func aTrailingCapNounBehindANonAskVerbNeverGrants() {
-    //     #expect(spend("set tiktok to a 20 minute cap") == nil)
-    // }
+    /// FINDING n7, promoted. A trailing cap noun behind a NON-ask verb
+    /// matched nothing: leadsTheNumber and leadsTheDoor both fail (the noun
+    /// trails number and door alike), the dative arm keyed on `askVerbs` and
+    /// "set" is not one, so no cap arm ran — and the clause, carrying a cap
+    /// lexeme aimed at a door, walked to rule 7 and SPENT. The FINDING 3 /
+    /// n4 proposal, one verb over. The recipient frame is no longer
+    /// ask-verb-keyed: a clause-leading verb outside every closed class,
+    /// with the door standing directly on it as its object and a cap noun in
+    /// the wake, terminates — "the tiktok cap should be 15 a day" keeps its
+    /// subject-is-the-rule set because "the" is a determiner, not a verb.
+    @Test func aTrailingCapNounBehindANonAskVerbNeverGrants() {
+        #expect(parse("set tiktok to a 20 minute cap") == .silence)
+        #expect(spend("set tiktok to a 20 minute cap") == nil)
+    }
 
-    // FINDING(n8) — "capping" is absent from `capNouns` (cap/caps/capped
-    // only) and no deinflection reaches it, so the politest wrapper of all
-    // is not cap-shaped at all — and rule 7's mood gate reads the fronted
-    // "would" as the ask's own request modal and GRANTS the app being
-    // restricted. The pinned "im capping tiktok at 20" stays out of the
-    // grant direction only through the subject-ahead gate, and the polite
-    // inversion has no subject to trip it. (high)
-    //   "would you mind capping tiktok at 20" -> SPEND(TikTok, 20); expected capSet(TikTok, 20) or silence — never a grant
-    // @Test func thePoliteGerundNeverFundsTheAppBeingCapped() {
-    //     #expect(spend("would you mind capping tiktok at 20") == nil)
-    // }
+    /// FINDING n8, promoted. "capping" was absent from `capNouns` and no
+    /// deinflection reaches it, so the politest wrapper of all was not
+    /// cap-shaped at all — and rule 7's mood gate read the fronted "would"
+    /// as the ask's own request modal and GRANTED the app being restricted.
+    /// The gerund is in the lexicon now: the polite inversion compiles to
+    /// the set it wraps, and the pinned "im capping tiktok at 20" still dies
+    /// on the subject-ahead scan — inside the cap family's own gates instead
+    /// of one rule from the grant.
+    @Test func thePoliteGerundNeverFundsTheAppBeingCapped() {
+        #expect(setsCap("would you mind capping tiktok at 20").map { $0 == ("TikTok", 20) } == true)
+        #expect(spend("would you mind capping tiktok at 20") == nil)
+    }
 }
 
 @Suite struct CapsAdversarialRound3Declines {
@@ -1451,17 +1463,19 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(parse(utterance, capped) == .silence, "\"\(utterance)\" kept walking")
     }
 
-    // FINDING(n9) — the declined-question veto's answer clause is an
-    // allSatisfy over nounNegators + spokenDeclines, and one transparent
-    // discourse adverb breaks it: "actually no" answers no, the veto lifts,
-    // and the self-declined question writes the ceiling the asker refused —
-    // n3 one adverb over, the n2 "even" move waiting for its one token of
-    // reach. An entry in that inventory can only subtract a written ceiling,
-    // so the fix direction is the family's safe one. (medium)
-    //   "should i cap tiktok at 20? actually no" -> capSet(TikTok, 20); expected .silence
-    // @Test func aDiscourseAdverbDoesNotUndoTheDecline() {
-    //     #expect(parse("should i cap tiktok at 20? actually no") == .silence)
-    // }
+    /// FINDING n9, promoted. The declined-question veto's answer clause was
+    /// an allSatisfy over nounNegators + spokenDeclines, and one transparent
+    /// discourse adverb broke it: "actually no" answers no, the veto lifted,
+    /// and the self-declined question wrote the ceiling the asker refused —
+    /// n3 one adverb over, the n2 "even" move one gate along. "actually" is
+    /// transparent filler in the answer slot now, and the clause must still
+    /// CONTAIN a decline — a bare trailing "actually" answers nothing — so
+    /// an entry in the inventory can only ever subtract a written ceiling,
+    /// the family's safe direction.
+    @Test func aDiscourseAdverbDoesNotUndoTheDecline() {
+        #expect(parse("should i cap tiktok at 20? actually no") == .silence)
+        #expect(setsCap("should i cap tiktok at 20? actually").map { $0 == ("TikTok", 20) } == true)
+    }
 }
 
 @Suite struct CapsAdversarialRound3FirstBreath {
@@ -1488,30 +1502,37 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
                 == .command(.setBudget(minutes: 40)))
     }
 
-    // FINDING(n10) — `namesThePool`'s shortcut has no attribution gate: the
-    // quoted "set my budget to 40" continues the pool noun with a ceiling
-    // preposition and its number, so the SHORTCUT writes the allowance the
-    // sentence only reports — where the fallback's own mood gate
-    // (`describesRatherThanSetsThePool`) would have refused on the spoken
-    // subject "they". A REPORT IS NOT AN INSTRUCTION is this file's oldest
-    // doctrine ("my mom said cap tiktok at 20" is pinned silence), and a
-    // quoted allowance is a parked RAISE whenever the quoted number exceeds
-    // the standing pool. The FINDING 11 prong holds — the pool claim still
-    // parks the trailing clearing — but both prongs must fail closed at
-    // once. (medium)
-    //   "they said set my budget to 40, no cap on tiktok" -> setBudget(40); expected .silence, and never a clearing
-    // @Test func anAttributedPoolInstructionWritesNothing() {
-    //     #expect(parse("they said set my budget to 40, no cap on tiktok", capped) == .silence)
-    //     #expect(budgetOf("they said set my budget to 40, no cap on tiktok") == nil)
-    //     #expect(clearsCap("they said set my budget to 40, no cap on tiktok") == nil)
-    // }
+    /// FINDING n10, promoted. `namesThePool`'s shortcut had no attribution
+    /// gate: the quoted "set my budget to 40" continues the pool noun with a
+    /// ceiling preposition and its number, so the SHORTCUT wrote the
+    /// allowance the sentence only reports — where the fallback's own mood
+    /// gate (`describesRatherThanSetsThePool`) would have refused on the
+    /// spoken subject "they". A speech verb ahead of the pool's number in
+    /// the number's own clause now silences the shortcut into the fallback's
+    /// doctrine — A REPORT IS NOT AN INSTRUCTION, this file's oldest ("my
+    /// mom said cap tiktok at 20" is pinned silence) — and a quoted
+    /// allowance is a parked RAISE whenever the quoted number exceeds the
+    /// standing pool. Both prongs now fail closed at once: the FINDING 11
+    /// pool-claim veto still parks the trailing clearing, and the pool
+    /// writes nothing.
+    @Test func anAttributedPoolInstructionWritesNothing() {
+        #expect(parse("they said set my budget to 40, no cap on tiktok", capped) == .silence)
+        #expect(budgetOf("they said set my budget to 40, no cap on tiktok") == nil)
+        #expect(clearsCap("they said set my budget to 40, no cap on tiktok") == nil)
+    }
 }
 
 // MARK: - ROUND 3 FINDINGS
 //
 // Thirty-five probes pinned green; seven seams genuinely failed (eight
 // sentences), each left as a commented FINDING block beside the rule it
-// breaks:
+// breaks. All seven were fixed in the ROUND 4 pass and their probes promoted
+// live beside their seams ("FINDING nX, promoted") — the demonstrative and
+// the leading non-ask verb close the dative frame, the determiner-on-the-
+// number pardon and the remover-between termination repair shape one from
+// both sides, "capping" joins the lexicon, "actually" turns transparent in
+// the answer slot, and the pool's shortcut learns attribution. The list
+// below stands as the record of what the round found:
 //
 //  n5  the dative arm's boundary scan reads the demonstrative "that" as a
 //      second predicate — "give tiktok that 20 minute cap we talked about"
