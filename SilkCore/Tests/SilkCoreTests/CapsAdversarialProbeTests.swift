@@ -747,3 +747,435 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 // rule 5's own contract (the "hey," flavor pinned in StressTests) says a
 // preambled removal is not claimed either, so the promoted probe pins the
 // terminating silence instead — recorded on the probe itself.
+
+// MARK: - Round 2: the fourteen fixes under fire
+//
+// A second adversarial round, aimed at the fix pass itself. Every probe below
+// stacks, starves, or minimally mutates a seam the fourteen-defect fix just
+// touched: the loosened `intervenes` door-phrase skip (FINDINGS 1-2), the
+// dative arm (3), the clearing-family tail guard (4), the politeAsk
+// termination (5), the stranded quantifier (6), the opener step-over (7), the
+// bare-door topic (8), the slang-emphatic gate (9), the declined question
+// (10), the pool-claim veto (11), the negated-number adjacency (12), and the
+// "by" deltas (13-14). Every attacker expectation was adjudicated against the
+// rule contracts before pinning; ten moved to the parser's side — the
+// pool-claim and remover-claim silences are the recall seam their own doc
+// comments disclose, "my budget is 40 already" is the pool's pinned
+// subject-is-the-rule setter class, "im done" is a closer phrase under the
+// pinned close-hoist, and the bare-door-topic veto is unconditional on the
+// number clause's tail by promoted doctrine — each recorded on its probe. The
+// four seams the grammar genuinely got wrong (six sentences) are commented
+// out as FINDING(n1)-(n4) blocks beside the rules they break; see ROUND 2
+// FINDINGS at the bottom.
+
+@Suite struct CapsAdversarialRound2Setters {
+
+    /// The widened `intervenes` skip, exercised one cell past each pinned row:
+    /// the possessive under a different verb, the possessive on a one-token
+    /// alias (doorEnd's other branch), the bare determiner on a plain door
+    /// name, the two-token alias with a polite dative tail, and the alias
+    /// setter opened mid-sentence by a habit report.
+    @Test(arguments: [
+        ("limit my tiktok to 25", "TikTok", 25),
+        ("cap my insta at 30", "Instagram", 30),
+        ("cap the tiktok at 20", "TikTok", 20),
+        // "for me" trails as a beneficiary, not a recipient the dative arm
+        // silences — the arm keys on the DOOR standing after the ask verb.
+        ("cap the gram at 20 for me", "Instagram", 20),
+        ("ive been doomscrolling so cap the gram at 25", "Instagram", 25),
+    ])
+    func theWidenedDoorPhraseFloorHolds(_ row: (utterance: String, door: String, minutes: Int)) {
+        let got = setsCap(row.utterance)
+        #expect(got?.0 == row.door && got?.1 == row.minutes,
+                "\"\(row.utterance)\" -> \(String(describing: got))")
+    }
+
+    /// Negators and "by" OUTSIDE the proposal are not evidence about it: the
+    /// adjacency test reads t[numberAt-1] only, the refused-scan reads only
+    /// ahead of the phrase, the "no more than" carve-out travels to every
+    /// spelling, and the delta refusal stays clause-local.
+    @Test(arguments: [
+        // A negator AFTER the number belongs to the idiom, not the ceiling.
+        ("cap tiktok at 20 no matter what", "TikTok", 20),
+        // The carve-out inside the at-phrase: "than", not the negator, stands
+        // on the number.
+        ("cap tiktok at no more than 20", "TikTok", 20),
+        // The carve-out through a two-token alias doorEnd.
+        ("no more than 20 of the gram a day", "Instagram", 20),
+        // "never" leads a sealed idiom clause: not an opener, not a remover,
+        // no number — all three earlier-claim arms stand down.
+        ("never mind youtube, cap tiktok at 20", "TikTok", 20),
+        // "by" with no number after it, glued into the clause uncomma'd: the
+        // delta refusal is adjacency-keyed, never a contains("by") scan.
+        ("cap tiktok at 25 by the way", "TikTok", 25),
+        // The reason clause's delta may not poison the first breath's setter.
+        ("cap tiktok at 20, i went over by 10 yesterday", "TikTok", 20),
+        // "not youtube" leads with a nounNegator but carries a door: the
+        // declined-question allSatisfy must fail, and doors(in:) stays
+        // clause-scoped.
+        ("cap tiktok at 20, not youtube", "TikTok", 20),
+        // "no rush" leads with a nounNegator and ends with a noun: the
+        // FINDING-10 veto must see "rush" and stand down.
+        ("can you cap tiktok at 20 minutes, no rush", "TikTok", 20),
+    ])
+    func aNegatorOrByOutsideTheProposalIsNotEvidence(_ row: (utterance: String, door: String, minutes: Int)) {
+        let got = setsCap(row.utterance)
+        #expect(got?.0 == row.door && got?.1 == row.minutes,
+                "\"\(row.utterance)\" -> \(String(describing: got))")
+    }
+
+    /// The cap noun LEADING its number is shape one wherever the recipient
+    /// stands: "give ME a ceiling" caps the door it names, and "give tiktok a
+    /// ceiling OF 20" is claimed by shape one before the dative arm ever runs
+    /// — a grant out of either is the inversion FINDING 3 closed.
+    @Test func theCapNounLeadingItsNumberStaysASet() {
+        #expect(setsCap("give me a 20 minute ceiling on tiktok").map { $0 == ("TikTok", 20) } == true)
+        #expect(setsCap("give tiktok a ceiling of 20 minutes").map { $0 == ("TikTok", 20) } == true)
+    }
+
+    /// FINDING 12 under the alias: the negator standing directly on the
+    /// number refuses through a two-token doorEnd too.
+    @Test func aNegatedNumberStillRefusesThroughTheAlias() {
+        #expect(parse("cap the gram at not 20 but 30") == .silence)
+    }
+
+    // FINDING(n2): AN INTENSIFIER HIDES THE NEGATOR FROM THE ADJACENCY TEST.
+    // "cap tiktok at not even 20" writes the 20 the sentence negates: "even"
+    // holds the numberAt-1 slot so the adjacency check misses, and "not"
+    // stands between lexeme and number where the refused-scan never looks —
+    // the one-token-of-slack spelling FINDING 12's narrowing left open. The
+    // adjacency doctrine's own justification ("a negator further off is
+    // governing something else") is false here: "not even" governs the number
+    // through a transparent intensifier.
+    // Expected .silence; got .command(.setDoorCap(door: tiktok, minutes: 20)).
+    //   #expect(parse("cap tiktok at not even 20") == .silence)
+
+    /// FINDINGS 13-14, generalized: "by" aims a delta whatever verb leads —
+    /// spelled numbers anchor the same adjacency, unlisted verbs ride the
+    /// same preposition ("bump ... TO 20" is a pinned set, so the verb stem
+    /// is live and the preposition alone carries the distinction), and the
+    /// delta composes with the declined question, the FINDING-4 tail guard,
+    /// and the pool-claim veto to silence, never to arithmetic.
+    @Test(arguments: [
+        "raise the tiktok cap by ten",
+        "bump the tiktok cap up by 15",
+        "should i lower the tiktok cap by 5? no",
+        "drop the tiktok limit by 10 because 20 was too strict",
+        // The trailing clause is a delta, not a clearing, so the pool-claim
+        // veto's loosening-only scope never engages: capSet's terminating
+        // by-refusal silences the sentence before rule 3 — the dropped budget
+        // move is the disclosed one-command cost, and above all never
+        // cap[tiktok]=5.
+        "set my budget to 40, lower the tiktok cap by 5",
+    ])
+    func aByDeltaTerminatesWhateverVerbLeads(_ utterance: String) {
+        #expect(parse(utterance, capped) == .silence, "\"\(utterance)\" kept walking")
+    }
+}
+
+@Suite struct CapsAdversarialRound2Politeness {
+
+    /// FINDING 5's termination across punctuation, modal, alias, and hedge
+    /// mutations: a polite numberless cap question beside a number in another
+    /// breath terminates — the number is a habit report, a fragment with a
+    /// particle, a comma'd orphan, or a hedged offer, and none of them may
+    /// fund the decline.
+    @Test(arguments: [
+        "can you cap tiktok? i already used 20 today",
+        "would you cap the gram? 15 tops",
+        "can you cap tiktok, 20 minutes",
+    ])
+    func aPoliteQuestionBesideAStrandedNumberTerminates(_ utterance: String) {
+        #expect(parse(utterance) == .silence, "\"\(utterance)\" kept walking")
+    }
+
+    /// The termination's two exemptions keep walking: the wh-guard keeps the
+    /// rhetorical question OUT of the politeAsk arm so the decline still
+    /// reaches the grant ("give me 20" borrows the question's door), and the
+    /// numberless polite ask is rule 8's own sentence on every verb spelling.
+    @Test func theWhGuardAndTheNumberlessAskKeepWalking() {
+        let a = spend("why would you cap tiktok? give me 20")
+        #expect(a?.0 == "TikTok" && a?.1 == 20)
+        #expect(parse("can i get a limit on insta")
+                == .command(.placeBoundAsk(door: instagram)))
+        // The ask-verb exemption on the stranded-quantifier arm is not
+        // verb-spelling-keyed: "let me have" walks to "How long?" exactly as
+        // "give me tiktok max" does.
+        #expect(parse("let me have insta max")
+                == .command(.placeBoundAsk(door: instagram)))
+    }
+
+    /// FINDING 3's dative silence under attribution, modals, and both alias
+    /// widths: the recipient is the DOOR, so the sentence terminates — never
+    /// a grant, and no polite wrapper re-admits it anywhere.
+    @Test(arguments: [
+        "coach said give tiktok a 30 minute ceiling",
+        "give the gram a 20 minute ceiling",
+        "can you give tiktok a 20 minute ceiling",
+    ])
+    func theDativeSetterTerminatesUnderQuotesAndModals(_ utterance: String) {
+        #expect(parse(utterance, capped) == .silence, "\"\(utterance)\" moved policy or granted")
+    }
+
+    // FINDING(n4): ONE ADJECTIVE RESURRECTS THE FINDING-3 GRANT. "give tiktok
+    // a hard 20 minute cap" — "hard" is not noun-phrase vocabulary, so
+    // spansOneNounPhrase breaks, the dative arm declines, and the decline
+    // walks into rule 7's give-door-number hot path: a request to RESTRICT
+    // the app funds twenty minutes of it. The worst direction this grammar
+    // has, reachable through a single sincere intensifier.
+    // Expected .silence; got .command(.spend(door: tiktok, minutes: 20)).
+    //   #expect(parse("give tiktok a hard 20 minute cap") == .silence)
+    //   #expect(spend("give tiktok a hard 20 minute cap") == nil)
+
+    /// And the doorless dative frame with no cap noun anywhere IS the hot
+    /// path — if the dative arm ever loosens from capNouns to the frame
+    /// shape, every third-person grant goes silent.
+    @Test func theHotPathKeepsTheDoorlessDativeFrame() {
+        let a = spend("give youtube 25 minutes")
+        #expect(a?.0 == "YouTube" && a?.1 == 25)
+    }
+
+    /// FINDING 10 on the canonical polite setter: the same requestModals
+    /// exemption that admits the question hands it to the bare-negator
+    /// termination.
+    @Test func aDeclinedQuestionStaysDeclined() {
+        #expect(parse("could you cap reddit at 30? no") == .silence)
+    }
+
+    // FINDING(n3): THE DECLINE'S OWN VOCABULARY IS MISSING. "should i cap
+    // tiktok at 20? nah" and "... nah nvm" write standing policy: the
+    // declined-question veto requires the answer clause to be ALL
+    // nounNegators ([no, none, not, never]), and "nah" — the commonest
+    // spoken decline there is — is not in the inventory, so the self-declined
+    // question writes the ceiling one synonym over from the fixed sentence.
+    // Expected .silence; got .command(.setDoorCap(door: tiktok, minutes: 20)).
+    //   #expect(parse("should i cap tiktok at 20? nah") == .silence)
+    //   #expect(parse("should i cap tiktok at 20? nah nvm") == .silence)
+
+    /// The report gates over the widened possessive skip: a third-party or
+    /// past-tense sentence whose determiner stands directly on the door is
+    /// still a report, and the copula restatement keeps its boundary reading
+    /// — the contrast rows proving the skip did not eat the mood gates.
+    @Test(arguments: [
+        "my dad capped my tiktok at 20 growing up",
+        "the tutorial says cap your tiktok at 20",
+        "the tiktok cap my mom set is 20",
+    ])
+    func aReportThroughTheSkippedDeterminerIsStillAReport(_ utterance: String) {
+        #expect(parse(utterance, capped) == .silence, "\"\(utterance)\" compiled to policy")
+    }
+
+    // FINDING(n1): THE REQUEST-MODAL EXEMPTION HAS NO SUBJECT GUARD. The
+    // exemption reads "a request modal ahead of the phrase, no wh-word" and
+    // preempts the spoken-subject test entirely, so a third-party sentence
+    // wearing a modal writes standing policy: "can you believe they capped
+    // tiktok at 20" is a rhetorical report ("they capped"), and "my mom would
+    // cap the tiktok at 20 if she could" is an attributed hypothetical — the
+    // widened exemption (FINDING 5) composed with the loosened intervenes
+    // skip (FINDINGS 1-2) walks both to a written ceiling. README rule 1's
+    // principle — the answer to a question is never a new rule, and a report
+    // is not an instruction — loses to one polite auxiliary.
+    // Expected .silence; got .command(.setDoorCap(door: tiktok, minutes: 20)) for both.
+    //   #expect(parse("can you believe they capped tiktok at 20") == .silence)
+    //   #expect(parse("my mom would cap the tiktok at 20 if she could") == .silence)
+}
+
+@Suite struct CapsAdversarialRound2FirstBreath {
+
+    /// FINDING 11 generalized: the leading pool command wins over a trailing
+    /// loosening on every remover flavor and alias width — and over pure
+    /// slang chatter, where the emphatic gate and the veto independently
+    /// forbid the clearing.
+    @Test func theLeadingPoolCommandStillWins() {
+        #expect(parse("set my budget to 45, uncap the gram", capped)
+                == .command(.setBudget(minutes: 45)))
+        #expect(parse("set my budget to 40, fr no cap tho tiktok", capped)
+                == .command(.setBudget(minutes: 40)))
+        // ADJUDICATED AGAINST THE ATTACKER, who expected the clearing: "my
+        // budget is 40 already" is the pool's own sentence, not a report —
+        // `namesThePool` lists the finite-verb continuation ("my budget is
+        // 30") as the pool speaking, and the mood gate's subject-is-the-rule
+        // carve-out pins "40 a day is what i already have" as a setter. A
+        // first breath that states the rule claims the sentence, and the
+        // trailing loosening drops — FINDING 11's own doctrine.
+        #expect(parse("my budget is 40 already, no cap on tiktok", capped)
+                == .command(.setBudget(minutes: 40)))
+    }
+
+    /// The veto scans EARLIER clauses only, and needs BOTH prongs: a leading
+    /// clearing beats a trailing pool command, and a numberless budget
+    /// mention claims nothing.
+    @Test func theVetoScansBackwardOnlyAndNeedsBothProngs() {
+        #expect(clearsCap("no cap on tiktok, set my budget to 30") == "TikTok")
+        #expect(clearsCap("budget stuff can wait, uncap tiktok") == "TikTok")
+    }
+
+    /// The pool-claim veto's recall seam, pinned as the seam it is: the
+    /// intent test is bare number-presence beside a budget-stem token —
+    /// disclosed on the rule as mirroring the door arm's pinned seam — so
+    /// numbered budget CHATTER (an adjective, a gerund) parks a trailing
+    /// clearing into silence. Direction-safe both ways: a parked loosening,
+    /// and above all the chatter's number never cuts the pool.
+    @Test(arguments: [
+        "my budget phone died at 20 percent, no cap on tiktok",
+        "im budgeting 40 bucks for gifts, uncap tiktok",
+    ])
+    func numberedBudgetChatterParksTheClearing(_ utterance: String) {
+        #expect(parse(utterance, capped) == .silence, "\"\(utterance)\" moved policy")
+        #expect(budgetOf(utterance) == nil, "\"\(utterance)\" cut the pool")
+    }
+
+    /// The remover-claim arm reads one lead token past the opener skip, by
+    /// design — "an intent is the REMOVER that OPENS THAT CLAUSE" — so a
+    /// hypothetical ("though remove instagram sounds harsh") and venting
+    /// ("drop the tiktok drama") claim their breath and park the trailing
+    /// clearing. The same silence FINDING 7 pinned for the sincere spelling:
+    /// preambled removals are not claimed either, and silence reaches the
+    /// widener, which can produce neither a cap nor a deletion (§5.7).
+    /// Direction-safe; pinned as the recall seam it is.
+    @Test(arguments: [
+        "though remove instagram sounds harsh, no cap on tiktok",
+        "so drop the tiktok drama, no cap on instagram",
+    ])
+    func aRemoverLedFirstBreathParksTheTrailingClearing(_ utterance: String) {
+        #expect(parse(utterance, capped) == .silence, "\"\(utterance)\" moved policy")
+    }
+
+    /// And the step-over is exactly one token wide: "so what if i remove
+    /// instagram" lands the claim test on "what", which removes nothing, so
+    /// the rhetorical question claims no breath and the clearing lands.
+    @Test func theOpenerSkipStaysOneTokenWide() {
+        #expect(clearsCap("so what if i remove instagram, no cap on tiktok") == "TikTok")
+    }
+}
+
+@Suite struct CapsAdversarialRound2ClearingsAndTopics {
+
+    /// Sincere clearings survive their tails: the comma'd reason, the
+    /// temporal "for today", the polite opener deliberately absent from
+    /// slangEmphatics, the comma-sealed emphatic, the whitelisted slang tail,
+    /// and the lone discourse opener.
+    @Test(arguments: [
+        "uncap tiktok, 20 wasnt enough",
+        "take the cap off tiktok for today",
+        // "pls" is politeness, not slang: the FINDING 9 split must not
+        // collapse back to the whole particle list.
+        "pls no cap on tiktok",
+        // "tbh" IS a slangEmphatic, but the comma seals it in its own clause
+        // and the gate scans clause-locally.
+        "tbh, no cap on tiktok",
+        // "rn" holds its whitelist TAIL seat; only ahead-of-negator is slang
+        // evidence.
+        "no cap on tiktok rn",
+        "anyway, uncap tiktok",
+    ])
+    func aSincereClearingSurvivesItsTail(_ utterance: String) {
+        #expect(clearsCap(utterance) == "TikTok", "\"\(utterance)\" no longer clears")
+    }
+
+    /// FINDING 4 and FINDING 9 hold one mutation out: the doorful-reason
+    /// termination is not remover- or number-keyed (equal to the standing cap
+    /// included), and slang ahead of the negator refuses the clearing even
+    /// when the door trails as a two-token-alias afterthought. Above all,
+    /// none of these may grant.
+    @Test(arguments: [
+        "lift the insta cap because 15 was brutal",
+        "ngl no cap tho the gram",
+        // ADJUDICATED: the attacker's primary reading was the Gen-Z grant
+        // ("seriously, give me 20 of tiktok") and its own note blessed the
+        // tight side. The "no" refuses the ask (aNegatorRefusesTheAsk), the
+        // after-span veto refuses the clearing, and the terminating silence
+        // is the doctrine's answer to a sentence wearing both readings —
+        // never a clearing, never a grant.
+        "no cap i need 20 of tiktok rn",
+    ])
+    func aClearingReasonOrSlangNeverGrantsOrClears(_ utterance: String) {
+        #expect(parse(utterance, capped) == .silence, "\"\(utterance)\" moved policy or granted")
+    }
+
+    /// The doorless commentary clearing in reversed clause order: its nil
+    /// still walks to the grant in breath two, with the first-breath
+    /// machinery running ahead of it.
+    @Test func theCommentaryClearingStillYieldsToTheGrant() {
+        let a = spend("no cap needed, give me 20 of tiktok")
+        #expect(a?.0 == "TikTok" && a?.1 == 20)
+    }
+
+    /// ADJUDICATED AGAINST THE ATTACKER, who expected the clearing: "im done"
+    /// is a closer phrase, `hasClosingVerb` is utterance-wide, and the
+    /// close-hoist asymmetry is pinned above as disclosed — a close is the
+    /// never-wrong direction. The slang reading agrees: "no cap ... im done
+    /// doomscrolling" is a resolution to stop, and the door closes for the
+    /// day. Above all: no grant, and no clearing out of an ambiguous breath.
+    @Test func theDoneDoomscrollingCloseHoistHolds() {
+        guard case .command(.closeDoorToday(let d, let until))
+            = parse("no cap on tiktok today, im done doomscrolling", capped) else {
+            Issue.record("the close-hoist asymmetry moved — re-adjudicate the sentence")
+            return
+        }
+        #expect(d.name == "TikTok")
+        #expect(until == nil)
+    }
+
+    /// FINDING 8 across punctuation and alias: a breath that is nothing but
+    /// a door's name strands the topic, and the pool does not move on it —
+    /// dash, comma, and period alike.
+    @Test(arguments: [
+        "the gram - 20 a day",
+        "insta, 25 a day",
+        // ADJUDICATED AGAINST THE ATTACKER, who wanted setBudget(45) on the
+        // strength of "for everything": the promoted doctrine is
+        // unconditional on the number clause's tail — a bare door name in
+        // the breath before the number makes the number that door's
+        // sentence, and the parked raise is the direction-safe cost.
+        "tiktok. 45 a day for everything",
+    ])
+    func aBareDoorTopicNeverMovesThePool(_ utterance: String) {
+        #expect(parse(utterance) == .silence, "\"\(utterance)\" compiled")
+        #expect(budgetOf(utterance) == nil, "\"\(utterance)\" cut the pool")
+    }
+
+    /// The veto's own scoping clause, proven from the other side: a door
+    /// WITH a predicate is commentary, and the pool command lands.
+    @Test func aDoorWithAPredicateReleasesThePoolMove() {
+        #expect(budgetOf("tiktok is brutal. 45 a day for everything") == 45)
+    }
+
+    /// FINDING 6 keyed to the boundary, not the dictation word or the door:
+    /// the clause-opener and the "like" filler strand the quantifier exactly
+    /// as "say" did, through a two-token doorEnd too, and the doorless
+    /// number never funds a grant on the app being restricted.
+    @Test(arguments: [
+        "so keep tiktok under, say, 20",
+        "keep the gram under, like, 15",
+    ])
+    func aStrandedQuantifierTerminatesOnEverySpelling(_ utterance: String) {
+        #expect(parse(utterance, capped) == .silence, "\"\(utterance)\" kept walking")
+    }
+}
+
+// MARK: - ROUND 2 FINDINGS
+//
+// Sixty-two probes pinned green; four seams genuinely failed (six sentences),
+// each left as a commented FINDING block beside the rule it breaks, none
+// fixed here:
+//
+//  n1  reportsRatherThanSets' requestModals exemption has no subject guard —
+//      "can you believe they capped tiktok at 20" and "my mom would cap the
+//      tiktok at 20 if she could" write standing policy from a rhetorical
+//      report and an attributed hypothetical. (medium)
+//  n2  the negated-number adjacency test is blind through one intensifier —
+//      "cap tiktok at not even 20" writes the 20 the sentence negates. (low)
+//  n3  the declined-question veto's nounNegators inventory lacks the
+//      vernacular declines — "should i cap tiktok at 20? nah" (and "nah
+//      nvm") writes the ceiling the asker talked themselves out of. (medium)
+//  n4  the dative arm's spansOneNounPhrase breaks on one adjective and the
+//      decline walks into rule 7 — "give tiktok a hard 20 minute cap" GRANTS
+//      twenty minutes of the app being restricted. (high — the FINDING 3
+//      inversion, resurrected)
+//
+// Ten attacker expectations were overturned against the rule contracts and
+// pinned at the adjudicated outcome instead — the pool-claim and
+// remover-claim recall seams (disclosed on their rules), the pool's
+// subject-is-the-rule copula setter, the "im done" close-hoist, and the
+// unconditional bare-door-topic veto — each recorded on its probe.
