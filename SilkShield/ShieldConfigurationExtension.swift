@@ -110,7 +110,11 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
         // through to saying only where to go.
         if let door = door(for: application, policy: p) {
             let ledger = SharedStore.loadLedger()
-            let dayStart = DayBoundary.dayStart(now: now, downHours: p.downHours)
+            // The ESTABLISHED day: the subtitle must promise what the bar
+            // would actually give, and the bar windows on the established
+            // day's start (`GrantLedger.effectiveDayStart`).
+            let dayStart = ledger.effectiveDayStart(now: now, downHours: p.downHours,
+                                                    calendar: .current)
             let askable = Validator.askableMinutes(door: door, state: p, ledger: ledger,
                                                    now: now, dayStart: dayStart)
             if askable > 0 {

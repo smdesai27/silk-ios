@@ -108,8 +108,15 @@ public enum Validator {
     ) -> Verdict {
         guard case .command(let command) = outcome else { return .silence }
 
-        let dayStart = DayBoundary.dayStart(now: now, downHours: state.downHours, calendar: calendar)
-        let remaining = ledger.remainingMinutes(budget: state.budgetMinutes, dayStart: dayStart)
+        // The ESTABLISHED day's start, not the live boundary's: a tighten that
+        // moves when down hours end lands mid-day, and the day she is standing
+        // in must keep the start it opened with, or the pool, the caps and
+        // every hand close refill and lift the moment the hour moves. The
+        // rationale lives on `GrantLedger.effectiveDayStart`.
+        let dayStart = ledger.effectiveDayStart(now: now, downHours: state.downHours,
+                                                calendar: calendar)
+        let remaining = ledger.remainingMinutes(budget: state.budgetMinutes, dayStart: dayStart,
+                                                calendar: calendar)
         let nowTime = timeOfDay(now, calendar: calendar)
 
         switch command {
@@ -157,7 +164,8 @@ public enum Validator {
             // any of the three branches below, because two of them need the
             // number she can actually be GIVEN rather than the one she said.
             let doorRemaining = state.doorCaps[door.id].map {
-                ledger.remainingMinutes(cap: $0, doorID: door.id, dayStart: dayStart)
+                ledger.remainingMinutes(cap: $0, doorID: door.id, dayStart: dayStart,
+                                        calendar: calendar)
             }
             // P4 — the budget binds, and the bind is a clamp. This point used
             // to refuse an over-ask with the balance ("stating the number is
@@ -443,9 +451,11 @@ public enum Validator {
         if state.downHours.contains(timeOfDay(now, calendar: calendar)) { return 0 }
         if ledger.isClosed(door.id, at: now, dayStart: dayStart) { return 0 }
         let ceiling = state.doorCaps[door.id].map {
-            ledger.remainingMinutes(cap: $0, doorID: door.id, dayStart: dayStart)
+            ledger.remainingMinutes(cap: $0, doorID: door.id, dayStart: dayStart,
+                                    calendar: calendar)
         }
-        var askable = min(ledger.remainingMinutes(budget: state.budgetMinutes, dayStart: dayStart),
+        var askable = min(ledger.remainingMinutes(budget: state.budgetMinutes, dayStart: dayStart,
+                                                  calendar: calendar),
                           ceiling ?? Int.max)
         if let edge = nextDownHoursStart(after: now, downHours: state.downHours, calendar: calendar) {
             askable = min(askable, Int(edge.timeIntervalSince(now) / 60))
