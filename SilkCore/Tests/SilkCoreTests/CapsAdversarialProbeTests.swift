@@ -2083,24 +2083,28 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(spend("how about capping tiktok at 20") == nil)
     }
 
-    // FINDING(n17) — the n12 gate is keyed to two token positions, and
-    // transparent material defeats both. It fires only when the gerund IS
-    // t[clause.lowerBound] and a number-bearing token stands at phraseStart,
-    // so a kept clause opener (the FINDING 7 seam, resurrected a second
-    // time), one transparent adverb, or the idiom table's token-less
-    // quantity each blind it — while the report evidence still sits behind
-    // the number, where no other gate reads. EXECUTED on this tip:
-    //   "ok so capping tiktok at 20 never worked for me"        -> setDoorCap(TikTok, 20)
-    //   "honestly capping tiktok at 20 would free up my budget" -> setDoorCap(TikTok, 20)
-    //   "capping tiktok at an hour never worked for me"         -> setDoorCap(TikTok, 60)
-    // (medium — reports write the ceiling they only discuss, and the idiom
-    // flavor against the capped door is a parked RAISE to 60; no grant
-    // fires and the pool is untouched.)
-    // @Test func theGerundGateSeesThroughOpenersAdverbsAndIdioms() {
-    //     #expect(parse("ok so capping tiktok at 20 never worked for me") == .silence)
-    //     #expect(parse("honestly capping tiktok at 20 would free up my budget") == .silence)
-    //     #expect(parse("capping tiktok at an hour never worked for me", capped) == .silence)
-    // }
+    /// FINDING n17, promoted. The n12 gate was keyed to two token positions,
+    /// and transparent material defeated both: it fired only when the gerund
+    /// WAS t[clause.lowerBound] and a number-bearing token stood at
+    /// phraseStart, so a kept clause opener ("ok so capping…" — the FINDING
+    /// 7 seam, resurrected a second time), one transparent adverb
+    /// ("honestly capping…", whose "would" is a modal the finite-verb test
+    /// rightly excludes), and the idiom table's token-less quantity
+    /// ("capping tiktok at an hour…" — against the capped door a parked
+    /// RAISE to 60) each blinded it, while the report evidence sat behind
+    /// the number where no other gate reads. The gate now steps over the
+    /// kept opener exactly as spendFragment steps over the same four words,
+    /// reads `answerSlotAdverbs` for the adverb slot (a read that can only
+    /// subtract a written ceiling), and anchors a token-less quantity at
+    /// the idiom's own last word — the evidence behind the number counts.
+    /// The floors hold beside it: the sealed fragment, the whitelisted
+    /// temporal tail and the inchoative imperative keep their sets, all
+    /// pinned above.
+    @Test func theGerundGateSeesThroughOpenersAdverbsAndIdioms() {
+        #expect(parse("ok so capping tiktok at 20 never worked for me") == .silence)
+        #expect(parse("honestly capping tiktok at 20 would free up my budget") == .silence)
+        #expect(parse("capping tiktok at an hour never worked for me", capped) == .silence)
+    }
 }
 
 @Suite struct CapsAdversarialRound5AnswerSlot {
@@ -2160,19 +2164,21 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(spend("should i cap tiktok at 20? he was like nah") == nil)
     }
 
-    // FINDING(n18) — the answer slot's inventory omits the lexicon's own
-    // slang spelling of "honestly". `answerSlotAdverbs` was widened for the
-    // n13 neighbours, and "tbh" — a word this grammar itself classifies as
-    // propositionless, holding a trailingParticles AND a slangEmphatics
-    // seat — breaks the veto's allSatisfy one synonym over, so the refused
-    // ceiling writes exactly as "honestly no" did in round 4: the n3/n9/n13
-    // seam's fourth iteration. EXECUTED on this tip:
-    //   "should i cap tiktok at 20? tbh no" -> setDoorCap(TikTok, 20)
-    // (medium — a self-declined question writes standing policy; an entry
-    // in the answer inventory can only ever subtract.)
-    // @Test func theSlangSpellingOfHonestlyStillAnswersNo() {
-    //     #expect(parse("should i cap tiktok at 20? tbh no") == .silence)
-    // }
+    /// FINDING n18, promoted. The answer slot's inventory omitted the
+    /// lexicon's own slang spelling of "honestly": "tbh" — a word this
+    /// grammar itself classifies as propositionless, holding a
+    /// trailingParticles AND a slangEmphatics seat — broke the veto's
+    /// allSatisfy one synonym over, and "should i cap tiktok at 20? tbh no"
+    /// wrote the refused ceiling exactly as "honestly no" did in round 4:
+    /// the n3/n9/n13 seam's fourth iteration. "tbh" holds an
+    /// `answerSlotAdverbs` seat now; the answer clause must still CONTAIN a
+    /// decline, so an entry there can only ever subtract a written ceiling,
+    /// and the word's other seats keep their own readings — the sealed
+    /// clearing ("tbh, no cap on tiktok") and the whitelisted tail ("no
+    /// limit on tiktok tbh") are pinned elsewhere and unmoved.
+    @Test func theSlangSpellingOfHonestlyStillAnswersNo() {
+        #expect(parse("should i cap tiktok at 20? tbh no") == .silence)
+    }
 }
 
 @Suite struct CapsAdversarialRound5PoolAttribution {
@@ -2241,24 +2247,27 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(budgetOf("my budget goes to 30 starting tomorrow") == nil)
     }
 
-    // FINDING(n19) — the n15 veto's attributed arm fails one spelling over
-    // on both of its keys at once. The arm is keyed to `speechVerbs` in the
-    // prior breath, and the n14 quotative carries none — "she was like"
-    // stands exactly where "my notes say" was fixed, with the two
-    // inventories never joined. And the arm guards `case .one = doors(in:
-    // prev)` with an all-door-token tail, so a quoted TWO-app note — MORE
-    // clearly a per-app list than the fixed sentence — defeats it twice:
-    // once on .several, once on "and". EXECUTED on this tip:
-    //   "she was like tiktok - 20 a day"            -> setBudget(20)
-    //   "my notes say tiktok and reddit - 20 a day" -> setBudget(20)
-    // (medium — the shared pool is cut to 20, instantly, out of reported
-    // words; the veto can only ever subtract a pool move.)
-    // @Test func aQuotedTopicAcrossTheDashNeverCutsThePool() {
-    //     #expect(parse("she was like tiktok - 20 a day") == .silence)
-    //     #expect(budgetOf("she was like tiktok - 20 a day") == nil)
-    //     #expect(parse("my notes say tiktok and reddit - 20 a day") == .silence)
-    //     #expect(budgetOf("my notes say tiktok and reddit - 20 a day") == nil)
-    // }
+    /// FINDING n19, promoted. The n15 veto's attributed arm failed one
+    /// spelling over on both of its keys at once. The arm was keyed to
+    /// `speechVerbs` in the prior breath, and the n14 quotative carries
+    /// none — "she was like" stood exactly where "my notes say" was fixed,
+    /// with the two inventories never joined. And the arm guarded `case
+    /// .one = doors(in: prev)` with an all-door-token tail, so a quoted
+    /// TWO-app note — MORE clearly a per-app list than the fixed sentence —
+    /// defeated it twice: once on .several, once on "and". The
+    /// copula-particle quotatives and the bare "goes" now mirror
+    /// `poolStatementIsAttributed`'s inventory in the arm's frame test, and
+    /// a quoted tail of doors joined by "and" is somebody's per-app list:
+    /// the pool is cut out of neither, and a read there can only ever
+    /// subtract a pool move. The door with a predicate of its own keeps
+    /// releasing the pool move and the approximation hedge keeps its own
+    /// setter, both pinned above.
+    @Test func aQuotedTopicAcrossTheDashNeverCutsThePool() {
+        #expect(parse("she was like tiktok - 20 a day") == .silence)
+        #expect(budgetOf("she was like tiktok - 20 a day") == nil)
+        #expect(parse("my notes say tiktok and reddit - 20 a day") == .silence)
+        #expect(budgetOf("my notes say tiktok and reddit - 20 a day") == nil)
+    }
 }
 
 @Suite struct CapsAdversarialRound5Demonstratives {
@@ -2328,7 +2337,13 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 //
 // Twenty-seven probes pinned green; three seams genuinely failed (six
 // sentences), each left as a commented FINDING block beside the rule it
-// breaks:
+// breaks. All three were fixed in the ROUND 6 pass and their probes promoted
+// live beside their seams ("FINDING nX, promoted") — the gerund gate steps
+// over the kept opener and the transparent adverb and anchors the idiom's
+// token-less quantity at its own last word, "tbh" takes the answer slot's
+// missing seat, and the quotative and the quoted door list join the
+// bare-door-topic veto's attributed arm. The list below stands as the record
+// of what the round found:
 //
 //  n17 the n12 gerund gate is keyed to the clause's first token and to a
 //      number-bearing token at phraseStart — "ok so capping tiktok at 20
