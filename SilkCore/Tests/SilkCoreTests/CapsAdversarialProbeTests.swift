@@ -839,16 +839,14 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(parse("cap the gram at not 20 but 30") == .silence)
     }
 
-    // FINDING(n2): AN INTENSIFIER HIDES THE NEGATOR FROM THE ADJACENCY TEST.
-    // "cap tiktok at not even 20" writes the 20 the sentence negates: "even"
-    // holds the numberAt-1 slot so the adjacency check misses, and "not"
-    // stands between lexeme and number where the refused-scan never looks —
-    // the one-token-of-slack spelling FINDING 12's narrowing left open. The
-    // adjacency doctrine's own justification ("a negator further off is
-    // governing something else") is false here: "not even" governs the number
-    // through a transparent intensifier.
-    // Expected .silence; got .command(.setDoorCap(door: tiktok, minutes: 20)).
-    //   #expect(parse("cap tiktok at not even 20") == .silence)
+    /// FINDING n2, promoted. "not even 20" governs its number through a
+    /// transparent intensifier: "even" holds the numberAt-1 slot, so the
+    /// adjacency test reads one token — one word, "even" — further back, and
+    /// the 20 the sentence negates is never written. "no more than 20" keeps
+    /// its carve-out one probe up, with "than" on the number as before.
+    @Test func aNegatorGovernsThroughATransparentIntensifier() {
+        #expect(parse("cap tiktok at not even 20") == .silence)
+    }
 
     /// FINDINGS 13-14, generalized: "by" aims a delta whatever verb leads —
     /// spelled numbers anchor the same adjacency, unlisted verbs ride the
@@ -917,15 +915,19 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(parse(utterance, capped) == .silence, "\"\(utterance)\" moved policy or granted")
     }
 
-    // FINDING(n4): ONE ADJECTIVE RESURRECTS THE FINDING-3 GRANT. "give tiktok
-    // a hard 20 minute cap" — "hard" is not noun-phrase vocabulary, so
-    // spansOneNounPhrase breaks, the dative arm declines, and the decline
-    // walks into rule 7's give-door-number hot path: a request to RESTRICT
-    // the app funds twenty minutes of it. The worst direction this grammar
-    // has, reachable through a single sincere intensifier.
-    // Expected .silence; got .command(.spend(door: tiktok, minutes: 20)).
-    //   #expect(parse("give tiktok a hard 20 minute cap") == .silence)
-    //   #expect(spend("give tiktok a hard 20 minute cap") == nil)
+    /// FINDING n4, promoted. One adjective may not resurrect the FINDING-3
+    /// grant: "hard" is not noun-phrase vocabulary, so the dative arm's old
+    /// whitelist broke on it, the arm declined, and the decline walked into
+    /// rule 7's give-door-number hot path — a request to RESTRICT the app
+    /// funding twenty minutes of it, the worst direction this grammar has.
+    /// The arm now asks the closed-class boundary question instead: with the
+    /// ask verb's recipient a door and a cap noun in its wake, an unknown
+    /// adjective terminates, and only a real second predicate (a subject or
+    /// a fresh ask verb) keeps the decline.
+    @Test func oneAdjectiveMayNotResurrectTheDativeGrant() {
+        #expect(parse("give tiktok a hard 20 minute cap") == .silence)
+        #expect(spend("give tiktok a hard 20 minute cap") == nil)
+    }
 
     /// And the doorless dative frame with no cap noun anywhere IS the hot
     /// path — if the dative arm ever loosens from capNouns to the frame
@@ -942,15 +944,15 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(parse("could you cap reddit at 30? no") == .silence)
     }
 
-    // FINDING(n3): THE DECLINE'S OWN VOCABULARY IS MISSING. "should i cap
-    // tiktok at 20? nah" and "... nah nvm" write standing policy: the
-    // declined-question veto requires the answer clause to be ALL
-    // nounNegators ([no, none, not, never]), and "nah" — the commonest
-    // spoken decline there is — is not in the inventory, so the self-declined
-    // question writes the ceiling one synonym over from the fixed sentence.
-    // Expected .silence; got .command(.setDoorCap(door: tiktok, minutes: 20)).
-    //   #expect(parse("should i cap tiktok at 20? nah") == .silence)
-    //   #expect(parse("should i cap tiktok at 20? nah nvm") == .silence)
+    /// FINDING n3, promoted. The decline's own vocabulary counts: "nah" and
+    /// "nah nvm" are the spoken spellings of the answering "no", read by the
+    /// declined-question veto (`spokenDeclines`) and by nothing else — a
+    /// self-declined question stays declined one synonym over from the fixed
+    /// sentence, and the words can only ever subtract a written ceiling.
+    @Test func theSpokenDeclineStaysDeclined() {
+        #expect(parse("should i cap tiktok at 20? nah") == .silence)
+        #expect(parse("should i cap tiktok at 20? nah nvm") == .silence)
+    }
 
     /// The report gates over the widened possessive skip: a third-party or
     /// past-tense sentence whose determiner stands directly on the door is
@@ -965,19 +967,18 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(parse(utterance, capped) == .silence, "\"\(utterance)\" compiled to policy")
     }
 
-    // FINDING(n1): THE REQUEST-MODAL EXEMPTION HAS NO SUBJECT GUARD. The
-    // exemption reads "a request modal ahead of the phrase, no wh-word" and
-    // preempts the spoken-subject test entirely, so a third-party sentence
-    // wearing a modal writes standing policy: "can you believe they capped
-    // tiktok at 20" is a rhetorical report ("they capped"), and "my mom would
-    // cap the tiktok at 20 if she could" is an attributed hypothetical — the
-    // widened exemption (FINDING 5) composed with the loosened intervenes
-    // skip (FINDINGS 1-2) walks both to a written ceiling. README rule 1's
-    // principle — the answer to a question is never a new rule, and a report
-    // is not an instruction — loses to one polite auxiliary.
-    // Expected .silence; got .command(.setDoorCap(door: tiktok, minutes: 20)) for both.
-    //   #expect(parse("can you believe they capped tiktok at 20") == .silence)
-    //   #expect(parse("my mom would cap the tiktok at 20 if she could") == .silence)
+    /// FINDING n1, promoted. The request-modal exemption guards its subject:
+    /// "can you believe they capped tiktok at 20" wraps a THIRD PARTY's act
+    /// in a rhetorical modal, and "my mom would cap the tiktok at 20 if she
+    /// could" fronts its modal with a person who is not the rule — a
+    /// third-party pronoun ahead of the phrase, or one unrecognised word
+    /// before the modal, withholds the exemption and hands both back to the
+    /// report gates. README rule 1's principle holds against one polite
+    /// auxiliary: a report is not an instruction.
+    @Test func aThirdPartyModalReportWritesNoPolicy() {
+        #expect(parse("can you believe they capped tiktok at 20") == .silence)
+        #expect(parse("my mom would cap the tiktok at 20 if she could") == .silence)
+    }
 }
 
 @Suite struct CapsAdversarialRound2FirstBreath {
@@ -1157,8 +1158,10 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 // MARK: - ROUND 2 FINDINGS
 //
 // Sixty-two probes pinned green; four seams genuinely failed (six sentences),
-// each left as a commented FINDING block beside the rule it breaks, none
-// fixed here:
+// each left as a commented FINDING block beside the rule it broke. All four
+// were fixed in the ROUND 3 pass and their probes promoted live beside their
+// seams ("FINDING nX, promoted"); the list below stands as the record of what
+// the round found:
 //
 //  n1  reportsRatherThanSets' requestModals exemption has no subject guard —
 //      "can you believe they capped tiktok at 20" and "my mom would cap the

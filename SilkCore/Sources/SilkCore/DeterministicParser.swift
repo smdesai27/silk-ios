@@ -639,6 +639,18 @@ public enum DeterministicParser {
     /// way a bare word clears a ceiling on its own ("no cap on tiktok").
     private static let nounNegators: Set<String> = ["no", "none", "not", "never"]
 
+    /// The spoken declines — the interjections that answer a question "no"
+    /// without negating anything else in this grammar. "should i cap tiktok at
+    /// 20? nah" wrote the ceiling the asker talked themselves out of, because
+    /// the declined-question veto asked its answer clause to be all
+    /// `nounNegators` and the commonest spoken decline there is was not in the
+    /// inventory (ROUND 3, n3). Read ONLY by that veto, and only to SILENCE a
+    /// setter — an entry here can only subtract a written ceiling, which is
+    /// the direction the family must fail in. NOT added to `nounNegators`
+    /// itself: that set also feeds the clearing family, where a new word is a
+    /// LOOSENING, and "nah cap on tiktok" must not start clearing ceilings.
+    private static let spokenDeclines: Set<String> = ["nah", "nvm"]
+
     /// Words that open a noun phrase. Only the clearing rule reads them, and
     /// only to find where a ceiling's own phrase STARTS — "take the 20 minute
     /// cap off tiktok" quotes its number to say which ceiling, and that number
@@ -777,6 +789,19 @@ public enum DeterministicParser {
     private static let requestModals: Set<String> = [
         "can", "cant", "can't", "could", "couldnt", "couldn't",
         "should", "shouldnt", "shouldn't", "would", "wouldnt", "wouldn't", "shall",
+    ]
+
+    /// The third-party subjects — the pronouns that hand a clause's verb to
+    /// somebody who is not the speaker and not the one being asked. Read ONLY
+    /// by the requestModals exemption's subject guard in
+    /// `reportsRatherThanSets`: "can you believe THEY capped tiktok at 20" is
+    /// a rhetorical report, not a request, and the pronoun is what says whose
+    /// act the modal is wrapping. A subset of `subjects` so the two sets
+    /// cannot disagree about what a word is; first person ("i") and the
+    /// imperative's addressee ("you") are deliberately absent, because those
+    /// are exactly the requests the exemption exists for.
+    private static let thirdPartySubjects: Set<String> = [
+        "he", "she", "they", "theyve", "they've",
     ]
 
     /// The wh-words. A question is never a rule change — README rule 1's own
@@ -1200,9 +1225,38 @@ public enum DeterministicParser {
         //    that the answer to a question is never a new rule, and the modal
         //    was letting the question skip the gate that enforces it.
         //  - only the REQUEST modals qualify. See `requestModals`.
+        //
+        // AND THE REQUEST MUST BE THE SPEAKER'S OWN. The exemption had no
+        // subject guard, so a third-party sentence wearing a modal wrote
+        // standing policy: "can you believe they capped tiktok at 20" is a
+        // rhetorical report of somebody else's act, and "my mom would cap the
+        // tiktok at 20 if she could" is an attributed hypothetical — both
+        // walked through on one polite auxiliary (ROUND 3, n1). Two guards,
+        // each a closed class:
+        //  - a THIRD-PARTY SUBJECT anywhere ahead of the phrase defeats it —
+        //    the modal is wrapping "they capped", not a request;
+        //  - the word standing DIRECTLY ON the modal must be one a request
+        //    can put there. English glues a declarative modal to its
+        //    subject's last word, so that slot holds the whole answer: a
+        //    fronted modal is the question's own inversion ("CAN i cap
+        //    tiktok at 20", "WOULD you kindly cap youtube at 25"), "i" and
+        //    "you" are the speaker and the one being asked ("everyone says i
+        //    SHOULD cap tiktok at 20" is a first-person committal however it
+        //    opens), and the rule's own noun phrase is the subject-is-the-
+        //    rule setter ("my tiktok limit SHOULD be 20 a day"). "my mom
+        //    WOULD cap" puts the attributed person exactly there, and an
+        //    unrecognised word in that slot makes the clause an attribution,
+        //    which REFUSES the exemption and lets the report gates read the
+        //    sentence. Adjacency, not a span scan — a scan from the clause's
+        //    start would refuse the reported first-person committal above.
         let ahead = clause.lowerBound..<min(phraseStart, clause.upperBound)
         if !ahead.contains(where: { whWords.contains(t[$0]) }),
-           ahead.contains(where: { requestModals.contains(t[$0]) }) { return false }
+           let modalAt = ahead.first(where: { requestModals.contains(t[$0]) }),
+           !ahead.contains(where: { thirdPartySubjects.contains(t[$0]) }),
+           modalAt == clause.lowerBound || t[modalAt - 1] == "i" || t[modalAt - 1] == "you"
+               || isNounPhraseWord(t, modalAt - 1, state: state)
+               || capNouns.contains(t[modalAt - 1])
+               || capQuantifiers.contains(t[modalAt - 1]) { return false }
         if statesAVolition(t, clause: clause) { return false }
         let finiteVerb = clause.contains {
             auxiliaries.contains(t[$0]) && !modals.contains(t[$0])
@@ -2044,15 +2098,36 @@ public enum DeterministicParser {
         // as the hot path and GRANTED the very restriction being asked for
         // (FINDING 3). The distinguishing structure is the dative: the ask
         // verb's recipient is the DOOR ITSELF ("give THE DOOR …", never
-        // "give ME"), with the ceiling's own noun phrase running unbroken
-        // from the door to the cap noun. Terminating silence — the grammar
-        // cannot resolve which shape this proposal is, and a grant is the
-        // one wrong answer. The volitional asks keep rule 8's "How long?"
-        // ("i want tiktok capped" is the command that speaks its subject).
+        // "give ME"), with a cap noun in the recipient's wake. Terminating
+        // silence — the grammar cannot resolve which shape this proposal is,
+        // and a grant is the one wrong answer. The volitional asks keep rule
+        // 8's "How long?" ("i want tiktok capped" is the command that speaks
+        // its subject).
+        //
+        // A BOUNDARY SCAN BETWEEN THE DOOR AND THE CAP NOUN, NOT THE
+        // NOUN-PHRASE WHITELIST. The first cut asked `spansOneNounPhrase`,
+        // and one sincere adjective broke it: "give tiktok a HARD 20 minute
+        // cap" is not whitelist vocabulary, so the arm declined, and the
+        // decline walked into rule 7's give-door-number hot path — a request
+        // to RESTRICT the app funded twenty minutes of it (ROUND 3, n4).
+        // The whitelist doctrine's direction-of-failure argument INVERTS
+        // here: in the clearing rules an unrecognised word must decline
+        // because a clearing is a loosening, but this arm's decline lands on
+        // SPEND, so an unrecognised word must TERMINATE. What keeps the
+        // decline is a real second predicate between the recipient and the
+        // cap noun — a subject or a fresh ask verb, the same closed-class
+        // boundary question shape one's `intervenes` scan asks — because
+        // then the cap noun is not aimed at the door at all: "give tiktok 20
+        // so I dont blow my limit" spends, and "my limit" belongs to the "i".
+        // Determiners are NOT boundaries here: they open the ceiling's own
+        // phrase ("give tiktok A hard cap"), the recipient's mirror of the
+        // FINDINGS 1-2 skip.
         if !shaped, let lexeme, capNouns.contains(t[lexeme]), lexeme > doorEnd,
            doorAt > clause.lowerBound, askVerbs.contains(t[doorAt - 1]),
            !statesAVolition(t, clause: clause),
-           spansOneNounPhrase(t, doorEnd + 1..<lexeme, state: state) {
+           !(doorEnd + 1..<lexeme).contains(where: {
+               askVerbs.contains(t[$0]) || subjects.contains(t[$0])
+           }) {
             return .silence
         }
         guard shaped else { return nil }
@@ -2100,8 +2175,23 @@ public enum DeterministicParser {
         // number (FINDING 12). Adjacency, the shape of a determiner on its
         // noun — a negator further off is governing something else, and "no
         // more than 20" puts "than", not its negator, on the number.
-        if let numberAt, numberAt > clause.lowerBound, negators.contains(t[numberAt - 1]) {
-            refused = true
+        //
+        // THROUGH ONE TRANSPARENT INTENSIFIER. "cap tiktok at not even 20"
+        // put "even" in the numberAt-1 slot and its "not" one further back,
+        // where the adjacency test never looked — and the 20 the sentence
+        // negates was written (ROUND 3, n2). The adjacency doctrine's own
+        // justification ("a negator further off is governing something
+        // else") is false for exactly this word: "not even" governs the
+        // number through it. One word ("even"), one token of reach, so "no
+        // more than 20" still puts "than" on its number and a negator any
+        // further off keeps its other-business reading.
+        if let numberAt, numberAt > clause.lowerBound {
+            if negators.contains(t[numberAt - 1]) {
+                refused = true
+            } else if t[numberAt - 1] == "even", numberAt - 1 > clause.lowerBound,
+                      negators.contains(t[numberAt - 2]) {
+                refused = true
+            }
         }
         if refused { return .silence }
 
@@ -2177,11 +2267,16 @@ public enum DeterministicParser {
         // clause) and to a LATER clause that is nothing but a bare negator:
         // "no, cap tiktok at 20" leads with its sealed negator and still
         // sets, and a trailing "no" after a plain imperative is not a
-        // question being answered.
+        // question being answered. The answer clause speaks the decline's
+        // own vocabulary too — `spokenDeclines`, because "should i cap
+        // tiktok at 20? nah" declined the question one synonym over from
+        // the fixed sentence and wrote the ceiling anyway (ROUND 3, n3).
         if clause.contains(where: { requestModals.contains(t[$0]) }),
            clauseRanges(index).contains(where: { later in
                later.lowerBound >= clause.upperBound
-                   && later.allSatisfy { nounNegators.contains(t[$0]) }
+                   && later.allSatisfy {
+                       nounNegators.contains(t[$0]) || spokenDeclines.contains(t[$0])
+                   }
            }) {
             return .silence
         }
