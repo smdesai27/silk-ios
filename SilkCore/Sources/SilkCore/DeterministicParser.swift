@@ -289,7 +289,8 @@ public enum DeterministicParser {
             // ceiling word behind the door, where it is commentary, and those
             // sentences still move the pool.
             if door != nil, numberClauseNamesADoor(clauses(), state: state)
-                || aCeilingLeadsADoorWithNoNumber(clauses(), state: state) {
+                || aCeilingLeadsADoorWithNoNumber(clauses(), state: state)
+                || aBareDoorTopicPrecedesTheNumberClause(clauses(), state: state) {
                 return .silence
             }
             // A REPORT IS NOT AN INSTRUCTION, and a REFUSAL IS NOT ONE EITHER —
@@ -704,6 +705,19 @@ public enum DeterministicParser {
                                                           "fr", "frfr", "ngl", "rn",
                                                           "tho", "lol", "lmao", "tbh",
                                                           "pls", "plz", "tops"]
+
+    /// The pure SLANG half of `trailingParticles` — the Gen-Z emphatics, as
+    /// opposed to politeness ("please", "pls") and timing ("today"). Read only
+    /// by the emphatic gate in `clearingPhrase`, and only to REFUSE a
+    /// clearing: a slang particle standing AHEAD of a bare negator marks the
+    /// phrase as the slang "no cap" ("fr no cap tho tiktok"), exactly as an
+    /// unrecognized Gen-Z opener does — the whitelist admitted these as
+    /// noun-phrase filler because the same words legitimately TRAIL a real
+    /// clearing ("no cap on tiktok fr fr"), and the tail admission must not
+    /// double as an opener pass (FINDING 9). An entry here can only subtract
+    /// a loosening, which is the direction the family must fail in.
+    private static let slangEmphatics: Set<String> = ["fr", "frfr", "ngl", "tbh",
+                                                      "tho", "lol", "lmao", "rn"]
 
     /// The auxiliaries and copulas, contractions included. A finite verb is what
     /// turns a request into a REPORT — "no limit on tiktok" asks for one to go,
@@ -1247,7 +1261,12 @@ public enum DeterministicParser {
             // overrule it.
             if let outcome = capCleared(index, clause: clause, state: state),
                !anotherDoorIsClaimedEarlier(index, before: clause, state: state,
-                                            door: capDoor(of: outcome)) {
+                                            door: capDoor(of: outcome)),
+               // A pool command is a first breath too, and a trailing
+               // LOOSENING may not overrule it — see
+               // `aPoolCommandIsClaimedEarlier` for the scoping (FINDING 11).
+               !(capDoor(of: outcome) != nil
+                 && aPoolCommandIsClaimedEarlier(index, before: clause)) {
                 return outcome
             }
             if let outcome = capSet(index, clause: clause, state: state, text: text),
@@ -1302,7 +1321,47 @@ public enum DeterministicParser {
             if earlier.contains(where: { !NumberParser.allNumbers(in: t[$0]).isEmpty }) {
                 return true
             }
-            if capRemovers.contains(t[earlier.lowerBound]) {
+            // A CLAUSE OPENER KEEPS ITS WORD, AND THE WORD IS NOT WHAT THE
+            // BREATH SAYS. The anchor fix already ruled that "a first breath
+            // is the first breath that says something, not the first token of
+            // the string" — and then this arm tested the clause's first token
+            // raw, so "ok so remove instagram, no cap on tiktok" resurrected
+            // the exact defect the anchor closed for "hey, remove instagram…":
+            // the "so" opener occupies the slot, the removal went unclaimed,
+            // and the trailing loosening parked (FINDING 7). The opener is
+            // stepped over exactly as `spendFragment` steps over the same
+            // four words; at most one can lead a clause, because a second
+            // would have opened a clause of its own.
+            var lead = earlier.lowerBound
+            if ["but", "so", "anyway", "though"].contains(t[lead]),
+               lead + 1 < earlier.upperBound {
+                lead += 1
+            }
+            if capRemovers.contains(t[lead]) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Whether an EARLIER clause is a POOL COMMAND — the pool's own stem with
+    /// a number in the same breath, which is rule 3's sentence said first.
+    ///
+    /// The guard above respects only earlier clauses that name a DOOR, so a
+    /// leading pool command was invisible and a trailing LOOSENING overruled
+    /// it: "set my budget to 40, no cap on tiktok" dropped the budget move and
+    /// parked the clearing — inverting the guard's own first-intent doctrine
+    /// (FINDING 11). The intent test is bare number-presence, mirroring the
+    /// door arm's (whose recall seam is pinned as such); consulted only for
+    /// CLEARINGS, because the loosening direction is the defect and the
+    /// tightening flavor ("make my budget 60 a day, cap tiktok at 20") is
+    /// pinned as an accepted recall seam — both outcomes there tighten.
+    private static func aPoolCommandIsClaimedEarlier(_ index: NumberParser.ClauseIndex,
+                                                     before clause: Range<Int>) -> Bool {
+        let t = index.tokens
+        for earlier in clauseRanges(index) where earlier.upperBound <= clause.lowerBound {
+            guard earlier.contains(where: { t[$0].hasPrefix("budget") }) else { continue }
+            if earlier.contains(where: { !NumberParser.allNumbers(in: t[$0]).isEmpty }) {
                 return true
             }
         }
@@ -1366,7 +1425,27 @@ public enum DeterministicParser {
         // one. A remover after the head is a word after the phrase, and no
         // remover is a noun-phrase word, so the two tests are the same test.
         guard spansOneNounPhrase(index.tokens, phrase.upperBound + 1..<clause.upperBound,
-                                 state: state) else { return nil }
+                                 state: state) else {
+            // AND THE REFUSAL TERMINATES WHEN THE CLAUSE IS ABOUT A DOOR.
+            // This guard used to DECLINE unconditionally, and a decline walks
+            // the ladder into SPEND: "uncap tiktok because 20 was too strict"
+            // glues its reason's number and copula into the clause, the tail
+            // fails, and a request to CLEAR a ceiling was answered with a
+            // grant and a debited pool on the very app being loosened —
+            // violating the family's own doctrine that a cap-shaped sentence
+            // must never keep walking (FINDING 4). A clause holding a door
+            // and a clearing phrase IS cap-shaped, so it terminates.
+            //
+            // Two carve-outs, each the shape a pinned sentence needs the nil
+            // for: a DOORLESS clause is commentary riding beside somebody
+            // else's ask ("give me 20 of tiktok, no cap needed" — the grant
+            // must keep walking to clause one), and a stated NEW ceiling is
+            // `capSet`'s sentence, one rule over in the same breath ("drop
+            // the tiktok limit TO 20" declines here so the set can land).
+            if case .none = doors(in: clause, of: index, state: state) { return nil }
+            if statesANewCeiling(index, clause: clause) { return nil }
+            return .silence
+        }
         switch doors(in: clause, of: index, state: state) {
         case .none:
             return nil
@@ -1516,8 +1595,14 @@ public enum DeterministicParser {
                 // span can hold (the noun-phrase whitelist plus the removers),
                 // and a word that cannot ("ruined", "got", "addicted") says
                 // the clause already said something else.
+                // A slang particle AHEAD of the negator is emphatic evidence
+                // in its own right — its noun-phrase seat exists for the tail
+                // of a real clearing, not for its opening (FINDING 9; see
+                // `slangEmphatics`).
                 let emphatic = (clause.lowerBound..<i).contains { j in
-                    !isNounPhraseWord(t, j, state: state) && !capRemovers.contains(t[j])
+                    slangEmphatics.contains(t[j])
+                        || (!isNounPhraseWord(t, j, state: state)
+                            && !capRemovers.contains(t[j]))
                 }
                 governs = !emphatic && !(i + 1..<h).contains { j in
                     determiners.contains(t[j])
@@ -1702,6 +1787,12 @@ public enum DeterministicParser {
         // would be guessing.
         let numberAt = clause.first { !NumberParser.allNumbers(in: t[$0]).isEmpty }
         let lexeme = capLexemeIndex(t, in: clause)
+        // Where the door's own matched name ENDS. `doorIndex` matches one token
+        // or two ("the gram"), and the scans below must know which tokens ARE
+        // the door, because the door's own name is never evidence about the
+        // words around it: "the" inside a matched alias is the alias, not a
+        // determiner opening a fresh phrase.
+        let doorEnd = door(t[doorAt], in: state) != nil ? doorAt : doorAt + 1
 
         // Shape one: the clause states a ceiling word, and that word LEADS what
         // it bounds.
@@ -1775,9 +1866,28 @@ public enum DeterministicParser {
             // which matters because a user may name a door "Max" or "Limit" and
             // an inverted range traps.
             let reach = numberAt ?? doorAt
-            let intervenes = (min(lexeme, reach) + 1..<max(lexeme, reach)).contains {
-                askVerbs.contains(t[$0]) || subjects.contains(t[$0])
-                    || determiners.contains(t[$0])
+            let intervenes = (min(lexeme, reach) + 1..<max(lexeme, reach)).contains { i in
+                // THE DOOR'S OWN NOUN PHRASE IS NOT A BOUNDARY. The scan asks
+                // whether a fresh predicate or phrase stands between the
+                // ceiling word and what it bounds — and the door standing
+                // there is the setter's own OBJECT, not an interruption. Two
+                // holes, one cause: "cap the gram at 20" carries a determiner
+                // INSIDE the two-token alias the door matched by, and "cap my
+                // tiktok at 20" hangs a possessive directly on the door's
+                // name. Both counted as boundaries, the shape died, and the
+                // ladder answered a restriction by taking the wall down
+                // (FINDINGS 1-2). The door's matched tokens are skipped, and
+                // so is a determiner standing IMMEDIATELY on the door's first
+                // token — that determiner opens the door's phrase, which is
+                // the phrase being capped. A determiner anywhere else keeps
+                // its boundary reading, so "make the tiktok limit 20" (the
+                // determiner ahead of the LEXEME) and the commentary shapes
+                // ("ive hit my limit give me 20 of tiktok", where an ask verb
+                // intervenes) are exactly as they were.
+                if (doorAt...doorEnd).contains(i) { return false }
+                if determiners.contains(t[i]), i + 1 == doorAt { return false }
+                return askVerbs.contains(t[i]) || subjects.contains(t[i])
+                    || determiners.contains(t[i])
             }
             // A BARE QUANTIFIER inside a request to be let in is a quantifier on
             // the ask, not a rule about tomorrow: "give me under 20 of tiktok"
@@ -1837,6 +1947,51 @@ public enum DeterministicParser {
         // overrule the same first breath from one rule over.
         if let lexeme, capNouns.contains(t[lexeme]), lexeme < doorAt, numbers.isEmpty,
            !(clause.lowerBound..<lexeme).contains(where: { negators.contains(t[$0]) }),
+           !statesAVolition(t, clause: clause) {
+            // A POLITE QUESTION IS STILL A CAP PROPOSAL, and it terminates
+            // like one WHEN A NUMBER STANDS IN ANOTHER BREATH.
+            // `reportsRatherThanAsks` reads a request modal as a plain
+            // auxiliary — no `requestModals` exemption, unlike
+            // `reportsRatherThanSets` — so "can you cap tiktok? 20 minutes"
+            // had its question clause refused as a report, this arm declined
+            // instead of terminating, and the bare "20 minutes" in the next
+            // breath was a perfect spendFragment: a request to RESTRICT the
+            // app funded a grant on it (FINDING 5). The exemption is the
+            // setter gate's own, wh-guard included, scoped to this arm so the
+            // clearing family's question refusals ("should i uncap tiktok")
+            // stay refusals — and scoped to the utterances whose decline the
+            // ladder would actually spend, because a NUMBERLESS polite ask is
+            // rule 8's own sentence: "can i get a cap on tiktok" is pinned as
+            // the cap ask missing one word, answered with that word, and
+            // nothing below rule 8 can grant with no number anywhere.
+            let ahead = clause.lowerBound..<lexeme
+            let politeAsk = !ahead.contains(where: { whWords.contains(t[$0]) })
+                && ahead.contains(where: { requestModals.contains(t[$0]) })
+                && t.indices.contains { i in
+                    !clause.contains(i) && !NumberParser.allNumbers(in: t[i]).isEmpty
+                }
+            if politeAsk
+                || !reportsRatherThanAsks(t, clause: clause, phraseStart: lexeme,
+                                          state: state) {
+                return .silence
+            }
+        }
+        // A QUANTIFIER STRANDED FROM ITS NUMBER IS THE SAME UNRESOLVABLE
+        // PROPOSAL. The arm above covers cap NOUNS only, so "keep tiktok
+        // under, say, 20" — dictation commas stranding the quantifier from
+        // its number — fell through, and the doorless "20" clause funded a
+        // grant on the app being restricted (FINDING 6). A door with a bare
+        // trailing quantifier and no number has proposed a ceiling this
+        // grammar cannot resolve. STRANDED means the boundary cut the number
+        // off: the quantifier is its clause's LAST word, so "keep tiktok
+        // under control, give me 20 of tiktok" — where "under" bounds a noun
+        // of its own — keeps its grant; the ask-verb exemption keeps the hedged
+        // elliptical asks walking ("give me tiktok max" still reaches rule
+        // 8's "How long?"); and the mood exemptions are the noun arm's own.
+        if let lexeme, capQuantifiers.contains(t[lexeme]), lexeme > doorEnd, numbers.isEmpty,
+           lexeme == clause.upperBound - 1,
+           !clause.contains(where: { askVerbs.contains(t[$0]) }),
+           !(clause.lowerBound..<lexeme).contains(where: { negators.contains(t[$0]) }),
            !statesAVolition(t, clause: clause),
            !reportsRatherThanAsks(t, clause: clause, phraseStart: lexeme, state: state) {
             return .silence
@@ -1883,6 +2038,24 @@ public enum DeterministicParser {
             }
             shaped = true
         }
+        // THE DATIVE SETTER HANDS THE CEILING TO THE DOOR, NOT TO THE USER.
+        // "give tiktok a 20 minute ceiling" trails its cap noun behind both
+        // the number and the door, so neither shape above can read it — and
+        // the decline walked into rule 7, which read "give" + door + number
+        // as the hot path and GRANTED the very restriction being asked for
+        // (FINDING 3). The distinguishing structure is the dative: the ask
+        // verb's recipient is the DOOR ITSELF ("give THE DOOR …", never
+        // "give ME"), with the ceiling's own noun phrase running unbroken
+        // from the door to the cap noun. Terminating silence — the grammar
+        // cannot resolve which shape this proposal is, and a grant is the
+        // one wrong answer. The volitional asks keep rule 8's "How long?"
+        // ("i want tiktok capped" is the command that speaks its subject).
+        if !shaped, let lexeme, capNouns.contains(t[lexeme]), lexeme > doorEnd,
+           doorAt > clause.lowerBound, askVerbs.contains(t[doorAt - 1]),
+           !statesAVolition(t, clause: clause),
+           spansOneNounPhrase(t, doorEnd + 1..<lexeme, state: state) {
+            return .silence
+        }
         guard shaped else { return nil }
 
         // A NEGATOR REFUSING THE CEILING WRITES NO CEILING. `negators` was read
@@ -1915,10 +2088,21 @@ public enum DeterministicParser {
         // `.silence` rather than a decline, because declining walks into SPEND
         // and buys the app the sentence was trying to restrict.
         let phraseStart = lexeme ?? numberAt ?? doorAt
-        let refused = (clause.lowerBound..<phraseStart).contains { i in
+        var refused = (clause.lowerBound..<phraseStart).contains { i in
             guard negators.contains(t[i]) else { return false }
             return !(t[i] == "no" && i + 2 < clause.upperBound
                      && t[i + 1] == "more" && t[i + 2] == "than")
+        }
+        // AND A NEGATOR STANDING ON THE NUMBER REFUSES THE NUMBER. The scan
+        // above reads only what stands before the proposal, so "cap tiktok at
+        // not 20 but 30" wrote the very ceiling the sentence NEGATES: "but"
+        // opens a clause, "but 30" leaves the breath, and the cap clause held
+        // exactly one number with its "not" invisible between lexeme and
+        // number (FINDING 12). Adjacency, the shape of a determiner on its
+        // noun — a negator further off is governing something else, and "no
+        // more than 20" puts "than", not its negator, on the number.
+        if let numberAt, numberAt > clause.lowerBound, negators.contains(t[numberAt - 1]) {
+            refused = true
         }
         if refused { return .silence }
 
@@ -1949,6 +2133,20 @@ public enum DeterministicParser {
         // of a sentence with no compilation.
         if numberIsNotMinutes(t, in: clause) { return .silence }
 
+        // A NUMBER AIMED BY "by" IS A DELTA, AND THIS GRAMMAR CANNOT DO
+        // ARITHMETIC — the subtractive doctrine (`everyNumberLiesInside`'s
+        // silence on "take 20 off the tiktok cap") already says so, and the
+        // additive spellings need the same terminating refusal: "raise the
+        // tiktok cap by 10" wrote the DELTA as an absolute ceiling — an
+        // instant tighten to 10 out of a request to LOOSEN — and "lower the
+        // tiktok cap by 5" landed 5 where the sentence meant 15 (FINDINGS
+        // 13-14). "by" is deliberately absent from `ceilingPrepositions`
+        // because it never aims an absolute; silence reaches the widener,
+        // which per §5.7 can produce no cap out of this either.
+        if let numberAt, numberAt > clause.lowerBound, t[numberAt - 1] == "by" {
+            return .silence
+        }
+
         guard case .one(let d) = doors(in: clause, of: index, state: state) else {
             // Two doors and one ceiling. Falling through answered it by debiting
             // the pool and unshielding whichever name was spelled first — a
@@ -1971,6 +2169,23 @@ public enum DeterministicParser {
         // `> 1`, so that a future shape which forgets to require a number fails
         // silent rather than crashing on `numbers.first`.
         guard numbers.count == 1, let n = numbers.first else { return .silence }
+        // A QUESTION THE SENTENCE ITSELF ANSWERS "no" IS DECLINED. The
+        // requestModals exemption admits "should i cap tiktok at 20" as a
+        // setter — a request wrapped in politeness — and the answering "no"
+        // is an invisible one-word clause, so a self-declined question wrote
+        // standing policy with only a toast (FINDING 10). Scoped to the
+        // question shape the exemption itself admits (a request modal in the
+        // clause) and to a LATER clause that is nothing but a bare negator:
+        // "no, cap tiktok at 20" leads with its sealed negator and still
+        // sets, and a trailing "no" after a plain imperative is not a
+        // question being answered.
+        if clause.contains(where: { requestModals.contains(t[$0]) }),
+           clauseRanges(index).contains(where: { later in
+               later.lowerBound >= clause.upperBound
+                   && later.allSatisfy { nounNegators.contains(t[$0]) }
+           }) {
+            return .silence
+        }
         return .command(.setDoorCap(door: d, minutes: n))
     }
 
@@ -2518,6 +2733,44 @@ public enum DeterministicParser {
         else { return false }
         if case .none = doors(in: clause, of: index, state: state) { return false }
         return true
+    }
+
+    /// Whether the sentence's number lives in a DOORLESS clause standing
+    /// directly after a clause that is NOTHING BUT a door's name — rule 3's
+    /// third door guard, for the topic a clause dash strands.
+    ///
+    /// "tiktok - 20 a day" is the dash spelling of the pinned habitual setter
+    /// "tiktok 20 a day": the spaced hyphen after a non-quantity word is a
+    /// clause dash (NumberParser's disclosed over-splitting trade), so the
+    /// door and its quantity land in different breaths, every cap rule goes
+    /// blind, both existing door guards miss — the number's clause names no
+    /// door and no ceiling word leads one — and the doorless fallback CUT THE
+    /// SHARED POOL to the per-app number, instantly (FINDING 8). A bare door
+    /// name standing alone in the breath before the number is the stranded
+    /// topic of the number's own sentence; the sentence is about that door,
+    /// and the pool must not move on it. Silence reaches the widener, which
+    /// per §5.7 cannot produce a cap and so cannot get the door wrong either.
+    ///
+    /// The PREVIOUS clause only, and only when it holds nothing beyond the
+    /// door's own name: a door with a predicate of its own ("tiktok is
+    /// killing me, make it 30 a day") is commentary, and those pool moves are
+    /// pinned. The number anchor falls back to the idiom's "hour" exactly as
+    /// `namesThePool` and `numberClauseNamesADoor` anchor it.
+    private static func aBareDoorTopicPrecedesTheNumberClause(_ index: NumberParser.ClauseIndex,
+                                                              state: PolicyState) -> Bool {
+        let t = index.tokens
+        let at = t.indices.first(where: { !NumberParser.allNumbers(in: t[$0]).isEmpty })
+            ?? t.firstIndex(of: "hour")
+        guard let at, let clause = index.clauseRange(containing: at) else { return false }
+        guard case .none = doors(in: clause, of: index, state: state) else { return false }
+        guard clause.lowerBound > 0,
+              let prev = index.clauseRange(containing: clause.lowerBound - 1),
+              case .one = doors(in: prev, of: index, state: state) else { return false }
+        return prev.allSatisfy { i in
+            door(t[i], in: state) != nil
+                || (i + 1 < prev.upperBound && door(t[i] + " " + t[i + 1], in: state) != nil)
+                || (i > prev.lowerBound && door(t[i - 1] + " " + t[i], in: state) != nil)
+        }
     }
 
     /// Whether some clause states a ceiling word LEADING a door and carries no
