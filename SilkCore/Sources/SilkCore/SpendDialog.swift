@@ -43,7 +43,7 @@ public enum SpendDialog {
     /// "TikTok closed until 7:00." — byte-identical to the bar. A capped-out
     /// door and a hand-closed door share this sentence; `until` is the lift.
     public static func doorClosed(door: String, until: TimeOfDay) -> String {
-        "\(door) \(SilkStrings.closedUntil) \(until.display)."
+        SilkStrings.closedUntil(door, until: until)
     }
 
     public static var blockingOff: String { SilkStrings.blockingOff }

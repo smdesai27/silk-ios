@@ -72,7 +72,8 @@ extension GrantLedger {
         // changes it, and stating the close's own would promise a door that
         // will refuse anyway. `nil` is what the case documents — the close that
         // simply runs to the day boundary.
-        if let cap, remainingMinutes(cap: cap, doorID: door.id, dayStart: dayStart) <= 0 {
+        if let cap, remainingMinutes(cap: cap, doorID: door.id, dayStart: dayStart,
+                                     calendar: calendar) <= 0 {
             return .rest(until: nil)
         }
         // `closedToday` is never pruned on read; a record from an earlier day is

@@ -59,8 +59,26 @@ public enum NumberParser {
             ("half an hour", 30), ("half hour", 30),
             ("an hour", 60), ("one hour", 60),
         ]
-        for (pattern, value) in idioms where consumed.contains(pattern) {
-            results.append(value)
+        // ONCE PER OCCURRENCE, NOT ONCE PER PATTERN. The scan appended one
+        // value and then REPLACED every copy, so a sentence carrying the
+        // same idiom twice read as one quantity — "capping tiktok at an
+        // hour never lasted an hour" was ONE 60 to every caller, and the
+        // two-quantity terminations that kill the digit twin ("cap tiktok
+        // at 20 never lasted 20" dies on numbers.count == 1) never fired:
+        // the duration-idiom decoy carried the anchor gate's own
+        // determiner and parked a RAISE to 60 out of a complaint that the
+        // cap never held (ROUND 7, n26). The digit and word paths below
+        // already append per occurrence; the idioms now count the same
+        // way, and the duplicate is visible to every count.
+        for (pattern, value) in idioms {
+            var occurrences = 0
+            var search = consumed.startIndex
+            while let r = consumed.range(of: pattern, range: search..<consumed.endIndex) {
+                occurrences += 1
+                search = r.upperBound
+            }
+            guard occurrences > 0 else { continue }
+            results.append(contentsOf: repeatElement(value, count: occurrences))
             consumed = consumed.replacingOccurrences(of: pattern, with: " ")
         }
 

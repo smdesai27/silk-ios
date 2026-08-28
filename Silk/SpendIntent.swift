@@ -217,15 +217,23 @@ struct SpendIntent: AppIntent {
             let cut = DayLog.compactionFrontier(
                 recorded: Set(SharedStore.dayRecords().map(\.dayStart)),
                 upTo: sweepStart)
-            if DayBoundary.nextDayStart(after: cut) > now {
-                var compacted = swept
-                compacted.compact(dayStart: cut)
-                // Written back only when something was dropped — a quiet pass
-                // re-encodes nothing — and stamped, as every ledger write is.
-                if compacted != swept {
-                    SharedStore.save(ledger: swept, knownStamp: sweepStamp,
-                                     applying: { $0.compact(dayStart: cut) })
-                }
+            let mayCut = DayBoundary.nextDayStart(after: cut) > now
+            // The established-day stamp advances here too — this is the one
+            // sweep a background-only user's days get, and the spend/close
+            // windows read the stamp (`GrantLedger.effectiveDayStart`). A
+            // `sweepStart` that jumped because down hours moved mid-day is
+            // refused inside `establishDay`.
+            var next = swept
+            next.establishDay(startingAt: sweepStart, calendar: .current)
+            if mayCut { next.compact(dayStart: cut) }
+            // Written back only when something moved — a quiet pass
+            // re-encodes nothing — and stamped, as every ledger write is.
+            if next != swept {
+                SharedStore.save(ledger: swept, knownStamp: sweepStamp,
+                                 applying: {
+                                     $0.establishDay(startingAt: sweepStart, calendar: .current)
+                                     if mayCut { $0.compact(dayStart: cut) }
+                                 })
             }
 
             let time = Validator.timeOfDay(relockAt, calendar: .current)

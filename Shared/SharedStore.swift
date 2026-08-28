@@ -383,7 +383,11 @@ public enum SharedStore {
     static func openDoorTokens(at now: Date, policy: PolicyState,
                                selections: [UUID: FamilyActivitySelection]) -> Set<ApplicationToken> {
         let ledger = loadLedger()
-        let dayStart = DayBoundary.dayStart(now: now, downHours: policy.downHours)
+        // The ESTABLISHED day, not the live boundary: a hand close must keep
+        // binding the wall itself across a mid-day down-hours move, exactly
+        // as it keeps binding the bar (`GrantLedger.effectiveDayStart`).
+        let dayStart = ledger.effectiveDayStart(now: now, downHours: policy.downHours,
+                                                calendar: .current)
         let openIDs = ledger.openDoors(at: now, dayStart: dayStart)
         var tokens = Set<ApplicationToken>()
         for id in openIDs {

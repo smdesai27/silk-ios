@@ -187,7 +187,16 @@ final class AppModel {
 
     // MARK: - What the screen reads
 
-    var dayStart: Date { DayBoundary.dayStart(now: now, downHours: policy.downHours) }
+    /// The ESTABLISHED day's start — the ledger's own stamp while the day she
+    /// is standing in still runs, the live boundary otherwise. Every ledger
+    /// window on this screen reads it, so a mid-day "down hours end at 9am"
+    /// cannot refill the hero, reopen a capped door or lift a close
+    /// (`GrantLedger.effectiveDayStart` carries the rationale). The sweep in
+    /// `compactLedgerIfDayTurned` reads the live boundary itself, because it
+    /// is the writer of this very stamp.
+    var dayStart: Date {
+        ledger.effectiveDayStart(now: now, downHours: policy.downHours, calendar: .current)
+    }
 
     var remainingMinutes: Int {
         ledger.remainingMinutes(budget: policy.budgetMinutes, dayStart: dayStart)
@@ -910,8 +919,8 @@ final class AppModel {
             // "0 left today." it replaces was a lie whenever the pool still had
             // minutes in it — which, once a door can run out on its own, is the
             // ordinary case.
-            let t = Validator.timeOfDay(until, calendar: .current).display
-            return (refuse("\(door.name) \(SilkStrings.closedUntil) \(t)."), nil)
+            let t = Validator.timeOfDay(until, calendar: .current)
+            return (refuse(SilkStrings.closedUntil(door.name, until: t)), nil)
 
         case .restated(let door, let until):
             // The ask was already covered, so nothing was debited and nothing
@@ -948,8 +957,8 @@ final class AppModel {
             close(&ledger)
             commit(reapplying: close)
             Silk.Haptic.tighten()
-            let t = Validator.timeOfDay(until, calendar: .current).display
-            return ("\(door.name) \(SilkStrings.closedUntil) \(t).",
+            let t = Validator.timeOfDay(until, calendar: .current)
+            return (SilkStrings.closedUntil(door.name, until: t),
                     restore(previous, ifStill: generation))
 
         case .closeAll(let doors, let until):
@@ -966,8 +975,8 @@ final class AppModel {
             closeAll(&ledger)
             commit(reapplying: closeAll)
             Silk.Haptic.tighten()
-            let t = Validator.timeOfDay(until, calendar: .current).display
-            return ("\(SilkStrings.everything) \(SilkStrings.closedUntil) \(t).",
+            let t = Validator.timeOfDay(until, calendar: .current)
+            return (SilkStrings.closedUntil(SilkStrings.everything, until: t),
                     restore(previous, ifStill: generation))
 
         case .grant(let door, let minutes, let relockAt):
@@ -1564,8 +1573,8 @@ final class AppModel {
         // cannot strand the fallback.
         if let rule = ledger.ruleInForce(for: policy, at: now, dayStart: dayStart) {
             let lifts = rule.lifts ?? DayBoundary.nextDayStart(after: dayStart)
-            let t = Validator.timeOfDay(lifts, calendar: .current).display
-            s += " \(rule.door.name) \(SilkStrings.closedUntil) \(t)."
+            let t = Validator.timeOfDay(lifts, calendar: .current)
+            s += " \(SilkStrings.closedUntil(rule.door.name, until: t))"
         }
         return s
     }
@@ -2170,7 +2179,10 @@ final class AppModel {
     @ObservationIgnored private var compactedDayStart: Date?
 
     private func compactLedgerIfDayTurned() {
-        let start = dayStart
+        // The LIVE boundary, deliberately not `dayStart`: the sweep is what
+        // detects the turn and stamps the established day, so it must read
+        // the clock the policy claims, not the stamp it maintains.
+        let start = DayBoundary.dayStart(now: now, downHours: policy.downHours)
         guard compactedDayStart != start else { return }
         compactedDayStart = start
         syncLedgerIfStale()
@@ -2202,6 +2214,16 @@ final class AppModel {
             compactedDayStart = nil
         }
 
+        // The standing day's start is stamped before anything is cut: the
+        // spend/close windows read the ESTABLISHED day
+        // (`GrantLedger.effectiveDayStart`), and this sweep — the moment the
+        // day actually turns — is what advances the stamp. A `start` that
+        // jumped because down hours moved mid-day is refused inside
+        // `establishDay`, so the stamp moves once per real day and never
+        // under the user's feet.
+        var next = ledger
+        next.establishDay(startingAt: start, calendar: .current)
+
         // The cut runs only when the frontier's own day reaches past `now`:
         // `compact` treats a grant issued at or past the cut day's end as a
         // phantom, and a frontier lagging real time (a long absence, a
@@ -2210,20 +2232,23 @@ final class AppModel {
         let cut = DayLog.compactionFrontier(
             recorded: Set(SharedStore.dayRecords().map(\.dayStart)),
             upTo: start)
-        guard DayBoundary.nextDayStart(after: cut) > now else { return }
+        let mayCut = DayBoundary.nextDayStart(after: cut) > now
+        if mayCut { next.compact(dayStart: cut) }
 
-        var compacted = ledger
-        compacted.compact(dayStart: cut)
-        // Written back only when something was dropped, so a quiet day's
-        // boundary re-encodes nothing.
-        guard compacted != ledger else { return }
-        ledger = compacted
+        // Written back only when something moved, so a quiet day's boundary
+        // re-encodes nothing.
+        guard next != ledger else { return }
+        ledger = next
         // Re-appliable for the same reason a close is — and marking the day
         // swept before this write stays honest because of it: a stamp race
-        // cannot skip the sweep, only re-run the compaction over the fresh
-        // ledger, which drops nothing an external writer landed (compaction
-        // only sheds entries spent before the frontier).
-        persist(reapplying: { $0.compact(dayStart: cut) })
+        // cannot skip the sweep, only re-run the stamp and the compaction
+        // over the fresh ledger, which drops nothing an external writer
+        // landed (compaction only sheds entries spent before the frontier,
+        // and the day stamp advances at most once per real day).
+        persist(reapplying: {
+            $0.establishDay(startingAt: start, calendar: .current)
+            if mayCut { $0.compact(dayStart: cut) }
+        })
     }
 
     private func persist(reapplying mutation: ((inout GrantLedger) -> Void)? = nil) {

@@ -30,6 +30,16 @@ public enum SilkStrings {
     public static let closedUntil = "closed until"    // "TikTok closed until 9:00."
     /// The subject of a close-all: "Everything closed until 9:00."
     public static let everything = "Everything"
+    /// "TikTok closed until 9:00." — and, with subject `everything`, the
+    /// close-all's plural confirmation. The ONE composition of `closedUntil`:
+    /// the bar's cap refusal, the close and close-all receipts, the status
+    /// tail, the ceiling receipt and Siri's dialog all speak this sentence,
+    /// and they were held byte-identical by comments before they were held
+    /// here. A rendering, not a new string: subject and hour are user data.
+    public static func closedUntil(_ subject: String, until: TimeOfDay) -> String {
+        let phrase: String = closedUntil
+        return "\(subject) \(phrase) \(until.display)."
+    }
     public static let minutes = "min"
     public static let howLong = "How long?"
     public static let didntGetThat = "Didn’t get that."

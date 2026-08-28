@@ -105,13 +105,14 @@ public enum Caps {
             // with it, where what actually moved is the door list.
             guard let cap = proposed.doorCaps[door.id] else { return nil }
             if ledger.activeGrant(for: door, at: now) == nil,
-               ledger.remainingMinutes(cap: cap, doorID: door.id, dayStart: dayStart) <= 0 {
+               ledger.remainingMinutes(cap: cap, doorID: door.id, dayStart: dayStart,
+                                       calendar: calendar) <= 0 {
                 // The honest sentence when the new ceiling has already bitten:
                 // the door is shut, and the hour it lifts is tomorrow's.
                 let t = Validator.timeOfDay(DayBoundary.nextDayStart(after: dayStart,
                                                                      calendar: calendar),
-                                            calendar: calendar).display
-                return "\(door.name) \(SilkStrings.closedUntil) \(t)."
+                                            calendar: calendar)
+                return SilkStrings.closedUntil(door.name, until: t)
             }
             // `settingsBudget`'s own composition, so the reply reads back what
             // the Settings row is about to show.
