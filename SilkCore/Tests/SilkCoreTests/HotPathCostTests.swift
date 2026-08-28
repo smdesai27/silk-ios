@@ -43,6 +43,39 @@ private let state = PolicyState(
 /// The hot path, and nothing else: the sentence the SPEND rule exists for.
 private let sentence = "give me 20 minutes of instagram"
 
+/// Whether `Foundation` here is Darwin's, which one bound below depends on.
+///
+/// Every other ratio in this package is a claim about the code, and portable
+/// for exactly the reason `PerformanceMeasurement` states: both arms move
+/// together on any machine. `tokenizeDoesNotPayPerCallSetupCost` is the one
+/// that is not, and it is worth being precise about why rather than calling it
+/// flaky. Its two arms differ by ONE thing — where a `CharacterSet` is built —
+/// so the ratio it measures is the cost of building that set, expressed as a
+/// share of a tokenization. That share is a property of the `Foundation`
+/// underneath, and the two Foundations do not agree:
+///
+/// | | build+invert the set, as a share of one per-call `tokenize` | best possible ratio |
+/// |---|---|---|
+/// | Darwin | ~70% (implied by the 3.3x this file records) | 3.3x |
+/// | swift-corelibs | 38–40% (measured, Swift 6.2.4, aarch64 Linux) | ~1.8x |
+///
+/// So on Linux the bound of 2 is unreachable *in isolation* — before the arms'
+/// deliberate asymmetry is even counted. (The shipped `tokenize` also scans for
+/// an apostrophe, which the denominator arm omits on purpose; that is what
+/// takes the in-suite measurement the rest of the way down to a repeatable
+/// 1.26–1.33x.) Lowering the bound to fit would cost the guard its job on the
+/// platform Silk ships to, where the regression it exists to catch is a 3.3x
+/// one. So the bound stays at 2 and the ratio is asked only where its premise
+/// holds; the half of that test which is about the code and not the machine
+/// moved out to `theTwoArmsAreTheSameTokenizer`, and runs everywhere.
+private let darwinFoundation: Bool = {
+    #if canImport(Darwin)
+    return true
+    #else
+    return false
+    #endif
+}()
+
 @Suite struct OneSentenceStaysCheap {
 
     /// **THE TOKENIZER IS NOT ALLOWED TO REBUILD ITS WORLD.**
@@ -69,7 +102,15 @@ private let sentence = "give me 20 minutes of instagram"
     /// therefore the opposite of the one the existing cost tests use, which is
     /// exactly why they did not catch it: every one of them measures ten
     /// thousand words.
-    @Test func tokenizeDoesNotPayPerCallSetupCost() {
+    ///
+    /// Darwin only, and `darwinFoundation` above carries the whole reason: the
+    /// share of a tokenization that building the set accounts for is a property
+    /// of the Foundation underneath, and on swift-corelibs it is small enough
+    /// that 2 is unreachable however healthy the code is. Skipped rather than
+    /// `#if`'d out so a Linux run says so out loud.
+    @Test(.enabled(if: darwinFoundation,
+                   "the bound is the Darwin CharacterSet's; swift-corelibs tops out near 1.8x"))
+    func tokenizeDoesNotPayPerCallSetupCost() {
         let (hoisted, perCall) = fastestPair(
             { for _ in 0..<20 { _ = NumberParser.tokenize(sentence) } },
             { for _ in 0..<20 { _ = Self.tokenizeRebuildingTheSet(sentence) } }
@@ -77,8 +118,19 @@ private let sentence = "give me 20 minutes of instagram"
         let saved = ratio(perCall, to: hoisted)
         #expect(saved > 2,
                 "the separator set looks like it is being rebuilt per call (only \(String(format: "%.1f", saved))x)")
-        // And the two really are the same tokenizer, or the ratio above is
-        // measuring two different functions rather than one change.
+    }
+
+    /// The two arms are one tokenizer, differing only by where the set is built.
+    ///
+    /// It lived inside the ratio test, guarding it: a denominator that has
+    /// drifted into a *different* function measures nothing, and the ratio
+    /// would go on reporting a healthy number while proving nothing at all.
+    /// That is precisely why it is out here now. The drift it catches is
+    /// platform-independent, and it is the only thing standing behind a
+    /// measurement that — since the split above — no longer runs on every
+    /// machine in CI. The arm the Darwin bound is read against has to be
+    /// checked somewhere that always runs.
+    @Test func theTwoArmsAreTheSameTokenizer() {
         #expect(NumberParser.tokenize(sentence) == Self.tokenizeRebuildingTheSet(sentence))
         #expect(NumberParser.tokenize("dont cap tiktok 20 a day")
                 == Self.tokenizeRebuildingTheSet("dont cap tiktok 20 a day"))
