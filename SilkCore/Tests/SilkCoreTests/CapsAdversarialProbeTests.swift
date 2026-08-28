@@ -1967,3 +1967,391 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 // finite-verb core, the n10 gate's disclosed subject-blindness, the
 // counterfactual subject-is-the-rule pool setter, and the clearing side's
 // disclosed no-exemption trade — each recorded on its probe.
+
+// MARK: - Round 5: the round-4 fix pass under fire
+//
+// A fifth adversarial round, aimed at the five ROUND 4 fixes (n12-n16) and
+// the seams they opened: one attacker hijacking (the n12 gerund gate's two
+// position keys under openers, adverbs and the idiom table; the n13
+// inventory by subtraction; the n14 quotative crossed with the pool-claim
+// and bare-door vetoes; the n16 pardon under attribution and its second
+// demonstrative), one starving (endorsement and adjunct tails on the gerund
+// gate, the answer inventory leaking into imperatives and clearings, the
+// quotative arm against sincere hedges and the future-rule "goes", the
+// pardon under fresh verbs, the wh-fronted proposal). Every expectation was
+// adjudicated against the rule contracts before pinning; seven moved to the
+// parser's side — the n12 gate's closed noun-phrase tail (the evaluative
+// endorsement and the temporal adjunct), the report gates' spoken-subject
+// core on the present-tense performative, the clearing whitelist's
+// unrecognised-word decline, `namesThePool`'s closed continuation list on
+// the bare "goes", the wh-guard on the "how about" proposal, and the
+// declined-question veto's subtract-only inventory against a relayed
+// third-party decline — each recorded on its probe. Three seams genuinely
+// failed (six sentences), commented out as FINDING(n17)-(n19) blocks beside
+// the rules they break; see ROUND 5 FINDINGS at the bottom.
+
+@Suite struct CapsAdversarialRound5GerundSeams {
+
+    /// The gerund lexicon fails closed one inflection out: "limit" is a
+    /// capNoun and "limiting" is not, so the clause walks past the whole cap
+    /// family — and what stands between the report and rule 7's grant is the
+    /// hot path's own habit-participle scan, which reads the gerund-shaped
+    /// head as a description with its subject elided. The family's forbidden
+    /// direction stays shut: a report about a restriction never funds the
+    /// restricted app. (An entry for "limiting" stays unearned until a
+    /// sincere sentence needs it — the n8 admission was bought by a starving
+    /// polite request, not by a report.)
+    @Test func theAbsentGerundInflectionNeverGrants() {
+        #expect(parse("limiting tiktok to 20 never worked for me", capped) == .silence)
+        #expect(spend("limiting tiktok to 20 never worked for me") == nil)
+    }
+
+    /// The n12 gate is clause-scoped, and the comma is the proof: the sealed
+    /// gerund fragment has an EMPTY tail behind its number — "an empty tail
+    /// predicates nothing", the fix's own words — so the restate-and-confirm
+    /// idiom keeps its set with the go-ahead trailing in its own breath.
+    @Test func theSealedGerundFragmentKeepsItsSet() {
+        #expect(setsCap("capping tiktok at 20, do it").map { $0 == ("TikTok", 20) } == true)
+    }
+
+    /// The inchoative imperative: "start" heads the clause, so the gerund
+    /// does not lead and the n12 gate stands down; "start" is in no closed
+    /// class, so neither the report scans nor the recipient frame claim the
+    /// breath, and the base-verb spelling of the round-3 lexeme sets.
+    @Test func theInchoativeImperativeStillSets() {
+        #expect(setsCap("start capping tiktok at 20").map { $0 == ("TikTok", 20) } == true)
+    }
+
+    /// ADJUDICATED AGAINST THE STARVATION ATTACKER, who expected the
+    /// approve-and-execute to set: the n12 gate's tail test is the closed
+    /// noun-phrase whitelist, disclosed on the rule — a tail that cannot
+    /// belong to the ceiling's own phrase is a predicate — and "sounds
+    /// right" is an evaluative predicate this grammar cannot tell from
+    /// "sounds brutal", so admitting one admits the complaint that writes
+    /// the ceiling it complains about: the exact n12 class. The go-ahead
+    /// lives one comma over, where "do it" carries no door, no number and
+    /// no lexeme, and no rule reads a neighbouring clause's anaphora. A
+    /// starved setter terminates and reaches the widener (§5.7: never a cap,
+    /// never a grant); the sealed restate that lands is pinned one probe up.
+    @Test func theEvaluativeTailStaysAReportAndNeverGrants() {
+        #expect(parse("capping tiktok at 20 sounds right, do it") == .silence)
+        #expect(spend("capping tiktok at 20 sounds right, do it") == nil)
+    }
+
+    /// ADJUDICATED AGAINST THE STARVATION ATTACKER, who expected the
+    /// immediate-effect set: the gate's tail contract is the phrase's own
+    /// vocabulary or nothing, and "starting now" is neither — while the
+    /// nearest admission is the defect itself: "capping tiktok at 20
+    /// starting to feel pointless" wears the same leading token (executed
+    /// silent on this tip), so a prefix carve reopens n12 one word over.
+    /// The whitelisted temporal tail keeps its set ("capping insta at 15
+    /// today" — "today" holds a trailingParticles seat — sets on this tip)
+    /// and the bare fragment keeps its reading ("capping tiktok at 20 a
+    /// day" sets); the adjunct starves to a re-ask, the family's own
+    /// failure direction.
+    @Test func theTemporalAdjunctStarvesByTheClosedTailWhitelist() {
+        #expect(parse("capping insta at 15 starting now") == .silence)
+        #expect(setsCap("capping insta at 15 today").map { $0 == ("Instagram", 15) } == true)
+    }
+
+    /// ADJUDICATED AGAINST THE STARVATION ATTACKER, who expected the
+    /// performative to set: a spoken subject ahead of the phrase is the
+    /// report gates' oldest core — English marks a command by leaving the
+    /// subject out — and the one command that speaks its subject is the
+    /// VOLITION inventory, which "say" is not in. "i say" is `speechVerbs`'
+    /// own present tense besides, and the pool-side twin is already pinned
+    /// as the disclosed subject-blind seam ("i said set my budget to 40",
+    /// round 4), beside round 3's "i really should cap tiktok at 20". The
+    /// hortative that lands is pinned above ("lets cap tiktok at 20"); the
+    /// performative starves to the widener.
+    @Test func thePresentTensePerformativeStarvesOnTheSubjectScan() {
+        #expect(parse("i say cap tiktok at 20") == .silence)
+    }
+
+    /// ADJUDICATED AGAINST THE STARVATION ATTACKER, who expected the
+    /// proposal to set: "how" is a wh-word, the wh-guard is the
+    /// requestModals exemption's own 149-sentence narrowing, and README
+    /// rule 1 — the answer to a question is never a new rule — is this
+    /// file's oldest principle. A "how about" idiom carve would be a fresh
+    /// write-direction widening with its own adversarial surface ("how
+    /// about no cap on tiktok", "how about 20 of tiktok") and must bring
+    /// its own round. The polite gerund that lands is pinned in round 3
+    /// ("would you mind capping tiktok at 20" — a request modal, not a
+    /// wh-word); the proposal's terminating silence never reaches SPEND.
+    @Test func theWhFrontedProposalDiesOnTheWhGuard() {
+        #expect(parse("how about capping tiktok at 20") == .silence)
+        #expect(spend("how about capping tiktok at 20") == nil)
+    }
+
+    // FINDING(n17) — the n12 gate is keyed to two token positions, and
+    // transparent material defeats both. It fires only when the gerund IS
+    // t[clause.lowerBound] and a number-bearing token stands at phraseStart,
+    // so a kept clause opener (the FINDING 7 seam, resurrected a second
+    // time), one transparent adverb, or the idiom table's token-less
+    // quantity each blind it — while the report evidence still sits behind
+    // the number, where no other gate reads. EXECUTED on this tip:
+    //   "ok so capping tiktok at 20 never worked for me"        -> setDoorCap(TikTok, 20)
+    //   "honestly capping tiktok at 20 would free up my budget" -> setDoorCap(TikTok, 20)
+    //   "capping tiktok at an hour never worked for me"         -> setDoorCap(TikTok, 60)
+    // (medium — reports write the ceiling they only discuss, and the idiom
+    // flavor against the capped door is a parked RAISE to 60; no grant
+    // fires and the pool is untouched.)
+    // @Test func theGerundGateSeesThroughOpenersAdverbsAndIdioms() {
+    //     #expect(parse("ok so capping tiktok at 20 never worked for me") == .silence)
+    //     #expect(parse("honestly capping tiktok at 20 would free up my budget") == .silence)
+    //     #expect(parse("capping tiktok at an hour never worked for me", capped) == .silence)
+    // }
+}
+
+@Suite struct CapsAdversarialRound5AnswerSlot {
+
+    /// The n13 fix generalizes across its own inventory: allSatisfy holds
+    /// jointly over {honestly, probably, not}, the spelling the closed-
+    /// inventory rationale promises — one entry per clause was never the
+    /// contract.
+    @Test func theInventoryHoldsJointlyAcrossAStackedAnswer() {
+        #expect(parse("should i cap tiktok at 20? honestly probably not") == .silence)
+    }
+
+    /// The direction guard, from the affirmed side: the veto's answer clause
+    /// must still CONTAIN a decline, so an affirmation, a bare inventory
+    /// adverb, and a gratitude tail all leave the request standing — an
+    /// answerSlotAdverbs entry can only ever subtract a written ceiling,
+    /// never eat an affirmed one, and "thanks" sits in no decline inventory.
+    @Test(arguments: [
+        "should i cap tiktok at 20? honestly yes",
+        "should i cap tiktok at 20? definitely",
+        "would you mind capping tiktok at 20? thanks",
+    ])
+    func anAffirmedOrThankedQuestionKeepsItsCeiling(_ utterance: String) {
+        #expect(setsCap(utterance).map { $0 == ("TikTok", 20) } == true,
+                "\"\(utterance)\" lost its set")
+    }
+
+    /// The inventory is confined to the veto's answer slot: "definitely"
+    /// leading a sincere imperative is not a subject, not an auxiliary and
+    /// not answer-slot evidence, so the emphatic everyday spelling keeps its
+    /// set exactly as the comma'd "actually, cap tiktok at 25" is pinned.
+    @Test func theInventoryStaysInertLeadingASincereImperative() {
+        #expect(setsCap("definitely cap tiktok at 25").map { $0 == ("TikTok", 25) } == true)
+    }
+
+    /// The two round-4/5 widenings meet: the n8 polite gerund question is
+    /// the setter, the n13 inventory is the answer, and the declined
+    /// question subtracts the politely-asked ceiling too.
+    @Test func thePoliteGerundQuestionIsStillSubtractable() {
+        #expect(parse("would you mind capping tiktok at 20? probably not") == .silence)
+    }
+
+    /// ADJUDICATED AGAINST THE HIJACK ATTACKER, who expected silence (and
+    /// disclosed the risk on the probe): the declined-question veto exists
+    /// for a question THE SENTENCE ITSELF answers no, and "he was like nah"
+    /// is not the asker's answer — it is somebody's relayed words, which the
+    /// attribution doctrine reads as nobody's instruction in either
+    /// direction. The self-question is the requestModals exemption's own
+    /// pinned request, and a trailing clause that is not a pure decline
+    /// leaves it standing: the bare "actually" (round 3) and "no rush"
+    /// (round 2) pins are exactly this shape, and the inventory's
+    /// subtract-only doc says a widening must not turn he/was/like into
+    /// answer words. The set is the question's own 20 — and never a grant.
+    @Test func aRelayedThirdPartyDeclineIsNotTheAskersAnswer() {
+        #expect(setsCap("should i cap tiktok at 20? he was like nah")
+                .map { $0 == ("TikTok", 20) } == true)
+        #expect(spend("should i cap tiktok at 20? he was like nah") == nil)
+    }
+
+    // FINDING(n18) — the answer slot's inventory omits the lexicon's own
+    // slang spelling of "honestly". `answerSlotAdverbs` was widened for the
+    // n13 neighbours, and "tbh" — a word this grammar itself classifies as
+    // propositionless, holding a trailingParticles AND a slangEmphatics
+    // seat — breaks the veto's allSatisfy one synonym over, so the refused
+    // ceiling writes exactly as "honestly no" did in round 4: the n3/n9/n13
+    // seam's fourth iteration. EXECUTED on this tip:
+    //   "should i cap tiktok at 20? tbh no" -> setDoorCap(TikTok, 20)
+    // (medium — a self-declined question writes standing policy; an entry
+    // in the answer inventory can only ever subtract.)
+    // @Test func theSlangSpellingOfHonestlyStillAnswersNo() {
+    //     #expect(parse("should i cap tiktok at 20? tbh no") == .silence)
+    // }
+}
+
+@Suite struct CapsAdversarialRound5PoolAttribution {
+
+    /// The bare-"goes" arm of the n14 inventory, unexercised by the promoted
+    /// probe, composed with the FINDING 11 pool-claim veto: the attributed
+    /// pool command is silenced by the quotative AND still claims its breath
+    /// against the trailing loosening — both prongs fail closed at once,
+    /// exactly as "he was like" is pinned.
+    @Test func theBareGoesArmSilencesTheAttributedPoolCommand() {
+        #expect(parse("she goes set my budget to 45, no cap on tiktok", capped) == .silence)
+        #expect(budgetOf("she goes set my budget to 45, no cap on tiktok") == nil)
+        #expect(clearsCap("she goes set my budget to 45, no cap on tiktok") == nil)
+    }
+
+    /// The were × all crossing of the copula-particle pairs, deliberately
+    /// spelled over the English ambiguity "were all set" (ready): either
+    /// reading is somebody else's words or a state description, never the
+    /// speaker's pool command, and the gate holds on the inventory's least
+    /// quotative-looking member.
+    @Test func theWereAllCrossingIsStillAttributed() {
+        #expect(parse("they were all set my budget to 50") == .silence)
+        #expect(budgetOf("they were all set my budget to 50") == nil)
+    }
+
+    /// The n15 attributed arm is the speechVerbs CLASS, not a pin of "say":
+    /// a fresh verb, reporter and number, with the tail exactly one door
+    /// token, and the quoted note still moves no pool.
+    @Test func theAttributedTopicVetoIsTheSpeechVerbClass() {
+        #expect(parse("my mom texted tiktok - 25 a day") == .silence)
+        #expect(budgetOf("my mom texted tiktok - 25 a day") == nil)
+    }
+
+    /// The fix doc's own claimed protections, pinned from the sincere side:
+    /// the copula-particle pair standing DIRECTLY on the number is an
+    /// approximation hedge and keeps its own setter (the i+2 bar), and
+    /// filler "like" with no copula one token back never breaks the
+    /// canonical spelling.
+    @Test func theHedgeAndTheFillerKeepTheirSetters() {
+        #expect(budgetOf("my budget was like 40") == 40)
+        #expect(budgetOf("set my budget to like 40") == 40)
+    }
+
+    /// The pool-side sibling of round 4's "yeah actually cap insta at 15":
+    /// the newly-inventoried adverb stays transparent ahead of the
+    /// subject-is-the-rule pool sentence — not a spoken subject, not
+    /// attribution, not a mood-gate trip.
+    @Test func theAdverbLedSubjectIsTheRulePoolSetterStillLands() {
+        #expect(budgetOf("honestly my budget should be 45") == 45)
+    }
+
+    /// ADJUDICATED AGAINST THE STARVATION ATTACKER, who expected the
+    /// future-rule pool setter: `namesThePool`'s continuation is a closed
+    /// list — a preposition, a finite verb, a negator, the number itself —
+    /// and "goes" is a lexical verb on none of it, so the pool noun never
+    /// owned this number on any tip; the fallback's mood gate then reads
+    /// the determiner-led clause as the description it is shaped like. The
+    /// same word is now the n14 quotative's own bare entry ("she goes set
+    /// my budget to 45", pinned above), so admitting it as a continuation
+    /// would seat one token in both inventories with a guard neither has —
+    /// a widening that must bring its own round. The pinned spellings land
+    /// ("my budget should be 45", "set my budget to 30"); the idiom
+    /// starves to a re-ask, the pool's own failure direction.
+    @Test func theBareGoesIdiomStarvesByTheClosedContinuationList() {
+        #expect(parse("my budget goes to 30 starting tomorrow") == .silence)
+        #expect(budgetOf("my budget goes to 30 starting tomorrow") == nil)
+    }
+
+    // FINDING(n19) — the n15 veto's attributed arm fails one spelling over
+    // on both of its keys at once. The arm is keyed to `speechVerbs` in the
+    // prior breath, and the n14 quotative carries none — "she was like"
+    // stands exactly where "my notes say" was fixed, with the two
+    // inventories never joined. And the arm guards `case .one = doors(in:
+    // prev)` with an all-door-token tail, so a quoted TWO-app note — MORE
+    // clearly a per-app list than the fixed sentence — defeats it twice:
+    // once on .several, once on "and". EXECUTED on this tip:
+    //   "she was like tiktok - 20 a day"            -> setBudget(20)
+    //   "my notes say tiktok and reddit - 20 a day" -> setBudget(20)
+    // (medium — the shared pool is cut to 20, instantly, out of reported
+    // words; the veto can only ever subtract a pool move.)
+    // @Test func aQuotedTopicAcrossTheDashNeverCutsThePool() {
+    //     #expect(parse("she was like tiktok - 20 a day") == .silence)
+    //     #expect(budgetOf("she was like tiktok - 20 a day") == nil)
+    //     #expect(parse("my notes say tiktok and reddit - 20 a day") == .silence)
+    //     #expect(budgetOf("my notes say tiktok and reddit - 20 a day") == nil)
+    // }
+}
+
+@Suite struct CapsAdversarialRound5Demonstratives {
+
+    /// The n16 pardon does not hand the demonstrative-led clause an
+    /// n12-shaped hole: the pardon `continue`s in the ahead-scan, but the
+    /// clause-leading determiner still answers to the determiner test, and
+    /// "never worked for me" fails `predicatesNothing` — the efficacy
+    /// report terminates while the fragment proposal ("a 20 minute cap on
+    /// tiktok a day") keeps its deliberate set.
+    @Test func aDemonstrativeLedEfficacyReportWritesNothing() {
+        #expect(parse("that 20 minute cap on tiktok never worked for me", capped) == .silence)
+    }
+
+    /// The pardon is the position, not the found token: the second
+    /// demonstrative ("this") and the other pinned setter verb ("put"), on
+    /// fresh doors and numbers — if anything in the fix keyed on "set",
+    /// "that", or the fixed sentence's shape, one of these starves.
+    @Test(arguments: [
+        ("set this 15 minute cap on insta", "Instagram", 15),
+        ("put that 20 minute cap on insta", "Instagram", 20),
+    ])
+    func thePardonIsThePositionNotTheFoundToken(_ row: (utterance: String, door: String, minutes: Int)) {
+        let got = setsCap(row.utterance)
+        #expect(got?.0 == row.door && got?.1 == row.minutes,
+                "\"\(row.utterance)\" -> \(String(describing: got))")
+    }
+
+    /// The pardoned slot cannot launder a reported imperative: "she" stands
+    /// ahead of the phrase where the subject scan reads it, exactly as "my
+    /// mom said cap tiktok at 20" is pinned, and the demonstrative's pardon
+    /// skips one token without swallowing the scan's earlier ones.
+    @Test func thePardonNeverLaundersAReportedImperative() {
+        #expect(parse("she said set that 20 minute cap on tiktok", capped) == .silence)
+    }
+
+    /// The comma-sealed concession: the third-party subject and finite
+    /// "was" live entirely in breath one, the cap clause is the bare
+    /// canonical setter, and no earlier-claim arm reads a doorless,
+    /// numberless, removerless, budgetless breath — one seal away from the
+    /// pinned uncomma'd silence ("they were right i should cap tiktok at
+    /// 20").
+    @Test func theCommaSealedConcessionKeepsTheImperative() {
+        #expect(setsCap("she was right, cap tiktok at 20").map { $0 == ("TikTok", 20) } == true)
+    }
+
+    /// ADJUDICATED AGAINST THE STARVATION ATTACKER, who expected the
+    /// clearing against the capped door: the words ahead of a bare negator
+    /// must all be ones a clearing's own span can hold — the FINDING 9
+    /// gate's disclosed shape — and "actually" is on no clearing whitelist:
+    /// its `answerSlotAdverbs` seat is read by the declined-question veto
+    /// and nothing else, exactly as that inventory's doc promises. An
+    /// unrecognised word ahead of the negator declines, and a declined
+    /// clearing costs a silence — the loosening side's own whitelist
+    /// doctrine, where a wrong admission parks a loosening that outlives
+    /// the conversation. The sealed spellings keep their clearings ("tbh,
+    /// no cap on tiktok", "anyway, uncap tiktok" — both pinned in round 2),
+    /// so the reconsidered clearing has its landing spelling one comma
+    /// away.
+    @Test func theUncommadAdverbLedClearingStarvesByTheWhitelist() {
+        #expect(parse("actually no cap on tiktok", capped) == .silence)
+        #expect(clearsCap("actually no cap on tiktok") == nil)
+    }
+}
+
+// MARK: - ROUND 5 FINDINGS
+//
+// Twenty-seven probes pinned green; three seams genuinely failed (six
+// sentences), each left as a commented FINDING block beside the rule it
+// breaks:
+//
+//  n17 the n12 gerund gate is keyed to the clause's first token and to a
+//      number-bearing token at phraseStart — "ok so capping tiktok at 20
+//      never worked for me", "honestly capping tiktok at 20 would free up
+//      my budget" and the idiom flavor "capping tiktok at an hour never
+//      worked for me" (a parked raise to 60 against the capped door) all
+//      write the ceiling they only discuss. (medium)
+//  n18 `answerSlotAdverbs` omits the lexicon's own slang spelling of
+//      "honestly" — "should i cap tiktok at 20? tbh no" writes the refused
+//      ceiling one synonym over from the n13 fix, though "tbh" already
+//      holds two propositionless seats in this grammar. (medium)
+//  n19 the n15 veto's attributed arm is speech-verb-keyed and one-door-
+//      guarded — "she was like tiktok - 20 a day" (the n14 quotative,
+//      never joined to the arm) and "my notes say tiktok and reddit - 20 a
+//      day" (two quoted doors defeat `.one` and the all-door tail) each
+//      cut the shared pool to 20 out of reported words. (medium)
+//
+// Seven attacker expectations were overturned against the rule contracts
+// and pinned at the adjudicated outcome instead — the n12 gate's closed
+// noun-phrase tail (the evaluative endorsement, the temporal adjunct), the
+// report gates' spoken-subject core on the present-tense performative "i
+// say", the clearing whitelist's unrecognised-word decline on the
+// uncomma'd "actually", `namesThePool`'s closed continuation list on the
+// bare "goes", the wh-guard on the "how about" proposal, and the
+// declined-question veto's subtract-only closed inventory against a
+// relayed third-party decline — each recorded on its probe.
