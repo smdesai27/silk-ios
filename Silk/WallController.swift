@@ -175,7 +175,10 @@ final class WallController {
                                                intervalEnd: end,
                                                repeats: true)
             )
-            Self.log.notice("heartbeat armed, anchored \(start.hour ?? -1, privacy: .public):\(start.minute ?? -1, privacy: .public) daily")
+            // The event is the record; the hour is the user's schedule. Private
+            // payloads redact in the persisted log and still show live under a
+            // debugger or logging profile when the device test needs them.
+            Self.log.notice("heartbeat armed, anchored \(start.hour ?? -1, privacy: .private):\(start.minute ?? -1, privacy: .private) daily")
             return true
         } catch {
             // Not fatal and not retried in a loop: the wall still locks, the
@@ -230,7 +233,7 @@ final class WallController {
         let primary = DeviceActivityName("relock.\(door.id.uuidString)")
         let backup = DeviceActivityName("relock2.\(door.id.uuidString)")
         if window.clamped {
-            Self.log.notice("schedule floor clamp engaged: relock \(relockAt, privacy: .public) → schedules end \(window.primaryEnd, privacy: .public); ledger holds true expiry")
+            Self.log.notice("schedule floor clamp engaged: relock \(relockAt, privacy: .private) → schedules end \(window.primaryEnd, privacy: .private); ledger holds true expiry")
         }
 
         // Disarm before arming, so arming is a restatement rather than a
@@ -248,7 +251,9 @@ final class WallController {
                 during: DeviceActivitySchedule(intervalStart: start, intervalEnd: end, repeats: false),
                 events: events
             )
-            Self.log.notice("armed \(primary.rawValue, privacy: .public) until \(window.primaryEnd, privacy: .public), threshold \(events.isEmpty ? "none" : "set", privacy: .public)")
+            // The activity name carries the door's UUID and the end is the
+            // grant's hour — both private; "threshold none/set" is structural.
+            Self.log.notice("armed \(primary.rawValue, privacy: .private) until \(window.primaryEnd, privacy: .private), threshold \(events.isEmpty ? "none" : "set", privacy: .public)")
         } catch {
             armed = false
             Self.log.error("primary re-lock failed to arm: \(String(describing: error), privacy: .public)")

@@ -19,7 +19,10 @@ final class MonitorExtension: DeviceActivityMonitor {
 
     override func intervalDidStart(for activity: DeviceActivityName) {
         super.intervalDidStart(for: activity)
-        Self.log.notice("intervalDidStart \(activity.rawValue, privacy: .public)")
+        // The event is the liveness record; the name carries a door UUID, so
+        // the payload is private — redacted in the persisted log, visible live
+        // under a debugger or logging profile when the device test needs it.
+        Self.log.notice("intervalDidStart \(activity.rawValue, privacy: .private)")
         // The permanent daily schedule. Its firing IS the record: it proves
         // the framework was alive for this Silk day, which nothing else in
         // this extension can establish — a quiet day produces no per-grant
@@ -35,7 +38,7 @@ final class MonitorExtension: DeviceActivityMonitor {
     override func intervalDidEnd(for activity: DeviceActivityName) {
         super.intervalDidEnd(for: activity)
         // A grant expired (or its staggered backup fired). Re-lock.
-        Self.log.notice("intervalDidEnd \(activity.rawValue, privacy: .public) — re-locking")
+        Self.log.notice("intervalDidEnd \(activity.rawValue, privacy: .private) — re-locking")
         Wall.reconcile()
     }
 
@@ -43,7 +46,7 @@ final class MonitorExtension: DeviceActivityMonitor {
                                          activity: DeviceActivityName) {
         super.eventDidReachThreshold(event, activity: activity)
         // Layer 3: the usage-threshold backstop on a granted door.
-        Self.log.notice("eventDidReachThreshold \(event.rawValue, privacy: .public) — re-locking")
+        Self.log.notice("eventDidReachThreshold \(event.rawValue, privacy: .private) — re-locking")
         Wall.reconcile()
     }
 }

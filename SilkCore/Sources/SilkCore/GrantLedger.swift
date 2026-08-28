@@ -50,21 +50,98 @@ public struct GrantLedger: Codable, Sendable, Equatable {
     /// doorID → when the close lifts, where a stated hour shortened it
     /// ("block tiktok until 9"). Absent means the day boundary, as ever.
     public private(set) var closedUntil: [UUID: Date]
+    /// The instant the standing Silk day began — the boundary that was in
+    /// force when the day actually turned, stamped by the day-boundary sweeps
+    /// through `establishDay`. nil on ledgers written before the field existed
+    /// and on stores no sweep has reached yet; `effectiveDayStart` then falls
+    /// back to the live boundary, which is exactly the pre-field behavior.
+    public private(set) var dayBegan: Date?
 
     public init(grants: [Grant] = [], closedToday: [UUID: Date] = [:],
-                closedUntil: [UUID: Date] = [:]) {
+                closedUntil: [UUID: Date] = [:], dayBegan: Date? = nil) {
         self.grants = grants
         self.closedToday = closedToday
         self.closedUntil = closedUntil
+        self.dayBegan = dayBegan
     }
 
-    /// `closedUntil` postdates the first persisted ledgers, so it decodes as
-    /// optional; synthesized `encode(to:)` still writes all three keys.
+    /// `closedUntil` and `dayBegan` postdate the first persisted ledgers, so
+    /// they decode as optional; synthesized `encode(to:)` still writes every key.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         grants = try c.decode([Grant].self, forKey: .grants)
         closedToday = try c.decode([UUID: Date].self, forKey: .closedToday)
         closedUntil = try c.decodeIfPresent([UUID: Date].self, forKey: .closedUntil) ?? [:]
+        dayBegan = try c.decodeIfPresent(Date.self, forKey: .dayBegan)
+    }
+
+    // MARK: - The established day
+
+    /// Stamp the standing day's true start. Called by the day-boundary sweeps
+    /// (the app's tick and `SpendIntent`'s post-grant sweep) with the LIVE
+    /// `DayBoundary.dayStart` — and it advances only when that start actually
+    /// begins a new day past the one already stamped. A live boundary that
+    /// moved MID-day ("down hours end at 9am" said at 8:00 lands instantly,
+    /// and `DayBoundary.dayStart` recomputes from live policy) is refused
+    /// here: the day the user is standing in keeps the start it opened with.
+    ///
+    /// The one exception is the heal: a stamp a whole day or more AHEAD of the
+    /// day now claims was written under a clock since corrected, and left in
+    /// place it would sit inert until real time caught up with it. Fabricated
+    /// days heal themselves, exactly as future-dated records and beats do.
+    public mutating func establishDay(startingAt start: Date, calendar: Calendar) {
+        guard let begun = dayBegan else { dayBegan = start; return }
+        if start >= DayBoundary.nextDayStart(after: begun, calendar: calendar) {
+            dayBegan = start          // the day genuinely turned
+        } else if begun >= DayBoundary.nextDayStart(after: start, calendar: calendar) {
+            dayBegan = start          // stamped under a clock since corrected
+        }
+        // Otherwise the same standing day: a boundary that moved under the
+        // user mid-day does not move this.
+    }
+
+    /// The day start every spend/close window must use: the ESTABLISHED day's,
+    /// not the live boundary's. **This is the seam, and the rationale lives
+    /// here.**
+    ///
+    /// `DayBoundary.dayStart` recomputes from the live `downHours` on every
+    /// read, so the moment "down hours end at 9am" lands (a longer night is a
+    /// tighten, and tightens are instant) the boundary of the day the user is
+    /// STANDING IN moves 7:00 → 9:00 under her feet. At 9:01 every grant
+    /// issued between the two hours falls out of `spentMinutes`'
+    /// `issuedAt >= dayStart` window — the pool and every exhausted cap refill
+    /// in the middle of the same calendar day — and a hand close stops
+    /// satisfying `isClosed`'s `closedAt >= dayStart`. A tighten must never
+    /// loosen anything.
+    ///
+    /// So the day keeps its original start until it actually ends: the sweeps
+    /// stamp the live boundary into `dayBegan` (`establishDay` refuses to move
+    /// it mid-day), and this returns that stamp while `now` is still inside
+    /// the day it opened. Past its end — or with nothing stamped — the live
+    /// boundary rules again, which is what makes tomorrow start at the NEW
+    /// hour: the tighten does take effect, one boundary later, exactly the
+    /// cadence a parked loosening already keeps. The same shape as
+    /// `DayLog.compactionFrontier`, deliberately: there the summarised chain,
+    /// not the live boundary, decides what may be destroyed; here the
+    /// established day, not the live boundary, decides what is spent — in
+    /// both places the live clock proposes and the record disposes. It is
+    /// derived here on the ledger rather than from the record chain itself
+    /// because the chain stays anchored at the OLDEST record's hour forever,
+    /// and windows read off it would never adopt a moved hour at all.
+    ///
+    /// Falls back to live — never holds — when `dayBegan` sits ahead of `now`
+    /// (a clock stepped backwards; the anchor heals at the next sweep) and
+    /// when the stamped day is over. The one behavior this trades away: on
+    /// the first morning after a matured night-SHORTENING, a sweep that has
+    /// not run yet leaves yesterday stamped until the old hour, and the pool
+    /// refills up to that hour late — the fail-closed side, "late, never
+    /// never".
+    public func effectiveDayStart(now: Date, downHours: DownHours, calendar: Calendar) -> Date {
+        let live = DayBoundary.dayStart(now: now, downHours: downHours, calendar: calendar)
+        guard let begun = dayBegan, begun <= now,
+              now < DayBoundary.nextDayStart(after: begun, calendar: calendar)
+        else { return live }
+        return begun
     }
 
     // MARK: - Spending
@@ -110,6 +187,16 @@ public struct GrantLedger: Codable, Sendable, Equatable {
     /// same minutes from the budget daily until real time caught up with it.
     /// Clipped to the day, a phantom grant charges only the day it claims to
     /// belong to, exactly as `DayLog.grantedMinutes` already clips.
+    ///
+    /// `calendar` stays defaulted here and on the day-window methods below,
+    /// deliberately: dozens of standing call sites (the app, the extensions,
+    /// both suites) read the device calendar and mean it, so removing the
+    /// default buys no compiler proof — every one of them would write
+    /// `.current` by hand and the mid-chain forwarding mistake would look the
+    /// same. The rule is narrower and pinned instead: any caller that takes a
+    /// calendar of its own MUST pass it through, because a dropped forward
+    /// splits one computation across two calendars and moves the day's far
+    /// edge (`CalendarFarEdgeTests`).
     public func spentMinutes(dayStart: Date, calendar: Calendar = .current) -> Int {
         let dayEnd = DayBoundary.nextDayStart(after: dayStart, calendar: calendar)
         return grants.filter { $0.issuedAt >= dayStart && $0.issuedAt < dayEnd }
