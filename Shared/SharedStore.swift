@@ -2,6 +2,9 @@ import Foundation
 import SilkCore
 import FamilyControls
 import ManagedSettings
+#if DEBUG
+import os
+#endif
 
 /// The App Group bridge between the app and its three extensions.
 /// Everything the shield needs to render — and everything the monitor needs to
@@ -15,6 +18,54 @@ public enum SharedStore {
     /// One subsystem across all four processes, so Console shows the app and
     /// its extensions under a single filter.
     public static let logSubsystem: String = infoString("SilkLogSubsystem")
+
+    // MARK: - The calibration instrument
+
+    /// The device day's only instrument, and **DEBUG-only on purpose**.
+    ///
+    /// `growth-decision` verdict 6 makes a real day of use a pre-beta gate:
+    /// near-zero reaches on an ordinary day, or many on an untouched one, and
+    /// the `reaches` term is noise. Nothing could answer that. Mirror draws the
+    /// score, which is four terms collapsed into one number and cannot be
+    /// inverted; the footnote shows today's unlocks and that is the only term
+    /// on any screen. The shield records every reach and logged none of them —
+    /// `SilkShield` had no `Logger` at all — so the term the gate exists to
+    /// judge was the one term nothing could see.
+    ///
+    /// **Why DEBUG and not `.private`.** `c49bc17` settled the doctrine for the
+    /// shipping log: keep the event, redact the payload, speak plainly only to
+    /// a watching debugger. These lines are payload — when someone reached, how
+    /// often, and what a day cost — so under that doctrine they would all be
+    /// `.private`, which is unreadable in Console without a logging profile.
+    /// Compiling them out of Release instead keeps the shipped privacy surface
+    /// exactly where `c49bc17` left it while leaving the numbers plainly
+    /// readable on the dev build the device protocols already install.
+    /// `scripts/ci.sh release` is what proves the Release side still compiles
+    /// with every one of these gone.
+    ///
+    /// Calibration is the whole reason it exists, so it is not `wall`'s or
+    /// `monitor`'s category: `docs/qa/calibration-day.md` filters on this one
+    /// and gets the day and nothing else.
+    @inline(__always)
+    static func calibrationLog(_ message: @autoclosure () -> String) {
+        #if DEBUG
+        // Evaluated into a local first: `Logger`'s interpolation escapes, and
+        // a non-escaping autoclosure cannot be handed to it directly.
+        let text = message()
+        calibration.notice("\(text, privacy: .public)")
+        #endif
+    }
+
+    #if DEBUG
+    private static let calibration = Logger(subsystem: logSubsystem, category: "calibration")
+    #endif
+
+    /// Sortable and unambiguous, which a localized date is not — these lines
+    /// get bucketed into Silk days by hand, and a Silk day does not start at
+    /// midnight.
+    static func iso(_ date: Date) -> String {
+        date.formatted(.iso8601.timeZone(separator: .omitted))
+    }
 
     /// Missing means the build is misconfigured, not that the user did
     /// something — there is no sane fallback for an App Group we'd silently
@@ -270,9 +321,28 @@ public enum SharedStore {
         // proof-of-read depends on — lives in `DayLog.recordClosedDays`,
         // where `swift test` can pin it against a scripted concurrent writer.
         // This is only the binding to the live container.
-        DayLog.recordClosedDays(upTo: currentDayStart, downHours: downHours,
-                                ledger: ledger, wallStanding: wallStanding,
-                                calendar: calendar, store: LiveDayRecordStore())
+        #if DEBUG
+        let before = Set(dayRecords().map(\.dayStart))
+        #endif
+        let sealed = DayLog.recordClosedDays(upTo: currentDayStart, downHours: downHours,
+                                             ledger: ledger, wallStanding: wallStanding,
+                                             calendar: calendar, store: LiveDayRecordStore())
+        // A record is written once and never revised, so this line is the only
+        // moment the day's four terms exist together anywhere outside storage.
+        // Mirror draws the score they produce; nothing on any screen shows the
+        // terms, and the calibration day is a question about the TERMS —
+        // whether `reaches` is signal and whether 180 is the right allowance.
+        // growth-decision verdict 6.
+        #if DEBUG
+        for r in dayRecords() where !before.contains(r.dayStart) {
+            calibrationLog("""
+                day sealed \(iso(r.dayStart)) — granted \(r.grantedMinutes)m, \
+                reaches \(r.reaches), late \(r.lateReaches), unlocks \(r.unlocks), \
+                observed \(r.observed), score \(r.score)
+                """)
+        }
+        #endif
+        return sealed
     }
 
     /// `SharedStore`'s conformance for the compaction gate, kept as a value
@@ -418,6 +488,11 @@ public enum SharedStore {
         encode(attempts, key: Key.attempts)
         defaults.set(now, forKey: Key.attemptsLast)
         defaults.set(attemptsRevision() &+ 1, forKey: Key.attemptsRevision)
+        // After the dedupe, never before it: `reaches` counts what was
+        // APPENDED, and a burst of renders that collapses into one attempt
+        // must read as one line here or the calibration day counts renders
+        // and calls them reaches. docs/qa/calibration-day.md.
+        calibrationLog("reach recorded at \(iso(now)) — attempts blob now \(attempts.count)")
     }
 
     /// Moves exactly when an attempt is appended, so a reader can hold its
