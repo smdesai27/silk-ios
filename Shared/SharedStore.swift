@@ -72,17 +72,27 @@ public enum SharedStore {
 
     // MARK: - The key
 
-    /// The key journal: every exception spent, in order. Mirror's footnote
-    /// reads the count and the last date ("⚿ 1 · Jul 12"); nothing else does.
-    /// The physical key isn't built yet, so today the only writer is the
-    /// in-app "Tap your key." path — when NFC lands it records here too, and
-    /// the footnote needs no new wiring.
+    /// The key journal: every exception spent, in order.
+    ///
+    /// **Nothing reads this today.** Mirror's footnote used to — it printed the
+    /// lifetime count and last date ("⚿ 1 · Jul 12") — and now counts today's
+    /// grants off the ledger instead, which is both a narrower window and a
+    /// different subject: the journal also takes an entry on the "Tap your
+    /// key." path, and a loosening opens no door. The writes stay because the
+    /// record is cheap, capped, and cannot be recovered once it stops being
+    /// kept; a reader that wants exceptions-over-time will want it whole.
+    ///
+    /// Three writers, not the one this used to claim: both unlock landings —
+    /// the in-app grant path and the Siri intent's — and the "Tap your key."
+    /// loosening. The physical key isn't built yet; when NFC lands it records
+    /// through this same call.
     public static func recordKeyUse(at now: Date = Date()) {
         var uses = decode([Date].self, key: Key.keyJournal) ?? []
         uses.append(now)
-        // Capped like its sibling, the attempts array: past the cap the
-        // footnote's count clamps, which is a smaller lie than a blob that
-        // grows for the life of the install.
+        // Capped like its sibling, the attempts array. It used to be the
+        // footnote's count that clamped here; nothing reads the journal now,
+        // so the cap only bounds the record — still the right trade against a
+        // blob that grows for the life of the install.
         if uses.count > 2000 { uses.removeFirst(uses.count - 2000) }
         encode(uses, key: Key.keyJournal)
     }

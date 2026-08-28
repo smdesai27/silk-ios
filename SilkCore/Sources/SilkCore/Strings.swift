@@ -112,6 +112,12 @@ public enum SilkStrings {
     /// The hero's day name before any day has closed: the running score is
     /// today's, and it says so.
     public static let today = "Today"
+    /// Mirror's footnote, spoken rather than drawn. On the page it is a key
+    /// glyph and a numeral, which VoiceOver reads as "key, 2" — true of the
+    /// pixels and useless as a sentence. Two forms because "1 unlocks today"
+    /// is wrong and the line is read aloud far more often on a quiet day.
+    public static let unlockToday = "unlock today"    // composes: "1 unlock today"
+    public static let unlocksToday = "unlocks today"  // composes: "2 unlocks today"
 
     // Settings
     public static let downHours = "Down hours"

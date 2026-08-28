@@ -150,15 +150,24 @@ struct MirrorView: View {
         .frame(width: 190)
     }
 
-    /// The key log: exceptions spent, and when the last one was.
+    /// Today's unlocks — how many times a door was opened since the day began.
+    ///
+    /// It read the lifetime key journal until now ("3 · Jul 12"). Every other
+    /// element on this page is one day, and a total since install was the only
+    /// thing here that could not be acted on.
     ///
     /// The canon's second glyph is ⚿ (U+269F). No font iOS ships draws it, and it
     /// lands as tofu in the design's own prototype too — visible in the handoff
     /// render. The SF Symbol is the same key at the same optical size.
+    ///
+    /// Spoken as a sentence because it cannot be read as one: a glyph beside a
+    /// numeral reaches VoiceOver as "key, 2".
     private var footnote: some View {
-        Text("\(Image(systemName: "key")) \(model.keyLog)")
+        let n = model.unlocksToday
+        return Text("\(Image(systemName: "key")) \(n)")
             .font(Silk.serif(12.5))
             .tracking(Silk.track(0.02, 12.5))
             .foregroundStyle(night ? Silk.paperAlpha(0.56) : Silk.inkAlpha(0.67))
+            .accessibilityLabel(Text("\(n) \(n == 1 ? SilkStrings.unlockToday : SilkStrings.unlocksToday)"))
     }
 }

@@ -296,8 +296,9 @@ final class AppModel {
     /// Mirror asks for the name on every body pass, and a fresh DateFormatter
     /// resolves an ICU template each time — real work for a word that changes
     /// once a day. Held for the process: a locale or timezone change could in
-    /// principle stale it, but iOS relaunches the app for those, the same
-    /// bargain `keyLog`'s cached "MMM d" already accepts.
+    /// principle stale it, but iOS relaunches the app for both, and that is
+    /// the whole of the bargain. It is now the only formatter Mirror holds —
+    /// the footnote's "MMM d" left with the lifetime key log.
     private static let weekdayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.setLocalizedDateFormatFromTemplate("EEEE")
@@ -330,28 +331,26 @@ final class AppModel {
         }
     }
 
-    /// "1 · Jul 12" — exceptions spent and when the last one was, read from the
-    /// key journal in SharedStore. The journal's writers are every unlock
-    /// landing (the in-app grant path and the Siri intent's) and the "Tap
-    /// your key." loosening path; the physical key will record through the
-    /// same call when it lands. Zero exceptions is a real count, so it reads
-    /// "0" and no date.
-    var keyLog: String {
-        if let cached = keyLogCache { return cached }
-        let journal = SharedStore.keyJournal()
-        let line: String
-        if let last = journal.last {
-            let f = DateFormatter()
-            f.setLocalizedDateFormatFromTemplate("MMM d")
-            line = "\(journal.count) · \(f.string(from: last))"
-        } else {
-            line = "0"
-        }
-        keyLogCache = line
-        return line
+    /// Today's unlocks: how many times a door was opened since the day began.
+    ///
+    /// It was the lifetime key journal ("3 · Jul 12"), and that is a number
+    /// which only ever rises. Mirror is a screen where every other element is
+    /// one day — the hero, the band, the ring — and a running total since
+    /// install was the one thing on it that could not be acted on.
+    ///
+    /// Read from the ledger rather than the key journal, which changes the
+    /// subject as well as the window. The journal also takes an entry on the
+    /// "Tap your key." path, and a loosening is not an unlock: `keyTapped`
+    /// applies a pending policy early and opens no door. Counting grants means
+    /// the line now counts what its glyph has always claimed.
+    ///
+    /// No cache, deliberately. The old one existed because `keyJournal()`
+    /// decoded a blob out of UserDefaults on every body pass; `ledger` is
+    /// already in memory and already observed, so the read is free — and the
+    /// three invalidation sites that could go stale leave with it.
+    var unlocksToday: Int {
+        ledger.unlocks(dayStart: dayStart)
     }
-
-    @ObservationIgnored private var keyLogCache: String?
 
     // MARK: - The shield, raised from a door row
 
@@ -983,12 +982,13 @@ final class AppModel {
             // that already had a longer grant running keeps ITS deadline.
             restateRelockLayers(for: door)
             Silk.Haptic.grant()
-            // Every unlock is an exception spent, and Mirror's key line is
-            // where the count is read — so the journal takes one here, at the
-            // landing, not only on the key-tap path. Sanil's call (2026-08-25):
-            // the counter must visibly rise each time an unlock is used.
+            // Every unlock is an exception spent, so the journal takes one
+            // here, at the landing, not only on the key-tap path. Sanil's call
+            // (2026-08-25): the counter must visibly rise each time an unlock
+            // is used. The counter is no longer read from here — the footnote
+            // counts today's grants off the ledger, which needs no write at
+            // all — but the journal keeps the entry as a record.
             SharedStore.recordKeyUse()
-            keyLogCache = nil
             LaunchCatalog.open(doorName: door.name)
             return ("\(door.name) \(SilkStrings.isOpenFor) \(minutes) \(SilkStrings.minutes).",
                     { [weak self] in
@@ -1908,7 +1908,6 @@ final class AppModel {
         // again" after the hitch rather than inside it.
         resumeWait()
         weekAttemptsCache = nil
-        keyLogCache = nil
         // The suspension is where external writes accumulate — a Shortcuts
         // grant performed against the store while this copy slept — so the
         // return is where the copy has to catch up, before anything on
@@ -2045,10 +2044,11 @@ final class AppModel {
         // An exception spent is an exception journalled, but only an exception
         // actually spent. The merge can legitimately deliver nothing — every
         // field the sentence proposed may have been overtaken by a tighten
-        // since — and the key is scarce, hand-tapped, and counted in Mirror's
-        // footnote. Burning it on a no-op is the one outcome the user can
-        // neither see nor undo, so the pending stays parked and the journal
-        // stays untouched. `pendingChange` hides the button before it comes to
+        // since — and the key is scarce and hand-tapped. Burning it on a no-op
+        // is the one outcome the user can neither see nor undo, and it is more
+        // invisible than it was: the footnote counts today's unlocks now, so
+        // nothing on screen surfaces this journal at all. The pending stays
+        // parked and the journal stays untouched. `pendingChange` hides the button before it comes to
         // this; the guard is here because the key will also arrive over NFC,
         // where nothing consults the screen.
         guard next != policy else { return }
@@ -2057,7 +2057,6 @@ final class AppModel {
         // The NFC key will record through the same call when the hardware flow
         // lands.
         SharedStore.recordKeyUse()
-        keyLogCache = nil
         commit()
     }
 
