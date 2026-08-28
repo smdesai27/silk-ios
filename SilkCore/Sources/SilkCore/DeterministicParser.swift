@@ -294,6 +294,22 @@ public enum DeterministicParser {
                 // FINDING 11 pool-claim veto still parks the trailing
                 // clearing, so both prongs fail closed at once.
                 if poolStatementIsAttributed(clauses()) { return .silence }
+                // A QUESTION ASKED BY INVERSION IS STILL A QUESTION. The
+                // shortcut's mood gating was the attribution test alone, so a
+                // pool question fronted with a plain auxiliary — "am" is not
+                // a request modal, and "gonna" holds no seat — walked past
+                // both the declined-ask veto (keyed on `requestModals` in the
+                // asked clause) and this arm's own gate: "am i really gonna
+                // set my budget to 30? no" wrote the refused allowance, and
+                // the decline was not even load-bearing — the bare question
+                // wrote the same 30 (ROUND 7, n29 — FINDING 10 replayed one
+                // MOOD over). The cap family already refuses the inverted
+                // question on `reportsRatherThanAsks`' fronted-auxiliary
+                // core ("was tiktok capped at an even 20 before" is pinned
+                // silence); this is that core, one family over. Terminating
+                // silence — rule 3's own invariant: the answer to a question
+                // is never a new allowance.
+                if poolAskIsAnInvertedQuestion(clauses()) { return .silence }
                 return .command(.setBudget(minutes: n))
             }
             // A sentence that merely MENTIONS budgeting states no new
@@ -693,7 +709,15 @@ public enum DeterministicParser {
     /// the direction the family must fail in. NOT added to `nounNegators`
     /// itself: that set also feeds the clearing family, where a new word is a
     /// LOOSENING, and "nah cap on tiktok" must not start clearing ceilings.
-    private static let spokenDeclines: Set<String> = ["nah", "nvm"]
+    ///
+    /// "nope" — the single commonest spoken decline in English — held no seat,
+    /// so the brand-new n25 pool veto was defeated on its first round by the
+    /// same inventory-by-subtraction move that produced n3, this time in the
+    /// decline inventory rather than the transparency one: "should i set my
+    /// budget to 30? nope" wrote the refused allowance (ROUND 7, n28). Seated
+    /// with its spelling variant "naw" — the fix is the class edge, not one
+    /// word.
+    private static let spokenDeclines: Set<String> = ["nah", "naw", "nope", "nvm"]
 
     /// The transparent discourse adverbs an ANSWER clause may carry without
     /// ceasing to answer. "should i cap tiktok at 20? actually no" answers no
@@ -721,8 +745,16 @@ public enum DeterministicParser {
     /// must still CONTAIN a decline — a bare trailing adverb answers
     /// nothing — and every read can only subtract a written ceiling or an
     /// allowance move, the direction both families must fail in.
+    ///
+    /// "yeah" is the one non-adverb with a seat: the colloquial decline
+    /// "yeah no" CUSHIONS its "no" with an affirmation that answers nothing
+    /// on its own, and with no seat the allSatisfy broke on it exactly as it
+    /// broke on the adverbs (ROUND 7's inventory sweep, beside n27/n28). The
+    /// contains-a-decline guard keeps the bare affirmation inert — "should i
+    /// cap tiktok at 20? ngl yeah" is pinned to LAND — so the seat can only
+    /// subtract, like every other read of this set.
     private static let answerSlotAdverbs: Set<String> =
-        Set(["actually", "honestly", "probably", "definitely"]).union(slangEmphatics)
+        Set(["actually", "honestly", "probably", "definitely", "yeah"]).union(slangEmphatics)
 
     /// Words that open a noun phrase. Only the clearing rule reads them, and
     /// only to find where a ceiling's own phrase STARTS — "take the 20 minute
@@ -788,6 +820,7 @@ public enum DeterministicParser {
                                                           "tonight", "thanks",
                                                           "fr", "frfr", "ngl", "rn",
                                                           "tho", "lol", "lmao", "tbh",
+                                                          "lowkey", "highkey", "deadass",
                                                           "pls", "plz", "tops"]
 
     /// The pure SLANG half of `trailingParticles` — the Gen-Z emphatics, as
@@ -800,8 +833,19 @@ public enum DeterministicParser {
     /// clearing ("no cap on tiktok fr fr"), and the tail admission must not
     /// double as an opener pass (FINDING 9). An entry here can only subtract
     /// a loosening, which is the direction the family must fail in.
+    ///
+    /// "lowkey" was the class's missing member: propositionless answer-slot
+    /// slang that appeared in this grammar only as a chatter example inside
+    /// `clearingPhrase`'s comment, so the by-construction union
+    /// (`answerSlotAdverbs`) missed it and "should i cap tiktok at 20? lowkey
+    /// no" wrote the refused ceiling — the n3/n9/n13/n18/n21 seam's sixth
+    /// iteration, at the union's own edge (ROUND 7, n27). Seated here, where
+    /// "tbh"/"fr"/"ngl" sit, together with the class's remaining common
+    /// members ("highkey", "deadass") — the fix is the class edge, not one
+    /// word.
     private static let slangEmphatics: Set<String> = ["fr", "frfr", "ngl", "tbh",
-                                                      "tho", "lol", "lmao", "rn"]
+                                                      "tho", "lol", "lmao", "rn",
+                                                      "lowkey", "highkey", "deadass"]
 
     /// The auxiliaries and copulas, contractions included. A finite verb is what
     /// turns a request into a REPORT — "no limit on tiktok" asks for one to go,
@@ -1052,6 +1096,28 @@ public enum DeterministicParser {
             return ["was", "were", "be"].contains(t[i]) && i + 1 < clause.upperBound
                 && ["like", "all"].contains(t[i + 1]) && i + 2 != anchor
         }
+    }
+
+    /// Whether the pool's sentence is a question asked by INVERSION — a plain
+    /// finite auxiliary standing in the lead slot of the clause holding the
+    /// pool's number ("AM i really gonna set my budget to 30"). English fronts
+    /// an auxiliary to ask, and the request modals are the one fronting that
+    /// wraps an instruction instead ("CAN you set my budget to 45" is a pinned
+    /// setter) — the exact split `reportsRatherThanAsks`' fronted-auxiliary
+    /// core and the `requestModals` doc already draw for the cap family.
+    /// Anchored exactly as `namesThePool` anchors — the first number token, or
+    /// the idioms' own "hour" — and read through `clauseLead`'s walk so a kept
+    /// opener or a transparent adverb cannot evict the auxiliary from the slot.
+    /// Read only by rule 3's shortcut, and only to SILENCE it, so this test can
+    /// only subtract an allowance move — the direction the pool must fail in
+    /// (ROUND 7, n29).
+    private static func poolAskIsAnInvertedQuestion(_ index: NumberParser.ClauseIndex) -> Bool {
+        let t = index.tokens
+        let anchor = t.indices.first(where: { !NumberParser.allNumbers(in: t[$0]).isEmpty })
+            ?? t.firstIndex(of: "hour")
+        guard let anchor, let clause = index.clauseRange(containing: anchor) else { return false }
+        let lead = clauseLead(t, clause: clause)
+        return auxiliaries.contains(t[lead]) && !requestModals.contains(t[lead])
     }
 
     /// Whether the pool's fallback sentence is prose ABOUT a daily quantity
@@ -3093,11 +3159,24 @@ public enum DeterministicParser {
     /// The verbs that report somebody's words. Read only by the quoted-speech
     /// arm above, and only to REFUSE a grant, so an entry can never widen what
     /// spends.
+    ///
+    /// The RECOMMEND family reports words as surely as "said": the set was
+    /// the say/tell/type/text/write families only, so "my therapist suggested
+    /// tiktok - 20 a day" found no frame, no attributed arm fired, and
+    /// somebody's reported recommendation cut the shared pool — n15/n19/n22
+    /// one verb over, the exact move that produced n14 on the quotative side
+    /// (ROUND 7, n31). suggest/recommend/advise/mention are seated whole,
+    /// each in its four forms, because an entry here is subtract-only by this
+    /// class's own doc.
     private static let speechVerbs: Set<String> = [
         "say", "says", "said", "saying",
         "tell", "tells", "told", "telling",
         "type", "types", "typed", "typing",
         "text", "texts", "texted", "write", "writes", "wrote",
+        "suggest", "suggests", "suggested", "suggesting",
+        "recommend", "recommends", "recommended", "recommending",
+        "advise", "advises", "advised", "advising",
+        "mention", "mentions", "mentioned", "mentioning",
     ]
 
     /// Whether a doorless clause is a bare fragment an ask can stand on — a
@@ -3270,15 +3349,30 @@ public enum DeterministicParser {
         // the pool move exactly as before — a read here can only subtract
         // a pool move, the direction the pool must fail in.
         if case .none = prevDoors { return false }
-        let quote = prev.compactMap { i -> Int? in
-            if speechVerbs.contains(t[i]) { return i + 1 }
-            if t[i] == "goes" { return i + 1 }
+        let frame = prev.compactMap { i -> (start: Int, end: Int)? in
+            if speechVerbs.contains(t[i]) { return (i, i + 1) }
+            if t[i] == "goes" { return (i, i + 1) }
             if ["was", "were", "be"].contains(t[i]), i + 1 < prev.upperBound,
-               ["like", "all"].contains(t[i + 1]) { return i + 2 }
+               ["like", "all"].contains(t[i + 1]) { return (i, i + 2) }
             return nil
         }.first
-        guard let quote, quote < prev.upperBound else { return false }
-        return (quote..<prev.upperBound).contains(where: doorToken)
+        guard let frame else { return false }
+        if frame.end < prev.upperBound,
+           (frame.end..<prev.upperBound).contains(where: doorToken) { return true }
+        // AND THE POSTPOSED FRAME QUOTES THE DOOR AHEAD OF IT. "tiktok she
+        // said - 20 a day" is the standard dictation of «"tiktok", she said»
+        // — the speech verb stands clause-FINAL, so the frame's tail is
+        // empty, the forward read above finds nothing, and the unattributed
+        // arm needs the breath to be nothing but the door's name, which
+        // "she said" defeats: the quoted per-app note cut the shared pool
+        // through the gap between the veto's two arms (ROUND 7, n30). A
+        // frame whose tail is empty owns the breath it CLOSES, so the door
+        // is read ahead of it instead — while the frameless release twin
+        // ("tiktok was brutal - 45 a day for everything", pinned) carries
+        // no frame at all and keeps its pool move. One more read that can
+        // only subtract a pool move, the direction the pool must fail in.
+        return frame.end == prev.upperBound
+            && (prev.lowerBound..<frame.start).contains(where: doorToken)
     }
 
     /// Whether some clause states a ceiling word LEADING a door and carries no
