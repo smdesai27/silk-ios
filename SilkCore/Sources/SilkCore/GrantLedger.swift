@@ -137,8 +137,9 @@ public struct GrantLedger: Codable, Sendable, Equatable {
     /// issued today expires after today began. So the day's own count needs no
     /// journal of its own; the ledger already holds it.
     public func unlocks(dayStart: Date, calendar: Calendar = .current) -> Int {
-        let dayEnd = DayBoundary.nextDayStart(after: dayStart, calendar: calendar)
-        return grants.filter { $0.issuedAt >= dayStart && $0.issuedAt < dayEnd }.count
+        DayLog.unlocks(grants,
+                       from: dayStart,
+                       to: DayBoundary.nextDayStart(after: dayStart, calendar: calendar))
     }
 
     /// What one door has drawn from the pool today. Derived from `grants`, like

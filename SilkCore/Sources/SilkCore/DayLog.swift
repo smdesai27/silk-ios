@@ -27,18 +27,47 @@ public struct DayRecord: Codable, Hashable, Sendable {
     public let reaches: Int
     /// Those reaches falling inside the down-hours window.
     public let lateReaches: Int
+    /// Purchases, not sessions — how many grants were issued inside the day.
+    ///
+    /// The name the evidence supports is `switchCost`'s `S`, and it counts
+    /// what `Validator` records: a top-up asked for *inside* a live grant
+    /// returns `.restated` and writes nothing, so someone who takes 60 minutes
+    /// at 09:00 and re-opens fifteen times has one unlock here. What this
+    /// prices is repeat *buying* after a window closes, which is the shape of
+    /// "five more, five more, five more" — and it is honestly less than the
+    /// whole of what fragmentation feels like. score-weighting §4.2.
+    ///
+    /// Zero on a record written before this field existed. That decodes to the
+    /// same score those days already had, because the term is zero below two.
+    public let unlocks: Int
     /// The wall stood and Silk could see it. Decided at write time and never
     /// revised — an unobserved day credits nothing, charges nothing, and
     /// draws a ring.
     public let observed: Bool
 
     public init(dayStart: Date, grantedMinutes: Int, reaches: Int,
-                lateReaches: Int, observed: Bool) {
+                lateReaches: Int, unlocks: Int = 0, observed: Bool) {
         self.dayStart = dayStart
         self.grantedMinutes = grantedMinutes
         self.reaches = reaches
         self.lateReaches = lateReaches
+        self.unlocks = unlocks
         self.observed = observed
+    }
+
+    /// `unlocks` postdates the first persisted records, so it decodes as
+    /// optional — the same accommodation `GrantLedger.closedUntil` makes, and
+    /// for the same reason: a record written once is never revised, so an old
+    /// one must still decode rather than be rewritten. The synthesized
+    /// `encode(to:)` still writes all six keys.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        dayStart = try c.decode(Date.self, forKey: .dayStart)
+        grantedMinutes = try c.decode(Int.self, forKey: .grantedMinutes)
+        reaches = try c.decode(Int.self, forKey: .reaches)
+        lateReaches = try c.decode(Int.self, forKey: .lateReaches)
+        unlocks = try c.decodeIfPresent(Int.self, forKey: .unlocks) ?? 0
+        observed = try c.decode(Bool.self, forKey: .observed)
     }
 
     /// The day's contribution. Frozen arithmetic over frozen fields: a record
@@ -47,6 +76,7 @@ public struct DayRecord: Codable, Hashable, Sendable {
     public var fraction: Double {
         guard observed else { return 0 }
         let cost = Double(grantedMinutes + reaches + lateReaches)
+            + DayLog.fragmentation(unlocks: unlocks, grantedMinutes: grantedMinutes)
         return max(0, 1 - cost / DayLog.allowance)
     }
 
@@ -67,13 +97,72 @@ public enum DayLog {
     /// calibrated against a real device day.
     public static let allowance: Double = 180
 
+    /// `switchCost`'s `c` — equivalent minutes charged per grant after the
+    /// first. score-weighting §4.4, and that section is worth reading before
+    /// touching this number: **it is a calibration constant, not an effect
+    /// size, and no citation supports it.** The direct experimental test of
+    /// the premise is null (Powers & Scerbo 2023: interruption *frequency* had
+    /// no effect once timing was held), and consolidation carries a measured
+    /// cost of its own (Fitz et al. 2019: batching lifted FoMO, d = 0.68).
+    /// It ships because taking fifteen minutes as 5 + 5 + 5 is a different day
+    /// from taking it once and the score could not previously tell them apart
+    /// — not because the literature priced it.
+    public static let switchCost: Double = 2
+
+    /// The switch term's ceiling, as a share of the day's granted minutes.
+    /// §4.4 sets it against *weighted* minutes; with no time-of-day curve
+    /// shipped every multiplier is 1.0, so the two are the same number here.
+    public static let switchCap: Double = 0.5
+
+    /// What fragmentation costs: `c` per grant after the first, never more
+    /// than half the minutes those grants bought.
+    ///
+    /// The cap is what stops a thin, choppy day from being all switch term —
+    /// four two-minute grants would otherwise cost three times what they
+    /// bought. It binds only below ~28 granted minutes; above that the term is
+    /// flat in the session count, which is the shape §4.4 asks for.
+    ///
+    /// **What does not transfer from §4.4.** That section derives its form
+    /// inside `score = 100 × M / W`, where the cap yields a structural floor —
+    /// fragmentation alone can never take a score below 66.7. Silk scores by
+    /// subtraction from an allowance (`growth-decision` verdict 3), so the
+    /// floor is a property of the ratio form and is *not* inherited here. What
+    /// survives is the ordering the floor existed to encode: the switch term
+    /// is bounded against the minutes, so fragmentation can add at most half
+    /// again to what the grants already cost, and can never be the whole of a
+    /// day's number. Stated rather than quietly assumed.
+    public static func fragmentation(unlocks: Int, grantedMinutes: Int) -> Double {
+        guard unlocks > 1 else { return 0 }
+        return min(switchCost * Double(unlocks - 1),
+                   switchCap * Double(grantedMinutes))
+    }
+
+    /// How many grants were issued inside the day — `switchCost`'s `S`.
+    ///
+    /// Clipped at both ends exactly as `grantedMinutes` clips windows: a grant
+    /// minted under a transiently forward clock carries a future `issuedAt`,
+    /// and an open-ended `issuedAt >= dayStart` counts that phantom again on
+    /// every later day. `GrantLedger.unlocks(dayStart:)` is this same rule,
+    /// reached from the live ledger.
+    ///
+    /// A count, where `grantedMinutes` is a union. Two doors opened at once is
+    /// one minute the wall was down but two decisions to open it, and the
+    /// asymmetry is deliberate — this term prices the asking.
+    public static func unlocks(_ grants: [Grant], from dayStart: Date, to dayEnd: Date) -> Int {
+        grants.filter { $0.issuedAt >= dayStart && $0.issuedAt < dayEnd }.count
+    }
+
     /// Today's number before the day closes: the record's own equation, taken
     /// on the live counts. Defined beside `DayRecord.fraction` so the running
     /// hero and the record it becomes at the day's turn are one formula — the
     /// two can drift only by a coefficient change both would feel.
+    ///
+    /// `unlocks` defaults to zero, which is the same value an old record
+    /// decodes to and costs the same nothing: the term is zero below two.
     public static func runningScore(grantedMinutes: Int, reaches: Int,
-                                    lateReaches: Int) -> Int {
+                                    lateReaches: Int, unlocks: Int = 0) -> Int {
         let cost = Double(grantedMinutes + reaches + lateReaches)
+            + fragmentation(unlocks: unlocks, grantedMinutes: grantedMinutes)
         return Int((max(0, 1 - cost / allowance) * 100).rounded())
     }
 
@@ -154,6 +243,7 @@ public enum DayLog {
                          grantedMinutes: grantedMinutes(grants, from: dayStart, to: dayEnd),
                          reaches: inDay.count,
                          lateReaches: late,
+                         unlocks: unlocks(grants, from: dayStart, to: dayEnd),
                          observed: wallStanding && sane && !truncated && alive)
     }
 

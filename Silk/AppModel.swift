@@ -275,7 +275,9 @@ final class AppModel {
         let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
         let granted = DayLog.grantedMinutes(ledger.grants, from: dayStart, to: dayEnd)
         return DayLog.runningScore(grantedMinutes: granted,
-                                   reaches: bucket.attempts, lateReaches: bucket.late)
+                                   reaches: bucket.attempts, lateReaches: bucket.late,
+                                   unlocks: DayLog.unlocks(ledger.grants,
+                                                           from: dayStart, to: dayEnd))
     }
 
     /// The shipped equation (canon.md: "82 = 100 − 12 attempts − 6 late"),
