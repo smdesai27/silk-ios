@@ -315,9 +315,8 @@ public enum DeterministicParser {
         if tokens.first == "add", tokens.count >= 2 {
             let name = tokens.dropFirst().joined(separator: " ")
             if !NumberParser.allNumbers(in: name).isEmpty { return .silence }
-            if let existing = state.door(named: name) {
+            if state.door(named: name) != nil {
                 // Adding an existing door is a no-op ask; treat as silence.
-                _ = existing
                 return .silence
             }
             return .command(.addDoor(name: name))

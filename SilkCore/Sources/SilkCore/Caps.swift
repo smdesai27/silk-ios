@@ -111,8 +111,8 @@ public enum Caps {
                 // the door is shut, and the hour it lifts is tomorrow's.
                 let t = Validator.timeOfDay(DayBoundary.nextDayStart(after: dayStart,
                                                                      calendar: calendar),
-                                            calendar: calendar).display
-                return "\(door.name) \(SilkStrings.closedUntil) \(t)."
+                                            calendar: calendar)
+                return SilkStrings.closedUntil(door.name, until: t)
             }
             // `settingsBudget`'s own composition, so the reply reads back what
             // the Settings row is about to show.

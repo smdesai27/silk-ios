@@ -918,8 +918,8 @@ final class AppModel {
             // "0 left today." it replaces was a lie whenever the pool still had
             // minutes in it — which, once a door can run out on its own, is the
             // ordinary case.
-            let t = Validator.timeOfDay(until, calendar: .current).display
-            return (refuse("\(door.name) \(SilkStrings.closedUntil) \(t)."), nil)
+            let t = Validator.timeOfDay(until, calendar: .current)
+            return (refuse(SilkStrings.closedUntil(door.name, until: t)), nil)
 
         case .restated(let door, let until):
             // The ask was already covered, so nothing was debited and nothing
@@ -956,8 +956,8 @@ final class AppModel {
             close(&ledger)
             commit(reapplying: close)
             Silk.Haptic.tighten()
-            let t = Validator.timeOfDay(until, calendar: .current).display
-            return ("\(door.name) \(SilkStrings.closedUntil) \(t).",
+            let t = Validator.timeOfDay(until, calendar: .current)
+            return (SilkStrings.closedUntil(door.name, until: t),
                     restore(previous, ifStill: generation))
 
         case .closeAll(let doors, let until):
@@ -974,8 +974,8 @@ final class AppModel {
             closeAll(&ledger)
             commit(reapplying: closeAll)
             Silk.Haptic.tighten()
-            let t = Validator.timeOfDay(until, calendar: .current).display
-            return ("\(SilkStrings.everything) \(SilkStrings.closedUntil) \(t).",
+            let t = Validator.timeOfDay(until, calendar: .current)
+            return (SilkStrings.closedUntil(SilkStrings.everything, until: t),
                     restore(previous, ifStill: generation))
 
         case .grant(let door, let minutes, let relockAt):
@@ -1571,8 +1571,8 @@ final class AppModel {
         // cannot strand the fallback.
         if let rule = ledger.ruleInForce(for: policy, at: now, dayStart: dayStart) {
             let lifts = rule.lifts ?? DayBoundary.nextDayStart(after: dayStart)
-            let t = Validator.timeOfDay(lifts, calendar: .current).display
-            s += " \(rule.door.name) \(SilkStrings.closedUntil) \(t)."
+            let t = Validator.timeOfDay(lifts, calendar: .current)
+            s += " \(SilkStrings.closedUntil(rule.door.name, until: t))"
         }
         return s
     }

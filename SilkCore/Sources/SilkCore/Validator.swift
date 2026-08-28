@@ -163,10 +163,8 @@ public enum Validator {
             // The door's own ceiling, and then the clamp — both computed before
             // any of the three branches below, because two of them need the
             // number she can actually be GIVEN rather than the one she said.
-            let doorRemaining = state.doorCaps[door.id].map {
-                ledger.remainingMinutes(cap: $0, doorID: door.id, dayStart: dayStart,
-                                        calendar: calendar)
-            }
+            let doorRemaining = ceilingRemaining(door: door, state: state, ledger: ledger,
+                                                 dayStart: dayStart, calendar: calendar)
             // P4 — the budget binds, and the bind is a clamp. This point used
             // to refuse an over-ask with the balance ("stating the number is
             // not negotiating"); the handoff superseded that: "Requested
@@ -450,10 +448,8 @@ public enum Validator {
                                       calendar: Calendar = .current) -> Int {
         if state.downHours.contains(timeOfDay(now, calendar: calendar)) { return 0 }
         if ledger.isClosed(door.id, at: now, dayStart: dayStart) { return 0 }
-        let ceiling = state.doorCaps[door.id].map {
-            ledger.remainingMinutes(cap: $0, doorID: door.id, dayStart: dayStart,
-                                    calendar: calendar)
-        }
+        let ceiling = ceilingRemaining(door: door, state: state, ledger: ledger,
+                                       dayStart: dayStart, calendar: calendar)
         var askable = min(ledger.remainingMinutes(budget: state.budgetMinutes, dayStart: dayStart,
                                                   calendar: calendar),
                           ceiling ?? Int.max)
@@ -461,6 +457,18 @@ public enum Validator {
             askable = min(askable, Int(edge.timeIntervalSince(now) / 60))
         }
         return max(0, askable)
+    }
+
+    /// The door's own ceiling as minutes still spendable — nil for a door with
+    /// no cap. The `.spend` arm and `askableMinutes` are the two computations
+    /// whose agreement is `askableMinutes`'s stated purpose, so the arithmetic
+    /// lives once and both call it.
+    static func ceilingRemaining(door: Door, state: PolicyState, ledger: GrantLedger,
+                                 dayStart: Date, calendar: Calendar) -> Int? {
+        state.doorCaps[door.id].map {
+            ledger.remainingMinutes(cap: $0, doorID: door.id, dayStart: dayStart,
+                                    calendar: calendar)
+        }
     }
 
     public static func timeOfDay(_ date: Date, calendar: Calendar) -> TimeOfDay {
