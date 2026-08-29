@@ -192,6 +192,13 @@ private func settle(within seconds: Double = 3.0,
         let stampBefore = SharedStore.ledgerStamp()
         #expect(SharedStore.loadLedger().grants.count == 2)
 
+        WallController.testForceArmed = true
+        SpendIntent.testForceWallUp = true
+        defer {
+            WallController.testForceArmed = nil
+            SpendIntent.testForceWallUp = nil
+        }
+
         _ = try await performSpend(door: door.name, minutes: 15)
 
         let after = SharedStore.loadLedger()
