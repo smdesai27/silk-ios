@@ -6,7 +6,7 @@
 # failures before they leave the machine.
 #
 #   scripts/ci.sh              all three suites + the Release build (~11 min)
-#   scripts/ci.sh spine        SilkCore only (~15 s, no simulator)
+#   scripts/ci.sh spine        SilkCore only (~15 s, no simulator, runs on Linux)
 #   scripts/ci.sh unit         SilkTests only — the app's own logic (~1 min)
 #   scripts/ci.sh ui           SilkUITests only (~5 min)
 #   scripts/ci.sh release      Release compiles at all (~4 min, no simulator)
@@ -160,6 +160,46 @@ run_release() {
   fi
 }
 
+# A missing toolchain is not a red suite. Without this, `swift` absent from a
+# fresh container reports as "FAILED: SilkCore" — the one failure message in
+# this script that would send you reading the spine's source for a bug that is
+# not there.
+if ! command -v swift >/dev/null 2>&1; then
+  echo "scripts/ci.sh: no swift toolchain on PATH — nothing here can run." >&2
+  echo "macOS: install Xcode. Linux: a swift.org toolchain, or the swift:6.2-noble image CI uses." >&2
+  exit 2
+fi
+
+# Three of the four lanes are built out of xcodebuild, which exists only on a
+# Mac. The spine is not: SilkCore is a plain SwiftPM package importing
+# Foundation and nothing else, so `swift test` answers for it on Linux exactly
+# as it does here — 859 of the repo's 945 cases, one short of the spine's whole
+# 860 because a single Darwin-shaped ratio names itself and skips. That is
+# deliberate, and .github/workflows/ci.yml has a job holding it true: it is what
+# lets the tests that matter most run in a container or a cloud session instead
+# of waiting on a runner.
+#
+# Without this check those three fail as `xcodebuild: command not found` inside
+# a redirected log, which reads like a broken script rather than a machine that
+# was never going to be able to answer.
+darwin_only_skipped=0
+if ! command -v xcodebuild >/dev/null 2>&1; then
+  case "$what" in
+    spine) ;;
+    all)
+      echo "No xcodebuild here — running the spine and stopping."
+      echo "SilkTests, SilkUITests and the Release build need macOS."
+      what=spine
+      darwin_only_skipped=1
+      ;;
+    *)
+      echo "scripts/ci.sh $what needs xcodebuild, which exists only on macOS." >&2
+      echo "Only 'spine' can run here; push and let CI answer for the rest." >&2
+      exit 2
+      ;;
+  esac
+fi
+
 case "$what" in
   spine)   run_spine ;;
   unit)    run_unit ;;
@@ -194,7 +234,13 @@ esac
 
 rule "Result"
 if [ ${#failed[@]} -eq 0 ]; then
-  echo "green"
+  if [ "$darwin_only_skipped" -eq 1 ]; then
+    # Not "green": the spine passed and three lanes never ran. Saying green
+    # here would be the script claiming an answer it does not have.
+    echo "spine green — SilkTests, SilkUITests and the Release build did not run"
+  else
+    echo "green"
+  fi
 else
   printf 'FAILED: %s\n' "${failed[*]}"
   exit 1

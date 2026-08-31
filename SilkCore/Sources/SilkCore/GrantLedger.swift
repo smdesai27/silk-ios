@@ -207,6 +207,28 @@ public struct GrantLedger: Codable, Sendable, Equatable {
         max(0, budget - spentMinutes(dayStart: dayStart, calendar: calendar))
     }
 
+    /// How many times the day was unlocked: one per grant issued inside it.
+    /// Mirror's footnote reads this, and it is a count rather than a sum
+    /// because the line answers "how many times did I open a door today",
+    /// which `spentMinutes` cannot — thirty minutes is one number whether it
+    /// arrived as one grant or six.
+    ///
+    /// Clipped at BOTH ends for the reason `spentMinutes` states above, and it
+    /// is not a copied precaution: a grant minted while the device clock was
+    /// transiently forward carries a future `issuedAt`, and an open-ended
+    /// `issuedAt >= dayStart` counts that phantom again on every later day.
+    /// The footnote would then read a number that never goes down.
+    ///
+    /// Grants issued today cannot be compacted out from under this — `compact`
+    /// drops a grant only once its `expiresAt` precedes `dayStart`, and a grant
+    /// issued today expires after today began. So the day's own count needs no
+    /// journal of its own; the ledger already holds it.
+    public func unlocks(dayStart: Date, calendar: Calendar = .current) -> Int {
+        DayLog.unlocks(grants,
+                       from: dayStart,
+                       to: DayBoundary.nextDayStart(after: dayStart, calendar: calendar))
+    }
+
     /// What one door has drawn from the pool today. Derived from `grants`, like
     /// the shared spend, so restoring a ledger value restores every door's
     /// remaining for free — which is why the grant and close undo paths need no
