@@ -57,6 +57,10 @@ struct RootView: View {
     /// resignation right after a send is the keyboard's habit, not the user
     /// leaving — the blur that tears the thread down must be a chosen one.
     @State private var submittedAt: Date = .distantPast
+    /// The keyboard's height above the glass, observed rather than taken as a
+    /// safe-area inset. See `silkKeyboardHeight(_:)` — this is what lets the
+    /// bar's whole travel be one offset on one curve.
+    @State private var keyboard: CGFloat = 0
 
     private var night: Bool { model.isDownHours }
 
@@ -182,11 +186,19 @@ struct RootView: View {
                             // bottom 44, dots bottom 24: _ds_bundle.css:270, 309), and
                             // stacking them put the bar at 83 and the dots at 43.5
                             // because PageDots is a 44pt tap target around a 5pt dot.
-                            // `.container` and not `.all` — the keyboard must still
-                            // lift the bar when the bar is what you are using; the
-                            // GeometryReader therefore measures glass-to-glass, or
-                            // glass-to-keyboard when one is up, which is exactly the
-                            // space the bar's rise is computed against.
+                            //
+                            // The keyboard is ignored here, like everywhere else on
+                            // this stack. It used to be honoured for the bar alone, so
+                            // the bar's base lift was a layout change on UIKit's own
+                            // ~0.25s curve and this reader re-delivered a shorter
+                            // height on every frame of it — which retargeted the 0.45s
+                            // rise sixty times a second at a moving mark. The height
+                            // this reports is now constant across a keyboard's whole
+                            // arrival, the keyboard's own height is observed below, and
+                            // the bar sums the two into a single offset on the one
+                            // curve. The dots keep their seat at the glass: they are at
+                            // .05 and blurred behind a raised keyboard anyway, because
+                            // the stage dims on exactly the focus that raises it.
                             GeometryReader { geo in
                                 ZStack(alignment: .bottom) {
                                     PageDots(count: 3, index: $model.page, night: night)
@@ -196,7 +208,8 @@ struct RootView: View {
                                                night: night,
                                                onSubmit: submit,
                                                hasTurns: model.conversation.hasTurns,
-                                               rise: CommandBar.riseDistance(in: geo.size.height),
+                                               containerHeight: geo.size.height,
+                                               keyboard: keyboard,
                                                focus: $barFocused)
                                         .padding(.horizontal, 28)
                                         .padding(.bottom, 44)
@@ -207,6 +220,8 @@ struct RootView: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                             }
                             .ignoresSafeArea(.container, edges: .bottom)
+                            .ignoresSafeArea(.keyboard, edges: .bottom)
+                            .silkKeyboardHeight($keyboard)
                         }
                         // The shield's backdrop-filter: blur(20px) over a ground at
                         // .92/.94 (README.md:181-183). SwiftUI has no backdrop
@@ -214,11 +229,19 @@ struct RootView: View {
                         // the shield covers is the same light arriving the same
                         // way. CSS's filter radius *is* the Gaussian sigma —
                         // unlike box-shadow, whose stated blur ApertureView halves
-                        // — so 20 ports as 20, unhalved. The radius itself snaps:
-                        // animating it re-renders the whole pager offscreen every
-                        // frame, and the veil's own fade is what the eye reads.
+                        // — so 20 ports as 20, unhalved.
+                        //
+                        // The radius rides the veil's own curve. Snapping it put
+                        // the pager fully blurred on the frame the veil was still
+                        // transparent, which is the one frame the stage is fully
+                        // visible — the pop was at the top of the fade, not hidden
+                        // under it. The curve is named here rather than inherited
+                        // from the `withAnimation` that raises the shield, so the
+                        // blur cannot be left behind by a caller that forgets it;
+                        // it is the same 0.45, and this is the only value it is
+                        // scoped to.
                         .blur(radius: model.shield == nil ? 0 : 20)
-                        .animation(nil, value: model.shield)
+                        .animation(Silk.motion(Silk.Motion.shield), value: model.shield)
                         // The wait's other wall, and the one nobody sees.
                         //
                         // `.accessibilityAddTraits(.isModal)` on the overlay is

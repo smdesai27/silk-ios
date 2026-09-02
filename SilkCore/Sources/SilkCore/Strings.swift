@@ -63,6 +63,21 @@ public enum SilkStrings {
     public static let downHoursOpens = "Down hours. Opens"
     public static let ok = "OK"
 
+    // The chrome, spoken. Nothing here is ever drawn: the bar is a hairline
+    // that asks nothing, the mic is a glyph, and the dots are three 5pt
+    // circles. An accessibility label is a thing Silk says out loud, so it is
+    // a string like every other, and these were literals in the views.
+    /// The command bar itself, named for the field.
+    public static let bar = "Bar"
+    /// The mic, which records nothing and only puts the caret in the bar.
+    public static let focusTheBar = "Focus the bar"
+    /// The pager's three pages, in the handoff's order. The dots read "1",
+    /// "2", "3" before this — true of the pixels and useless to anyone who
+    /// cannot see which page they are on.
+    public static let pageNow = "Now"
+    public static let pageMirror = "Mirror"
+    public static let pageSettings = "Settings"
+
     // The shield — whose wall this is, and where to go. The extension links
     // SilkCore, so its words live here like everyone else's.
     public static let brand = "Silk"
@@ -135,6 +150,11 @@ public enum SilkStrings {
     public static let apps = "Apps"
     /// A closed app's state word, where no reopen time applies: "closed".
     public static let closed = "closed"
+    /// The other two state words a door's row is spoken with — "Reddit, open
+    /// till 4:52", "Instagram, in use". The dot and the rule beside them say
+    /// nothing, so the state has to be a word or it is not said at all.
+    public static let open = "open"
+    public static let inUse = "in use"
     public static let perDay = "day"
     /// The cap wheel's first seat, the Settings row's value for a door with no
     /// ceiling, and — lowercased, as `till` is — the pending row's rendering of
@@ -155,6 +175,18 @@ public enum SilkStrings {
     /// The quiet second path on the apps step: block apps Silk can't open by
     /// name (anything outside the launch catalogue).
     public static let otherApps = "Other apps"
+    /// Screen Time was asked for and refused. Without this the first step's OK
+    /// is a button that does nothing: iOS draws its own sheet, the user says no
+    /// inside it, the sheet goes, and setup sits exactly where it was with
+    /// nothing on screen admitting that anything happened.
+    ///
+    /// It states the consequence and the way out, in that order, because the
+    /// consequence is the part that is not obvious — a refusal here does not
+    /// break Silk visibly, it just leaves the wall unbuilt. No apology and no
+    /// second try at persuading: the first line already said why Screen Time is
+    /// wanted, and repeating it louder is not what a "no" is owed.
+    public static let setupPermissionRefused =
+        "Silk can't block anything without Screen Time. Tap OK to try again."
 
     // The picker sheet. Silk owns the sheet the system list sits inside, so
     // every one of these lines is on screen the whole time the list is —
@@ -190,6 +222,17 @@ public enum SilkStrings {
     }
     public static let done = "Done"
     public static let cancel = "Cancel"
+
+    /// What stands between the names on setup's summary line, and the tail
+    /// that stands for the apps with no name to show: "Instagram · Reddit ·
+    /// 2 more". A count is user data, so the tail is a rendering.
+    public static let separator = " · "
+    public static func andMore(_ n: Int) -> String { "\(n) more" }
+    /// The two night wheels, spoken. The caption above them already says
+    /// "Locked overnight"; VoiceOver still has to be told which end of it a
+    /// wheel is, so each composes onto that caption.
+    public static let windowStart = "start"
+    public static let windowEnd = "end"
 
     // Settings — editing the doors group after setup. The rows opened up
     // deliberately (they were statements only, once); the editor speaks the
