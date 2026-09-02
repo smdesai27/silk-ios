@@ -1104,3 +1104,86 @@ private final class ScriptedDayStore: DayRecordStore, @unchecked Sendable {
         #expect(rec.score == 0)
     }
 }
+
+// MARK: - The gate's "no" has two different meanings
+
+/// `recordClosedDays` answers one Bool to two questions: did every owed day
+/// land, and does the summarised chain reach the live boundary. They come
+/// apart the moment the user moves when down hours END, and the caller's
+/// retry marker must be read against the first question only — the second is
+/// a standing condition no retry can change.
+@Suite struct AMovedBoundaryTrailsTheFrontierWithNothingOwed {
+
+    private func record(_ start: Date) -> DayRecord {
+        DayRecord(dayStart: start, grantedMinutes: 0, reaches: 0,
+                  lateReaches: 0, observed: true)
+    }
+
+    /// Down hours used to end at 7:00; the user moved them to 7:30. The
+    /// records chain is anchored at the OLD time of day and `nextDayStart`
+    /// walks it forward a whole day at a time, so its frontier lands on 7:00
+    /// of the standing day while the live boundary is 7:30 — thirty minutes
+    /// the chain can never close, today or on any day after it.
+    @Test func theGateSaysNoWhileNoBoundaryIsMissingARecord() {
+        let later = DownHours(start: TimeOfDay(hour: 22),
+                              end: TimeOfDay(hour: 7, minute: 30))
+        let store = ScriptedDayStore(records: [record(at(6, 7, 7)),
+                                               record(at(6, 8, 7)),
+                                               record(at(6, 9, 7))],
+                                     beats: [at(6, 9, 7)])
+        let start = at(6, 10, 7, 30)
+
+        let ok = DayLog.recordClosedDays(upTo: start, downHours: later,
+                                         ledger: GrantLedger(), wallStanding: true,
+                                         calendar: cal, store: store)
+        #expect(!ok)
+        // And not because anything failed to land: nothing was owed, so
+        // nothing was written.
+        #expect(store.saves == 0)
+
+        let recorded = Set(store.records.map(\.dayStart))
+        #expect(DayLog.missingBoundaries(recorded: recorded, upTo: start).isEmpty)
+        #expect(DayLog.compactionFrontier(recorded: recorded, upTo: start) == at(6, 10, 7))
+    }
+
+    /// The next day, and every day after: the day just closed is recorded at
+    /// the old anchor too, so the gap never closes and the gate never turns
+    /// true. A caller that clears its retry marker on `false` sweeps forever.
+    @Test func theNoDoesNotHealOnTheNextDay() {
+        let later = DownHours(start: TimeOfDay(hour: 22),
+                              end: TimeOfDay(hour: 7, minute: 30))
+        let store = ScriptedDayStore(records: [record(at(6, 7, 7)),
+                                               record(at(6, 8, 7)),
+                                               record(at(6, 9, 7))],
+                                     beats: [at(6, 9, 7), at(6, 10, 7)])
+        let start = at(6, 11, 7, 30)
+
+        let ok = DayLog.recordClosedDays(upTo: start, downHours: later,
+                                         ledger: GrantLedger(), wallStanding: true,
+                                         calendar: cal, store: store)
+        #expect(!ok)
+        // Jun 10 WAS owed and it landed — the chain grew, at 7:00 as ever.
+        #expect(store.records.contains { $0.dayStart == at(6, 10, 7) })
+        let recorded = Set(store.records.map(\.dayStart))
+        #expect(DayLog.missingBoundaries(recorded: recorded, upTo: start).isEmpty)
+        #expect(DayLog.compactionFrontier(recorded: recorded, upTo: start) == at(6, 11, 7))
+    }
+
+    /// The other half of the distinction, so the caller's new read is not
+    /// vacuous: a day the evidence cannot vouch for is genuinely owed and
+    /// genuinely missing after the sweep, and that IS worth a retry.
+    @Test func anOwedDayThatCannotLandStaysMissing() {
+        // One beat, far past the anchor: evidence exists, none of it chains,
+        // so nothing is vouched and nothing is written.
+        let store = ScriptedDayStore(records: [record(at(6, 8, 7))],
+                                     beats: [at(9, 1, 7)])
+        let start = at(6, 10, 7)
+
+        let ok = DayLog.recordClosedDays(upTo: start, downHours: night,
+                                         ledger: GrantLedger(), wallStanding: true,
+                                         calendar: cal, store: store)
+        #expect(!ok)
+        let recorded = Set(store.records.map(\.dayStart))
+        #expect(DayLog.missingBoundaries(recorded: recorded, upTo: start) == [at(6, 9, 7)])
+    }
+}

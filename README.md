@@ -12,7 +12,7 @@ See [`docs/design/per-app-caps.md`](docs/design/per-app-caps.md).
 
 | Path | What it is |
 |---|---|
-| `SilkCore/` | The spine as a pure-Swift package: parser, number tokenizer, clause index, validator, polarity engine, grant ledger, per-app ceilings, the wait's clock and price, the launch catalogue's data. `swift test` runs on macOS **and on Linux** — 860 tests across 156 suites (three generations of fuzz corpora, a seeded 20k-input fuzzer, see `docs/qa/`, the wait's frame-budget bounds, and the re-lock's lateness bounds), no simulator needed. The sources import Foundation and nothing else and carry no conditional compilation at all, which is what lets 859 of the repo's 945 cases answer in a container; CI's `spine-linux` job is what keeps that true. |
+| `SilkCore/` | The spine as a pure-Swift package: parser, number tokenizer, clause index, validator, polarity engine, grant ledger, per-app ceilings, the wait's clock and price, the launch catalogue's data. `swift test` runs on macOS **and on Linux** — 900 tests across 164 suites (three generations of fuzz corpora, a seeded 20k-input fuzzer, see `docs/qa/`, the wait's frame-budget bounds, and the re-lock's lateness bounds), no simulator needed. The sources import Foundation and nothing else and carry no conditional compilation at all, which is what lets 899 of the repo's 1,000 cases answer in a container; CI's `spine-linux` job is what keeps that true. |
 | `Silk/` | The app: Now, Mirror + Settings, the bar and its conversation, the compile pipeline, wall controller, the launch catalogue's one `UIApplication` call, the `Spend` App Intent, the on-device model widener. |
 | `Shared/` | The App Group bridge (`SharedStore`) and the single wall (`Wall.reconcile()`), shared with all three extensions. |
 | `SilkMonitor/` · `SilkShield/` · `SilkShieldAction/` | The Screen Time extensions: re-lock layers, the statement-only shield, the one OK button. |
@@ -34,7 +34,7 @@ xcodebuild -project Silk.xcodeproj -scheme Silk \
 ## Tests
 
 ```bash
-scripts/ci.sh                    # all three suites, ~7 min
+scripts/ci.sh                    # all three suites, ~25 min
 scripts/ci.sh spine              # SilkCore only, seconds, no simulator
 scripts/ci.sh unit               # SilkTests only — the app's logic, ~1 min
 scripts/ci.sh ui                 # SilkUITests only, ~5 min
@@ -72,11 +72,10 @@ needs nothing else — FamilyControls is available to every team for development
 
 Bundle identity derives from a single build setting, `SILK_BUNDLE_PREFIX` in `project.yml`. All four
 bundle IDs, the App Group, and the log subsystem are built from it, so a rename is one line plus
-`xcodegen generate`. Two things make that rename one-way, and neither has happened yet:
-
-- bundle IDs lock at the **first build upload** to App Store Connect;
-- the **FamilyControls (Distribution)** entitlement is granted *per bundle ID* — four separate requests
-  here — so renaming afterward means re-requesting all four and waiting out the queue again.
+`xcodegen generate`. One thing makes that rename one-way, and it has not happened yet: bundle IDs
+lock at the **first build upload** to App Store Connect. The **FamilyControls (Distribution)**
+entitlement is not a second lock — it was granted team-level on 2026-08-17, one submission for all
+four identifiers (`docs/market/shipping-roadmap.md`), so a rename costs no re-request.
 
 Distribution is the gate, not development: TestFlight, Ad Hoc and the App Store all require that
 entitlement, and Apple must grant it by hand (see `docs/market/what-is-buildable.md` → Shipping).
@@ -97,5 +96,5 @@ entitlement, and Apple must grant it by hand (see `docs/market/what-is-buildable
 4. **The wall fails closed.** The ledger is the truth; a dead extension closes doors late, never
    leaves them open. The model proposes; the validator disposes.
 5. **No notification permission, ever.** Every word the app says comes from
-   `SilkCore/Sources/SilkCore/Strings.swift` — 60 of them today, 55 constants and 5 that compose. The
+   `SilkCore/Sources/SilkCore/Strings.swift` — 75 of them today, 68 constants and 7 that compose. The
    file is the vocabulary, and nothing outside it may speak.

@@ -26,15 +26,54 @@ struct MirrorView: View {
     /// canon sets for discrete UI.
     @State private var grown: Double = 0
 
-    /// The hedgerow's age. **`AppModel` carries no days-since-install figure**,
-    /// so this is the design's year-three planting until the ledger grows one.
-    private static let plantingAge = 600_000
+    /// The hedgerow's age, in the canvas's own units. Seeded at the floor so
+    /// the first frame draws a Day-one border rather than an empty one; the
+    /// page's own `onChange` replaces it with the reading below.
+    @State private var age = Self.plantingAge()
+
+    /// A day's growth, and therefore the floor: the border is never emptier
+    /// than the day it was planted (docs/design/canvas/Main.dc.html:182).
+    private static let dayOne = 550
+
+    /// Every day since install, at 550 a day.
+    ///
+    /// It was `600_000` — a constant — so every install, on its first morning,
+    /// opened on the design's *year-three* hedge in full flower. The whole
+    /// point of the planting is that it says how long you have kept this up,
+    /// and a border that arrives finished says nothing at all; worse, it can
+    /// only ever stand still, so the one thing it is for could never happen.
+    ///
+    /// The canvas's own ages fall straight out of 550/day and are what the
+    /// ladder was tuned against: Day one 550, Month one 16,500 (30 × 550),
+    /// Year one 200,750, Year three 602,250, Year five 1,004,300 — the last of
+    /// which is where the cap sits, because `Hedgerow` reads lushness as
+    /// `sqrt(count / 1,000,000)` and has nothing left to say past it.
+    ///
+    /// Calendar days, not 24-hour spans, and deliberately not the Silk day
+    /// (`DayBoundary.dayStart`, anchored on down-hours end): that boundary
+    /// would move the border's growth by up to seven hours against the
+    /// score beside it, and nothing on this page can tell a day of hedge
+    /// from a day and seven hours of it. What must not vary is the count
+    /// itself — one more each morning, whichever morning.
+    private static func plantingAge(now: Date = .now) -> Int {
+        let cal = Calendar.current
+        let days = cal.dateComponents([.day],
+                                      from: cal.startOfDay(for: SharedStore.firstRun()),
+                                      to: cal.startOfDay(for: now)).day ?? 0
+        return min(1_000_000, max(dayOne, days * dayOne))
+    }
+
+    /// Reduce Motion takes the ceremony, not the border. The planting is the
+    /// screen's meaning and it stays; what goes is the 1.15s creep across it,
+    /// which is a large-area animation of exactly the kind the setting is for.
+    /// The hedge is simply already standing when the page arrives.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var night: Bool { model.isDownHours }
 
     var body: some View {
         ZStack {
-            Hedgerow(count: Self.plantingAge, night: night, progress: grown)
+            Hedgerow(count: age, night: night, progress: grown)
                 .ignoresSafeArea()
 
             // The column, centred in what is left above the key log. The seat
@@ -61,8 +100,42 @@ struct MirrorView: View {
         // `onAppear` fires for Mirror while Now is still on screen, and the whole
         // growth would be spent before the swipe.
         .onChange(of: model.page, initial: true) { _, page in
-            guard page == 1 else { return }
-            guard Self.earnsCeremony() else { grown = 1; return }
+            age = Self.plantingAge()
+            guard page == 1 else {
+                // LEAVING. If the next arrival is going to play the ceremony,
+                // go bare here, off-screen, where nothing is watching.
+                //
+                // Resetting on arrival is what produced the snap: a replayed
+                // ceremony found the border standing from last time, cleared it
+                // to nothing on the frame the page settled, and grew it back.
+                // The pager's selection lands when the swipe finishes, so this
+                // fires with Mirror already off screen, and the swipe *back*
+                // then finds a page that is bare because it was left bare.
+                //
+                // Conditional, because the alternative is worse: reset on every
+                // leave and an ordinary revisit — one that has no ceremony to
+                // spend — would arrive bare and pop to full instead.
+                //
+                // One residual, named rather than hidden: the six-hour window
+                // can open while the app is alive and Mirror is never left
+                // again, and that one visit still snaps. Closing it would mean
+                // waking a timer for a border nobody is looking at.
+                // Never under Reduce Motion: a bare arrival there is a cut to
+                // full at the settle, the one transition Silk never makes.
+                if !reduceMotion && Self.wouldEarnCeremony() { grown = 0 }
+                return
+            }
+            // Only a page that arrives BARE plays. A border left standing —
+            // the six-hour window opened after the last leave — stays; the
+            // ceremony waits for the next arrival the leave below left bare.
+            // Clearing a standing border here was the snap this branch exists
+            // to prevent, by a wider door than the one it first closed.
+            guard Self.wouldEarnCeremony(), grown == 0 else { grown = 1; return }
+            // Reduce Motion: the hedge is there, it simply did not creep in —
+            // and the visit is not spent, so the ceremony waits for a viewer
+            // who will see it.
+            guard !reduceMotion else { grown = 1; return }
+            Self.spendCeremony()
             grown = 0
             Task { @MainActor in
                 withAnimation(.linear(duration: 1.15)) { grown = 1 }
@@ -70,26 +143,34 @@ struct MirrorView: View {
         }
     }
 
-    /// Whether this visit earns the grow-in. The planting used to come in on
-    /// every swipe to Mirror, and a ceremony repeated on demand reads as a
-    /// trick, not a garden — a hedge does not regrow because you looked away.
-    /// So the growth is spent: the first three visits ever play it in full
-    /// (the planting is new; let it arrive), and after that it replays only
-    /// when Mirror has not been seen for six hours — roughly a sitting, long
-    /// enough that the return reads as coming back rather than flipping pages.
-    /// Every other visit finds the border already standing. UserDefaults, not
-    /// the App Group store: this is the screen's own memory of having been
-    /// seen, no other process has any claim on it, and losing it costs one
-    /// extra ceremony. Sanil's call (2026-08-25).
-    private static func earnsCeremony(now: Date = .now) -> Bool {
+    /// Whether a visit right now would earn the grow-in. The planting used to
+    /// come in on every swipe to Mirror, and a ceremony repeated on demand
+    /// reads as a trick, not a garden — a hedge does not regrow because you
+    /// looked away. So the growth is spent: the first three visits ever play it
+    /// in full (the planting is new; let it arrive), and after that it replays
+    /// only when Mirror has not been seen for six hours — roughly a sitting,
+    /// long enough that the return reads as coming back rather than flipping
+    /// pages. Every other visit finds the border already standing.
+    /// UserDefaults, not the App Group store: this is the screen's own memory
+    /// of having been seen, no other process has any claim on it, and losing it
+    /// costs one extra ceremony. Sanil's call (2026-08-25).
+    ///
+    /// Asking and spending are two calls, not one. The leave path has to ask
+    /// whether the *next* arrival will earn a ceremony so it can go bare in
+    /// advance, and a question that quietly consumed the answer would spend the
+    /// growth on a page nobody is looking at.
+    private static func wouldEarnCeremony(now: Date = .now) -> Bool {
         let d = UserDefaults.standard
         let plays = d.integer(forKey: "silk.mirror.grows")
         let last = d.double(forKey: "silk.mirror.grown.at")
-        if plays >= 3,
-           now.timeIntervalSinceReferenceDate - last < 6 * 3600 { return false }
-        d.set(plays + 1, forKey: "silk.mirror.grows")
+        return !(plays >= 3 && now.timeIntervalSinceReferenceDate - last < 6 * 3600)
+    }
+
+    /// Marks one ceremony spent. Called on arrival and nowhere else.
+    private static func spendCeremony(now: Date = .now) {
+        let d = UserDefaults.standard
+        d.set(d.integer(forKey: "silk.mirror.grows") + 1, forKey: "silk.mirror.grows")
         d.set(now.timeIntervalSinceReferenceDate, forKey: "silk.mirror.grown.at")
-        return true
     }
 
     /// The score over the week, sharing one axis.

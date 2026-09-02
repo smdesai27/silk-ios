@@ -138,8 +138,7 @@ struct AppPickerSheet: View {
                 // the same way), so the only shift here is contrast: a
                 // correction is darker than a neutral count, and the Done
                 // going dead beside it is the louder signal anyway.
-                Text(statusText)
-                    .font(Silk.sans(12.5, weight: needsAnswer ? .medium : .regular))
+                statusLine
                     .foregroundStyle(Silk.inkAlpha(needsAnswer ? 0.82 : 0.72))
                     .multilineTextAlignment(.leading)
             }
@@ -147,6 +146,32 @@ struct AppPickerSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityIdentifier("silk.picker.status")
         .accessibilityLabel(Text(soleAppSpoken ?? statusText))
+    }
+
+    /// The numeral is locked — New York serif, tabular — and that is not a rule
+    /// about hero numbers, it is a rule about digits (canon.md, Form). This line
+    /// was setting "2 picked — tap one to remove." and "4 apps" wholly in sans,
+    /// which is the only place in Silk a count is drawn in the sans face.
+    ///
+    /// Fixed by composition rather than by a second string: both counting forms
+    /// (`pickedTapToRemove`, `appsPicked`) put the number first, so the leading
+    /// run of digits changes voice and the rest of the sentence does not. A
+    /// message with no leading digit — "Nothing picked yet", either correction —
+    /// falls through as one sans run, so nothing here has to know which branch
+    /// `statusText` took. The numeral keeps `Silk.serif`'s regular weight while
+    /// the words take the correction's medium: the canon locks the numeral to
+    /// regular, and the count is not the part being corrected.
+    /// One `AttributedString` and not two `Text`s: `Text + Text` is deprecated
+    /// from iOS 26, and a run-attributed string says the same thing in one
+    /// element, which is also the one VoiceOver reads.
+    private var statusLine: Text {
+        let line = statusText
+        let count = line.prefix(while: \.isNumber)
+        var numeral = AttributedString(count)
+        numeral.font = Silk.serif(12.5)
+        var words = AttributedString(line.dropFirst(count.count))
+        words.font = Silk.sans(12.5, weight: needsAnswer ? .medium : .regular)
+        return Text(numeral + words)
     }
 
     // MARK: - The gate

@@ -99,6 +99,17 @@ actor SilkModelParser {
     /// act on beats a turn still pretending to think.
     static let deadline: Duration = .seconds(2)
 
+    // Outside the FoundationModels block: the seam must exist on every SDK
+    // the file builds for, or the fallback branch cannot compile in Debug.
+    #if DEBUG
+    /// Test seam: answer every parse with silence, as an unavailable model
+    /// would. The simulator this suite runs on has Apple Intelligence, so a
+    /// sentence the grammar falls silent on otherwise reaches a real model
+    /// and the refusal's wording cannot be asserted; with this set, the
+    /// bar's own four words are the only answer possible.
+    nonisolated(unsafe) static var testForceSilent = false
+    #endif
+
     #if canImport(FoundationModels)
 
     /// One session, built and warmed ahead of the sentence it will answer.
@@ -108,6 +119,16 @@ actor SilkModelParser {
     /// would answer with the wrong doors in it, so a mismatch throws it away
     /// rather than using it.
     private var warm: (instructions: String, session: LanguageModelSession)?
+    /// Generations still running, counted on this actor by the work arm
+    /// itself. Nonzero at the top of `parse` means the last clock won and
+    /// its loser ignored the cancel; see the guard there.
+    private var liveGenerations = 0
+    /// When the newest generation started. A generation that ignored its
+    /// cancel would otherwise hold the gate below for the life of the
+    /// process; after this long it is presumed wedged and overlapped.
+    private var newestGenerationStarted: ContinuousClock.Instant?
+    static let wedgedAfter: Duration = .seconds(10)
+
 
     /// Build the session and let the model start loading, while the user is
     /// still typing.
@@ -143,8 +164,40 @@ actor SilkModelParser {
     #endif
 
     func parse(_ utterance: String, state: PolicyState) async -> ParseOutcome {
+        #if DEBUG
+        if Self.testForceSilent { return .silence }
+        #endif
         #if canImport(FoundationModels)
         guard case .available = SystemLanguageModel.default.availability else { return .silence }
+        // At most one abandoned generation. The clock below returns without
+        // waiting for the work it cancelled — that is the point — but a model
+        // that ignored the cancel is still generating, and the next sentence
+        // must not stack a second one on top of it. While one is alive the
+        // bar answers as an unavailable model does; the grammar is untouched.
+        //
+        // Bounded, not permanent: a generation that never returns is presumed
+        // wedged after `wedgedAfter` and the next sentence overlaps it — so
+        // the worst a broken cancel can cost is ten seconds of grammar-only
+        // answers, and never the widener for the life of the process.
+        //
+        // Counted HERE, on the actor, before anything suspends. Counting it
+        // inside the work arm left a window: two sentences sent back to back
+        // both read zero before either arm had run, and both generated.
+        let clock = ContinuousClock()
+        if liveGenerations > 0 {
+            if let started = newestGenerationStarted, clock.now - started < Self.wedgedAfter {
+                return .silence
+            }
+            // Presumed wedged, and its count is DROPPED here — otherwise a
+            // generation that never returns floors the gate at one, and every
+            // admitted sentence restarts the ten-second clock against it: one
+            // sentence per ten seconds for the life of the process. Its own
+            // decrement, if it ever comes, floors at zero below.
+            liveGenerations = 0
+        }
+        liveGenerations += 1
+        newestGenerationStarted = clock.now
+        defer { liveGenerations = max(0, liveGenerations - 1) }
 
         let prompt = Self.instructions(for: state)
         // The warm session is SPENT here, not reused: the 4096-token window is
@@ -162,36 +215,66 @@ actor SilkModelParser {
 
         let options = GenerationOptions(sampling: .greedy)
 
-        // The race. `respond` honours cancellation — measured: cancelled at
+        // The race — and the deadline is a RACER, not a watchdog that then
+        // waits. `respond` honours cancellation — measured: cancelled at
         // 300 ms it returned at 321 ms, and a cancel mid-generation surfaces as
         // `CancellationError` or as a `decodingFailure` over truncated JSON,
-        // both of which the catch below already answers with silence. So the
-        // watchdog is a real bound and not a decoration.
+        // both of which the catch below already answers with silence.
         //
-        // The caller's own cancellation is forwarded the same way, so a turn
-        // the user has walked away from stops generating instead of running to
-        // completion behind whatever they do next.
-        let work = Task { () -> ParseOutcome in
-            do {
-                let response = try await session.respond(to: utterance,
-                                                         generating: ModelCommand.self,
-                                                         options: options)
-                return Self.map(response.content, state: state)
-            } catch {
-                return .silence
+        // But "it honours cancellation" is a property of the framework, not
+        // something this file can hold. The shape this used to have — cancel at
+        // the deadline, then `await work.value` — is bounded only if the cancel
+        // takes. A generation that ignored it left the turn awaiting a bound
+        // that had already expired, and `ConversationModel.blur()` refuses to
+        // clear a PENDING turn: the stage stayed dimmed and hit-dead for as
+        // long as the model took, with no way out and no sentence to point at.
+        // That is the one failure mode the deadline exists to make impossible,
+        // and the deadline could not reach it.
+        //
+        // So the clock answers on its own and the work is cancelled behind it,
+        // unwaited. An answer nobody is going to read must not be able to hold
+        // the screen. Not a task group, which cannot express this: a group may
+        // not return until every child has completed, cancelled or not, so the
+        // work would simply be awaited again at its closing brace. Two arms and
+        // a one-shot stream is the smallest thing that actually bounds.
+        //
+        // The caller's own cancellation is forwarded the same way — the stream
+        // terminates and both arms are cancelled — so a turn the user has
+        // walked away from stops generating instead of running to completion
+        // behind whatever they do next.
+        let answers = AsyncStream<ParseOutcome> { continuation in
+            let work = Task {
+                // The loser keeps the count it was given until it returns —
+                // that is what the gate at the top of `parse` reads.
+                self.liveGenerations += 1
+                defer { self.liveGenerations = max(0, self.liveGenerations - 1) }
+                let outcome: ParseOutcome
+                do {
+                    let response = try await session.respond(to: utterance,
+                                                             generating: ModelCommand.self,
+                                                             options: options)
+                    outcome = Self.map(response.content, state: state)
+                } catch {
+                    outcome = .silence
+                }
+                continuation.yield(outcome)
+                continuation.finish()
+            }
+            let clock = Task {
+                try? await Task.sleep(for: Self.deadline)
+                // Expiry is answered exactly as an unavailable model is.
+                continuation.yield(.silence)
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                work.cancel()
+                clock.cancel()
             }
         }
-        let watchdog = Task {
-            try? await Task.sleep(for: Self.deadline)
-            work.cancel()
-        }
-        let outcome = await withTaskCancellationHandler {
-            await work.value
-        } onCancel: {
-            work.cancel()
-        }
-        watchdog.cancel()
-        return outcome
+        // The first arm home is the turn. Returning here drops the iterator,
+        // which terminates the stream, which cancels the loser.
+        for await outcome in answers { return outcome }
+        return .silence
         #else
         return .silence
         #endif

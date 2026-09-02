@@ -26,20 +26,6 @@ private func performSpend(door: String, minutes: Int) async throws -> String {
     return SpendIntent.lastDialog
 }
 
-private func nightWellClearOfNow(_ now: Date = .now) -> DownHours {
-    let c = Calendar.current.dateComponents([.hour, .minute], from: now)
-    let minuteOfDay = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-    return DownHours(start: TimeOfDay(minutesSinceMidnight: minuteOfDay + 6 * 60),
-                     end: TimeOfDay(minutesSinceMidnight: minuteOfDay + 7 * 60))
-}
-
-private func nightContainingNow(_ now: Date = .now) -> DownHours {
-    let c = Calendar.current.dateComponents([.hour, .minute], from: now)
-    let minuteOfDay = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-    return DownHours(start: TimeOfDay(minutesSinceMidnight: minuteOfDay - 60),
-                     end: TimeOfDay(minutesSinceMidnight: minuteOfDay + 60))
-}
-
 @MainActor
 private func freshPolicy(budget: Int = 40,
                          downHours: DownHours? = nil,
@@ -77,27 +63,27 @@ private func freshModel(budget: Int = 40, doors: [Door]) -> AppModel {
     return model
 }
 
-@MainActor
-private func settle(within seconds: Double = 3.0,
-                    until reached: () -> Bool) async -> Bool {
-    let deadline = ContinuousClock.now.advanced(by: .seconds(seconds))
-    while !reached() {
-        guard ContinuousClock.now < deadline else { return false }
-        try? await Task.sleep(for: .milliseconds(10))
-    }
-    return true
-}
-
 @Suite(.serialized) @MainActor struct SpendIntentDialogs {
 
     @Test func unknownDoorAnswersSilenceAndWritesNothing() async throws {
         let _ = freshPolicy()
+        // **A sentinel, because silence is the empty string.** `freshPolicy`
+        // resets `lastDialog` to "" and `SpendDialog.silence` IS "", so an
+        // intent that never spoke at all — a `perform` that returned before it
+        // reached `answer(_:)`, or one that crashed past it — left the fixture's
+        // own reset standing and the assertions below read it as a deliberate
+        // silence. Every other test in this file is safe from that by accident,
+        // because its expected dialog is a non-empty sentence; this one is the
+        // test where the tautology lives, so the seam is armed with a value no
+        // code path can produce.
+        SpendIntent.lastDialog = "⟨nothing was spoken⟩"
         let before = SharedStore.loadLedger()
         let stamp = SharedStore.ledgerStamp()
 
         let spoken = try await performSpend(door: "NotAnApp", minutes: 15)
 
-        #expect(spoken == SpendDialog.silence)
+        #expect(spoken == SpendDialog.silence,
+                "Siri answered \"\(spoken)\" for a door that does not exist")
         #expect(spoken.isEmpty)
         #expect(SharedStore.loadLedger() == before)
         #expect(SharedStore.ledgerStamp() == stamp)
@@ -315,7 +301,21 @@ private func settle(within seconds: Double = 3.0,
         // write is one landing never sees.
         WallController.testForceArmed = true
         defer { WallController.testForceArmed = nil }
+
+        // **The wait is parked across the intent, and that is what makes this
+        // test about ordering rather than about speed.** `performSpend` is an
+        // await: on a loaded runner it can take longer than the 0.8 s price,
+        // and the veil then lands BEFORE the intent's write exists — the
+        // landing re-validates against the ledger it already had, answers with
+        // the grant, and the failure reads as "the wait landed the verdict from
+        // before the intent" when nothing was out of order at all. Parking
+        // disarms the landing (`pauseWait` cancels the task) so the intent
+        // cannot be raced, and the resume re-arms it over the ledger the intent
+        // left behind. The property — a write that lands during the wait is
+        // seen at landing — is unchanged; only the coin toss is gone.
+        model.pauseWait()
         _ = try await performSpend(door: tiktok.name, minutes: 40)
+        model.resumeWait()
 
         #expect(await settle { model.waiting == nil }, "the veil never came down")
 

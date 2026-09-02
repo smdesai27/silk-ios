@@ -2,9 +2,10 @@ import Foundation
 import SilkCore
 import FamilyControls
 import ManagedSettings
-#if DEBUG
+// Unconditional since `Wall.reconcile` gained a shipping log line: the
+// calibration logger below is still DEBUG-only, but the reconcile's refusal to
+// write is a Release fact and has to be visible on a shipped build.
 import os
-#endif
 
 /// The App Group bridge between the app and its three extensions.
 /// Everything the shield needs to render — and everything the monitor needs to
@@ -434,6 +435,23 @@ public enum SharedStore {
         encode(doorSelections, key: Key.doorSelections)
     }
 
+    /// The same two reads, with the corrupt case kept apart from the absent
+    /// one — the distinction `loadPolicyDecoded` exists for, for the same
+    /// reason and on the same one code path.
+    ///
+    /// The loaders above end in `?? FamilyActivitySelection()` and `?? [:]`,
+    /// which is right for every caller that is *editing* a selection (an
+    /// unreadable blob is about to be overwritten by the picker anyway) and
+    /// wrong for the one caller that is *enforcing* it: there, an empty set is
+    /// not "nothing to block", it is a torn-down wall.
+    static func loadWallSelectionDecoded() -> Decoded<FamilyActivitySelection> {
+        decoded(FamilyActivitySelection.self, key: Key.wallSelection)
+    }
+
+    static func loadDoorSelectionsDecoded() -> Decoded<[UUID: FamilyActivitySelection]> {
+        decoded([UUID: FamilyActivitySelection].self, key: Key.doorSelections)
+    }
+
     /// Every application token any door names. What the wall covers is this
     /// union plus the extras in the wall selection.
     public static func doorApplicationTokens() -> Set<ApplicationToken> {
@@ -450,8 +468,14 @@ public enum SharedStore {
     /// re-read both blobs lost its last caller when `reconcile` switched to
     /// this threaded form, and was deleted rather than left as a second,
     /// slower way to ask the same question.)
+    ///
+    /// Takes the token sets and not the selections they came out of: its one
+    /// caller is `WallPlan.plan`'s `openDoors` closure, whose door map is
+    /// already `[UUID: Set<ApplicationToken>]` — Core cannot name
+    /// `FamilyActivitySelection`, and this only ever read `applicationTokens`
+    /// off it anyway.
     static func openDoorTokens(at now: Date, policy: PolicyState,
-                               selections: [UUID: FamilyActivitySelection]) -> Set<ApplicationToken> {
+                               selections: [UUID: Set<ApplicationToken>]) -> Set<ApplicationToken> {
         let ledger = loadLedger()
         // The ESTABLISHED day, not the live boundary: a hand close must keep
         // binding the wall itself across a mid-day down-hours move, exactly
@@ -461,8 +485,8 @@ public enum SharedStore {
         let openIDs = ledger.openDoors(at: now, dayStart: dayStart)
         var tokens = Set<ApplicationToken>()
         for id in openIDs {
-            if let sel = selections[id] {
-                tokens.formUnion(sel.applicationTokens)
+            if let doorTokens = selections[id] {
+                tokens.formUnion(doorTokens)
             }
         }
         return tokens
@@ -510,20 +534,11 @@ public enum SharedStore {
 
     // MARK: - Codable plumbing
 
-    /// Why `decode` has three outcomes and not two. `try?` collapses "never
-    /// configured" and "configured, and the blob would not decode" into the same
-    /// nil, and `Wall.reconcile` reads that nil as "nothing to enforce" and
-    /// returns. Shield settings persist across processes, so returning does not
-    /// RAISE the wall — it FREEZES it, with whatever grant exception was live
-    /// still standing. That is fail-OPEN on the one code path README rule 4
-    /// names, and it is why the corrupt case has to be tellable from the absent
-    /// one at the call site.
-    enum Decoded<T> {
-        case absent          // no data at the key: never configured
-        case value(T)
-        case corrupt         // data present, decode threw
-    }
-
+    /// Three outcomes and not two: `try?` collapses "never configured" and
+    /// "configured, and the blob would not decode" into the same nil, and a
+    /// wall that reads that nil as "nothing to enforce" fails open. `Decoded`
+    /// lives in Core (`WallPlan.swift`) beside the decision written against
+    /// it, and carries the full argument.
     static func decoded<T: Decodable>(_ type: T.Type, key: String) -> Decoded<T> {
         guard let data = defaults.data(forKey: key) else { return .absent }
         guard let value = try? JSONDecoder().decode(type, from: data) else { return .corrupt }
@@ -575,96 +590,103 @@ public enum Wall {
         ManagedSettingsStore(named: storeName)
     }
 
+    /// The reconcile's own log, under the subsystem all four processes share
+    /// and the category `WallController` already writes the app-side wall
+    /// events to — a refusal to write from a shield extension and the app's
+    /// own arming read as one story under a single Console filter. Payload
+    /// never goes in a line here; see `calibrationLog`'s note on the c49bc17
+    /// doctrine for why.
+    private static let log = Logger(subsystem: SharedStore.logSubsystem, category: "wall")
+
     /// Reconcile the wall against the ledger. Idempotent, callable from any
     /// process — the app on foreground, the monitor on intervalDidEnd, the
     /// shield extensions on every render/tap. Fail-closed: if state can't be
     /// read, the wall goes up whole.
     public static func reconcile(now: Date = Date()) {
-        // The wall is apps only: every door's tokens plus the extras (the
-        // wall selection — apps blocked without a name or launch entry).
-        // A nil selection is an empty one, not an unconfigured wall; the
-        // doors alone can carry the whole policy.
-        let extras = SharedStore.loadWallSelection() ?? FamilyActivitySelection()
-        // Decoded once and threaded through: the exceptions below need the
-        // same dictionary, and this runs on every shield render.
-        let doorSelections = SharedStore.loadDoorSelections()
-        let blocked = doorSelections.values.reduce(into: extras.applicationTokens) {
-            $0.formUnion($1.applicationTokens)
-        }
+        // Three reads in, one write out. Everything between them — which of
+        // the three states each blob is in, and what the wall should therefore
+        // be — is `WallPlan.plan`, in Core, where it can be run against every
+        // combination of them without a device, a Screen Time authorization or
+        // a shield extension to render the answer. What stays here is the half
+        // that cannot be: the `ManagedSettingsStore`.
+        //
+        // All three are decoded up front, including on the two paths that do
+        // not consult the selections at all (no policy yet, and a wall the
+        // user switched off). Those pay two decodes they used to skip; both
+        // end in an immediate return or a `clearAllSettings`, neither is the
+        // shield-render hot path, and a pure function cannot be handed a blob
+        // it might not need without becoming a pair of closures and ceasing to
+        // be one function anybody can read.
+        let policy = SharedStore.loadPolicyDecoded()
+        let extras = SharedStore.loadWallSelectionDecoded()
+        let doors = SharedStore.loadDoorSelectionsDecoded()
         let store = Self.store
 
-        let exceptions: Set<ApplicationToken>
-        switch SharedStore.loadPolicyDecoded() {
-        case .absent:
-            // No configuration yet: nothing to enforce.
-            return
-        case .corrupt:
-            // A policy that will not decode is a policy this process cannot
-            // reason about, and returning here would leave the shield frozen
-            // exactly as the last reconcile left it — every live grant exception
-            // still standing, for as long as the blob stays unreadable. Nor can
-            // the grants be honoured: which of them are still running is
-            // readable without the policy (`Grant.isActive` takes no `dayStart`
-            // at all), but whether a hand-close has already RETRACTED one is
-            // decided by `isClosed`, against a `dayStart` derived from
-            // `policy.downHours` — the value that would not decode. Honouring
-            // the grants without the closes would honour precisely the
-            // exceptions the user revoked. So shield the full union with NO
-            // exceptions and let the next good read hand the minutes back.
-            //
-            // `wallEnabled` is inside the blob too, so it cannot be consulted
-            // either. Shielding a user who had turned the wall off is a visible,
-            // recoverable wrong; leaving a door open is the one this rule
-            // forbids.
-            //
-            // Which is also why an empty union is a refusal to write rather than
-            // a wall of nothing. `blocked` comes from selections that swallow
-            // their own decode failures (`loadDoorSelections` ends in `?? [:]`),
-            // and FamilyControls tokens are opaque versioned blobs — the
-            // realistic failure is BOTH keys unreadable at once, after an OS
-            // upgrade. Assigning the empty union there would tear down the whole
-            // standing shield: fail-open, on the path this branch exists to keep
-            // closed. An empty union under an unreadable policy is not "nothing
-            // to block", it is a second input this process cannot read.
-            guard !blocked.isEmpty else { return }
-            exceptions = []
-        case .value(let policy):
-            guard policy.wallEnabled else {
-                // Off has to mean DOWN, and down means writing it. Returning
-                // here left `shield.applications` holding exactly what the last
-                // enabled reconcile put there, and nothing else in Silk clears
-                // it — so the wall the user switched off stayed up for good,
-                // every later reconcile taking this branch and returning again.
-                //
-                // The shape of the bug from outside: she turns the wall off,
-                // the door stays shut anyway, she deletes Silk to be rid of it.
-                // The shield settings survive the delete; the extension that
-                // renders them does not. So iOS draws its own default over the
-                // app — "TikTok is restricted." — with no Screen Time
-                // restriction anywhere to explain it and no app left that could
-                // take it down. That is the factory-reset review in
-                // docs/market/gaps.md #5, reached from inside a working install.
-                //
-                // This is not the fail-closed rule bending. Rule 4 governs
-                // state that cannot be READ — the `.corrupt` branch above. Here
-                // the policy decoded and said off. Obeying it is the ledger
-                // being the truth.
-                store.clearAllSettings()
-                return
+        // `mapValues`, not a second decode: the token sets are already built
+        // inside the selections, and this runs on every shield render inside
+        // the extension's 6 MB budget.
+        let plan = WallPlan.plan(
+            policy: policy,
+            extras: extras.map(\.applicationTokens),
+            doors: doors.map { $0.mapValues(\.applicationTokens) },
+            // What the store holds now: the stand-in for an extras blob
+            // that will not decode, so nothing shielded is ever dropped
+            // for a key this process could not read. Nil is passed as
+            // nil — a stand-in that cannot be read is no stand-in, and
+            // the plan refuses rather than write the doors alone.
+            standing: store.shield.applications,
+            openDoors: { policyValue, doorTokens in
+                // The ledger read the plan cannot do — and does not ask for on
+                // any path that refuses to write.
+                SharedStore.openDoorTokens(at: now, policy: policyValue, selections: doorTokens)
+            })
+
+        switch plan {
+        case .leaveUntouched:
+            // A selection blob that would not decode is the one refusal
+            // nothing else records: the wall stands exactly as it stood, which
+            // from outside is indistinguishable from a reconcile that had
+            // nothing to do. Which key, and what was in it, is exactly what
+            // the shipping log does not say (the c49bc17 doctrine: keep the
+            // event, redact the payload).
+            if doors.isCorrupt {
+                log.error("reconcile: the door selections would not decode; wall left as it stands")
             }
-            exceptions = SharedStore.openDoorTokens(at: now, policy: policy,
-                                                    selections: doorSelections)
+            return
+        case .clearAll:
+            store.clearAllSettings()
+            return
+        case .shield(let blocked):
+            if extras.isCorrupt {
+                log.error("reconcile: the wall selection would not decode; the standing shield stood in for it")
+            }
+            store.shield.applications = blocked
         }
 
-        store.shield.applications = blocked.subtracting(exceptions)
         // Categories are gone from the model. Nil-ing them here clears stale
         // category shields on upgraded installs — and retires the documented
         // device-verify risk that a category shield overrides per-app
         // unshielding: there is no category layer left to override anything.
+        //
+        // Only here, after the app layer was written. The refusing paths above
+        // return first on purpose: a legacy category shield may be the whole
+        // wall an unreadable install still has, and clearing one layer without
+        // writing the other is the fail-open this file exists to forbid. The
+        // migration waits for the next readable reconcile, which is a stuck
+        // restriction, not an open door.
         store.shield.applicationCategories = nil
         store.shield.webDomainCategories = nil
 
-        // Web domains never open with a grant (docs/market/gaps.md #2).
-        store.shield.webDomains = extras.webDomainTokens.isEmpty ? nil : extras.webDomainTokens
+        // Web domains never open with a grant (docs/market/gaps.md #2), which
+        // is why they are no part of the plan: that decision is app tokens and
+        // exceptions, and no door has ever opened a domain. The domains live
+        // in the extras blob, and a corrupt one has no stand-in here (the
+        // standing shield covers apps, not domains) — so on that path the
+        // domain shield is left exactly as it stands, never cleared for a
+        // key this process could not read.
+        if let extraSelection = extras.orEmpty(FamilyActivitySelection()) {
+            let webDomains = extraSelection.webDomainTokens
+            store.shield.webDomains = webDomains.isEmpty ? nil : webDomains
+        }
     }
 }

@@ -5,10 +5,11 @@
 # to catch the cheap failures before they cost a round trip, not to duplicate
 # CI.
 #
-# So it runs the spine and stops. 356 tests in about three seconds catches most
-# of what breaks; the eleven simulator walks take five minutes locally and
-# thirteen on a runner, and paying that on every push to learn what the PR is
-# about to tell you anyway is how a hook gets deleted.
+# So it runs the spine and stops. The spine's tests run in about three seconds
+# and catch most of what breaks; the simulator walks take five minutes locally
+# and thirteen on a runner, and paying that on every push to learn what the PR
+# is about to tell you anyway is how a hook gets deleted. (Counts deliberately
+# not written here — see the comment at the top of .github/workflows/ci.yml.)
 #
 # Tracked (unlike .git/hooks/) and reached through core.hooksPath, so the gate
 # is version-controlled and a fresh clone turns it on with one command:

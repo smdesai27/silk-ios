@@ -68,21 +68,6 @@ private func performSpend(door: String, minutes: Int) async throws {
 /// syncs the ledger and reconciles the wall on its own schedule is a second
 /// writer standing inside a test whose entire subject is which write happened
 /// when.
-///
-/// The night window is six hours out, so neither the aperture nor its clamping edge
-/// is a function of the hour the suite happened to run at.
-///
-/// A zero-length window was tried first and is subtly wrong: `contains` is
-/// vacuous on it, so nothing is refused — but `Validator` still clamps a grant
-/// at the window's next *start*, so a run near that hour shortens the ask for a
-/// reason that has nothing to do with this file.
-private func nightWellClearOfNow(_ now: Date = .now) -> DownHours {
-    let c = Calendar.current.dateComponents([.hour, .minute], from: now)
-    let minuteOfDay = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-    return DownHours(start: TimeOfDay(minutesSinceMidnight: minuteOfDay + 6 * 60),
-                     end: TimeOfDay(minutesSinceMidnight: minuteOfDay + 7 * 60))
-}
-
 @MainActor
 private func freshPolicy(budget: Int = 40) -> Door {
     SharedStore.wipeAll()

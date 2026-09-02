@@ -23,26 +23,6 @@ import UIKit
 
 // MARK: - Fixtures
 
-/// A down-hours window that contains no minute of any day, and whose edge is
-/// half a day away whatever the clock says when the suite runs.
-///
-/// Every test below drives a real grant through `handle`, and the shipped
-/// 22–7 window would answer all of them with "Opens at 7 AM" whenever the
-/// suite is run at night — the hours this project is most often built in. A
-/// zero-length window contains nothing (`DownHours.contains`, start == end
-/// makes the half-open test vacuous), so `isDownHours` is false at every hour.
-///
-/// The start still matters even so: `Validator` clamps a grant at the next
-/// occurrence of it (`nextDownHoursStart`, which does not care that the window
-/// is empty), so a window pinned at midnight would silently shorten a
-/// ten-minute ask made at 23:55 to five. Anchoring it twelve hours from now
-/// puts that edge at least eleven and a half hours out, always.
-private func noWindowTonight(at reference: Date = .now) -> DownHours {
-    let hour = (Calendar.current.component(.hour, from: reference) + 12) % 24
-    let nowhere = TimeOfDay(hour: hour, minute: 30)
-    return DownHours(start: nowhere, end: nowhere)
-}
-
 @MainActor
 private func freshModel(budget: Int = 40,
                         downHours: DownHours = noWindowTonight()) -> (AppModel, Door) {
@@ -62,14 +42,6 @@ private func freshModel(budget: Int = 40,
     #expect(UIApplication.shared.applicationState != .background,
             "the host app is not foreground — every wait below will be born parked")
     return (model, door)
-}
-
-/// Both debug seams, off. `defer`red at the top of every test that touches
-/// them: a pinned wait or a pinned staleness window left behind would follow
-/// the process into whatever runs next.
-private func unpinTheSeams() {
-    UserDefaults.standard.removeObject(forKey: "silkWait")
-    UserDefaults.standard.removeObject(forKey: "silkStale")
 }
 
 @Suite(.serialized) @MainActor struct WaitLifecycle {
@@ -157,9 +129,20 @@ private func unpinTheSeams() {
     /// park must equal `watched` four hundred milliseconds later — a wall-clock
     /// wait fails there — and `watched` after the resume must equal the same
     /// number, because a resume that reset would pass every inequality above it.
+    ///
+    /// **Thirty seconds, not three.** The price is only ever a ceiling here:
+    /// the test sleeps 300 + 400 + 300 ms and asserts about a wait that is
+    /// still standing, so anything comfortably past a second would do — but at
+    /// three seconds the margin was one stall wide. A loaded runner pausing a
+    /// beat between the `handle` and the first sleep, or between the resume and
+    /// the last, lands the wait mid-test: the veil comes down, the grant is
+    /// taken, and the failure reads as "the ink moved while nobody was looking
+    /// at it" — a sentence about the feature, pointing at the machine. Thirty
+    /// cannot be reached by any stall that leaves the rest of the suite green,
+    /// and no assertion below wants a landing.
     @Test func leavingBanksTheWatchingAndComingBackGoesOnFromThere() async throws {
         defer { unpinTheSeams() }
-        UserDefaults.standard.set("3.0", forKey: "silkWait")
+        UserDefaults.standard.set("30", forKey: "silkWait")
         let (model, _) = freshModel()
 
         await model.handle("instagram for ten")
@@ -172,7 +155,7 @@ private func unpinTheSeams() {
 
         let banked = try #require(model.waiting?.wait.watched)
         #expect(banked >= 0.2, "the span she watched before leaving was not banked")
-        #expect(banked < 1.5, "a paused wait banked more than the whole price")
+        #expect(banked < 1.5, "the pause landed far later than it was asked for — the runner stalled")
         #expect(model.waiting?.wait.isWatching == false, "the departure did not stop the ink")
 
         // Away. Nothing accrues, nothing lands, nothing is spent.
@@ -192,7 +175,7 @@ private func unpinTheSeams() {
         try await Task.sleep(for: .milliseconds(300))
         let resumed = try #require(model.waiting?.wait.watched(at: Monotonic.reading))
         #expect(resumed > banked + 0.2, "the resumed wait did not accrue")
-        #expect(resumed < 1.5, "the resumed wait overran the price it was set")
+        #expect(resumed < 1.5, "the resumed reading came far later than it was asked for — the runner stalled")
 
         // Disarm: a landing left sleeping would fire into whatever runs next,
         // and `SharedStore` is process-global.
@@ -315,10 +298,10 @@ private func unpinTheSeams() {
     // There is no honest one to write from here, and the obstacle is timing
     // rather than access. `startClock`'s only externally visible effect is the
     // tick body — `now = .now`, a ledger sync, a reconcile, two day-turn
-    // sweeps — and the first tick fires at `secondsUntilNextWake()`, which is
+    // sweeps — and the first tick fires at `nextWake()`, which is
     // `max(1, min(next minute boundary, ledger.nextTransition))`: between one
     // and sixty seconds out, and not steerable from a test. `clock` and
-    // `secondsUntilNextWake` are private, `ledger` is `private(set)`, and the
+    // `nextWake` are private, `ledger` is `private(set)`, and the
     // soonest transition the app can be talked into minting through `handle` is
     // a one-minute grant. A test could only sample `model.now` and hope, which
     // passes on a coin flip and fails no bug.

@@ -116,7 +116,12 @@ public struct DownHours: Hashable, Codable, Sendable {
 /// The whole of Silk's policy. Small on purpose: if it doesn't fit here,
 /// Silk doesn't do it.
 public struct PolicyState: Hashable, Codable, Sendable {
-    public var budgetMinutes: Int          // one daily allowance for all distraction
+    /// One daily allowance for all distraction. Never past a day: the setter
+    /// clamps, so no writer — a parse, a wheel, a decode, a migration — can
+    /// hold a number `Validator` would refuse (see `maxMinutesPerDay`).
+    public var budgetMinutes: Int {
+        didSet { budgetMinutes = Self.clampedDaily(budgetMinutes) }
+    }
     public var downHours: DownHours        // one night window
     public var doors: [Door]               // 3–6 named doors
     public var wallEnabled: Bool           // the categories behind the wall (tokens live outside Core)
@@ -132,13 +137,61 @@ public struct PolicyState: Hashable, Codable, Sendable {
     /// exists to deliver it. Inside `PolicyState` it also rides inside
     /// `silk.policy`, so `wipeAll` needs no new entry and no extension can strip
     /// it. Splitting it into a sibling App Group key would reintroduce both.
-    public var doorCaps: [UUID: Int]
+    public var doorCaps: [UUID: Int] {
+        didSet { doorCaps = doorCaps.mapValues(Self.clampedDaily) }
+    }
+
+    // MARK: - The day's ceiling
+    //
+    // ONE constant, and every daily minute number in the policy is measured
+    // against it: the pool, and every per-door ceiling. Both are counted against
+    // a Silk day and both refill at its boundary, so a number larger than the
+    // day cannot mean what it says — there is no day for the 1441st minute to
+    // be spent in.
+
+    /// The most minutes any daily number in this policy may mean: one day.
+    ///
+    /// A parsed number is unbounded, and nothing downstream bounded it. The
+    /// reader takes an eighteen-digit literal straight through `Int(tok)`
+    /// (`NumberParser.allNumbers`), and its hours multiplier already saturates
+    /// at `Int.max` rather than trapping (`NumberParser.saturating`) — so
+    /// "budget 999999999999999999" compiled, passed provenance, and parked as
+    /// an ordinary loosening. Once applied, `Validator`'s `.spend` arm clamped
+    /// the ask to a pool of 10^18 and computed `asked * 60`, which is not an
+    /// `Int`: "instagram 999999999999999999" was a SIGTRAP in the bar, reachable
+    /// in two sentences from a clean install. The clamp is the fix; the
+    /// validator's `Double` multiply is the belt behind it, because a policy can
+    /// also arrive from a stored blob this function never touched.
+    public static let maxMinutesPerDay = 1440
+
+    /// A daily minute count as this policy is willing to hold it.
+    ///
+    /// CLAMPED, NOT REFUSED, and the precedent is P4: a duration that overruns
+    /// the pool is not an error, it is bounded to what she can actually have,
+    /// and the read-back then states the bounded number ("Requested durations
+    /// clamp to the minutes actually remaining"). A budget of a billion is the
+    /// same sentence one order of absurdity further out, and answering it with
+    /// "Didn't get that." would teach nothing about why. So "budget
+    /// 999999999999999999" parks as `Tomorrow: 1440` — a day, named — and the
+    /// user can see exactly what she is getting.
+    ///
+    /// The floor is here for symmetry rather than for a live path: no parser
+    /// produces a negative, and a stored negative budget would already read as
+    /// an empty pool through `remainingMinutes`' own `max(0, …)`.
+    public static func clampedDaily(_ minutes: Int) -> Int {
+        min(max(0, minutes), maxMinutesPerDay)
+    }
 
     /// `doorCaps` goes last and carries a default, so every call site that
     /// predates caps keeps compiling — a door with no entry is simply uncapped,
     /// which is what those call sites already mean.
     public init(budgetMinutes: Int, downHours: DownHours, doors: [Door],
                 wallEnabled: Bool = true, doorCaps: [UUID: Int] = [:]) {
+        // RAW on purpose — the one door the ceiling does not guard. Observers
+        // do not fire in an initializer, the decoder clamps for itself, and
+        // every live writer goes through a setter or the decoder; this init
+        // is how a test hands the validator a state past the ceiling and
+        // proves its `Double` multiply is a real belt and not dead code.
         self.budgetMinutes = budgetMinutes
         self.downHours = downHours
         self.doors = doors
@@ -158,14 +211,19 @@ public struct PolicyState: Hashable, Codable, Sendable {
     /// pending and the baseline, and this one init covers all three keys.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        budgetMinutes = try c.decode(Int.self, forKey: .budgetMinutes)
+        // Clamped on the way in, so a blob written before the ceiling existed
+        // (or one hand-corrupted) reads back as the same day the bar enforces:
+        // every surface that draws the budget draws the number `Validator`
+        // will honour, and the hero cannot show a figure the bar refuses.
+        budgetMinutes = Self.clampedDaily(try c.decode(Int.self, forKey: .budgetMinutes))
         downHours     = try c.decode(DownHours.self, forKey: .downHours)
         doors         = try c.decode([Door].self, forKey: .doors)
         wallEnabled   = try c.decode(Bool.self, forKey: .wallEnabled)
         // `decodeIfPresent` maps an absent key and a JSON null to no caps, and
         // still throws on a present-but-malformed value — so this is a
         // migration and not a blanket catch.
-        doorCaps      = try c.decodeIfPresent([UUID: Int].self, forKey: .doorCaps) ?? [:]
+        doorCaps      = (try c.decodeIfPresent([UUID: Int].self, forKey: .doorCaps) ?? [:])
+            .mapValues(Self.clampedDaily)
     }
 
     public func door(named utteranceToken: String) -> Door? {

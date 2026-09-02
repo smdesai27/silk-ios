@@ -88,13 +88,20 @@ struct ShieldOverlay: View {
 
     var body: some View {
         ZStack {
-            // The spec's ground: rgba(246,243,236,.92) day, rgba(26,28,32,.94)
-            // night, under a backdrop-filter blur(20px) (README.md:181-183).
-            // The blur half lives at the root — RootView blurs the stage the
-            // shield covers, which over Silk's opaque grounds is the same
-            // light — so this layer is the tinted veil alone. It replaced
-            // .ultraThinMaterial, whose system grey argued with the paper.
-            (night ? Color(red: 0.102, green: 0.110, blue: 0.125).opacity(0.94)
+            // The spec's ground at the spec's alphas: .92 day, .94 night, under
+            // a backdrop-filter blur(20px) (README.md:181-183). The blur half
+            // lives at the root — RootView blurs the stage the shield covers,
+            // which over Silk's opaque grounds is the same light — so this
+            // layer is the tinted veil alone. It replaced .ultraThinMaterial,
+            // whose system grey argued with the paper.
+            //
+            // The colours are each face's own ground, as the wheel's veil is:
+            // the handoff wrote night's as rgba(26,28,32,.94), the floor of a
+            // slate radial the ground stopped drawing, and a blue-grey wall
+            // over a warm black page announced itself at every edge. The alphas
+            // are the spec's and unchanged — the wall is a wall because you can
+            // just see the page through it.
+            (night ? Silk.Night.ground.opacity(0.94)
                    : Silk.paper.opacity(0.92))
 
             VStack(spacing: 6) {
@@ -146,7 +153,7 @@ struct ShieldOverlay: View {
             }
             .padding(.vertical, 40)
             .frame(maxWidth: .infinity)
-            .background(night ? Color(red: 0.118, green: 0.129, blue: 0.149) : Silk.paper)
+            .background(night ? Silk.Night.ground : Silk.paper)
         }
     }
 }

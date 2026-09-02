@@ -108,12 +108,8 @@ final class WallController {
     ///      schedules', which is the point
     ///   4. every app foreground / shield render / shield tap reconciles
     /// If every layer fails, the door closes at the next wake: late, never never.
-    func open(door: Door, until relockAt: Date) {
-        Wall.reconcile()   // ledger already contains the grant; this opens the door
-        arm(door: door, until: relockAt)
-    }
 
-    /// The scheduling half of `open`, without the unshielding, reporting
+    /// The scheduling half of a grant, without the unshielding, reporting
     /// whether BOTH schedules took. The Spend intent gates a grant on the
     /// answer, because nothing wakes that path: Shortcuts performs the intent
     /// in a background launch with no scene, so `foregrounded()` never runs,

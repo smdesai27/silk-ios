@@ -65,7 +65,7 @@ struct WaitOverlay: View {
         ZStack {
             // The same veil the wheel and the door editor wear, from the same
             // constant. A second colour here would be a second kind of overlay.
-            (night ? WheelPickerOverlay.nightVeil.opacity(0.97) : Silk.paperAlpha(0.97))
+            WheelPickerOverlay.veil(night: night)
                 .ignoresSafeArea()
                 // Eats every touch. There is no control on this screen — no
                 // dismiss, no skip, no "open now" — and the way out is the way
@@ -148,7 +148,7 @@ private func parked(at f: Double) -> Wait {
                             .clipped()
                     }
                 }
-                .background(night ? Silk.lacquer : Silk.paper)
+                .background(night ? Silk.Night.ground : Silk.paper)
             }
         }
     }

@@ -65,8 +65,18 @@ struct OnboardingView: View {
         return TimeOfDay(hour: 7)
     }()
 
-    /// The step's own natural height, measured. See `body`.
+    /// The step's natural height as of this instant, measured.
+    @State private var liveHeight: CGFloat = 0
+    /// The height the scale is computed from: `liveHeight`, held still for the
+    /// length of a cross-fade. See `column`.
     @State private var columnHeight: CGFloat = 0
+    /// True while a step is fading into the next one.
+    @State private var crossFading = false
+    @State private var hold: Task<Void, Never>?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Screen Time was asked for and refused, and setup is still on step one.
+    /// Cleared by a grant, which is the same moment the step advances.
+    @State private var permissionRefused = false
 
     var body: some View {
         // The same defence NowView and SettingsView mount, for the same reason:
@@ -99,7 +109,14 @@ struct OnboardingView: View {
             let usable = geo.size.height - Self.footReserve
             let scale = min(1, usable / max(1, columnHeight))
             column
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { columnHeight = $0 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+                    liveHeight = h
+                    // Held across the cross-fade: see `column`. `liveHeight` is
+                    // still kept current so the hold has something true to end
+                    // on — a frozen measurement that never catches up is just a
+                    // stale one.
+                    if !crossFading { columnHeight = h }
+                }
                 .scaleEffect(scale, anchor: .top)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
@@ -111,6 +128,25 @@ struct OnboardingView: View {
                 .padding(.bottom, 60)
         }
         .animation(Silk.motion(0.45), value: step)
+        // The measurement stands still for the length of the cross-fade and
+        // takes the incoming step's height when it lands. Without the hold the
+        // scale is recomputed from a height that is briefly neither step's.
+        .onChange(of: step) { _, _ in
+            crossFading = true
+            // A second step inside the 450 ms cancels the first hold, so it
+            // cannot end early and hand the scale a height that is briefly
+            // neither step's.
+            hold?.cancel()
+            hold = Task { @MainActor in
+                // As long as the fade it holds for: 450 ms, or the short curve
+                // under Reduce Motion — a hold that outlives its fade rescales
+                // a column whose content has already changed.
+                try? await Task.sleep(for: .seconds(reduceMotion ? 0.12 : 0.45))
+                guard !Task.isCancelled else { return }
+                crossFading = false
+                columnHeight = liveHeight
+            }
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Silk.paper.ignoresSafeArea())
         // Silk's sheet, with Apple's list inside it. One sheet for both
@@ -144,9 +180,19 @@ struct OnboardingView: View {
             // to answer the same way twice, and NowView and SettingsView hold
             // their own seats exactly this way.
             Color.clear.frame(height: 96)
-            content
-                .id(step)
-                .transition(.opacity)
+            // A ZStack, not the VStack's own slot. `.transition(.opacity)`
+            // keeps the outgoing step alive for the whole 450ms cross-fade, and
+            // stacked vertically that meant BOTH steps were in layout: the
+            // column measured their sum, the scale computed from the sum shrank
+            // the page, and it grew back when the outgoing half was finally
+            // removed. Every OK did it. Overlapped, the two only ever measure
+            // as the taller of them — and the hold in `body` keeps even that
+            // out of the scale until the fade has landed.
+            ZStack(alignment: .top) {
+                content
+                    .id(step)
+                    .transition(.opacity)
+            }
         }
         .frame(maxWidth: .infinity)
         .fixedSize(horizontal: false, vertical: true)
@@ -163,7 +209,19 @@ struct OnboardingView: View {
     private var content: some View {
         switch step {
         case .permission:
-            prompt(SilkStrings.setupPermission)
+            VStack(spacing: 18) {
+                prompt(SilkStrings.setupPermission)
+                // The one line that appears when iOS's own sheet came back a
+                // no. Same register as the apps step's summary — under the
+                // prompt, quieter than it, stating what is true now.
+                if permissionRefused {
+                    summaryLine(SilkStrings.setupPermissionRefused)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 46)
+                        .transition(.opacity)
+                }
+            }
+            .animation(Silk.motion(0.35), value: permissionRefused)
 
         case .apps:
             VStack(spacing: 28) {
@@ -243,8 +301,8 @@ struct OnboardingView: View {
         }
         var parts = doorNames.map(displayName)
         let extras = wallSelection.applicationTokens.count
-        if extras > 0 { parts.append("\(extras) more") }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        if extras > 0 { parts.append(SilkStrings.andMore(extras)) }
+        return parts.isEmpty ? nil : parts.joined(separator: SilkStrings.separator)
     }
 
     private func chip(_ name: String) -> some View {
@@ -395,10 +453,12 @@ struct OnboardingView: View {
             HStack(spacing: 6) {
                 Text("☾").font(Silk.serif(13))
                     .accessibilityHidden(true)
-                timeWheel(binding: $downStart, spoken: "\(SilkStrings.lockedOvernight) start")
+                timeWheel(binding: $downStart,
+                          spoken: "\(SilkStrings.lockedOvernight) \(SilkStrings.windowStart)")
                 Text("–").font(Silk.serif(13.5))
                     .accessibilityHidden(true)
-                timeWheel(binding: $downEnd, spoken: "\(SilkStrings.lockedOvernight) end")
+                timeWheel(binding: $downEnd,
+                          spoken: "\(SilkStrings.lockedOvernight) \(SilkStrings.windowEnd)")
             }
             .foregroundStyle(Silk.duskBlue)
         }
@@ -485,7 +545,14 @@ struct OnboardingView: View {
                 // nothing of this install's own for it to knock down. Idempotent
                 // either way — worst case it deletes stores that are already gone.
                 model.wall.clearOrphans()
+                permissionRefused = false
                 step = .apps
+            } else {
+                // A refusal used to change nothing at all: iOS drew its sheet,
+                // the answer was no, the sheet went, and setup sat on the same
+                // step with the same sentence — which reads as a dead button,
+                // not as a decision that was heard.
+                permissionRefused = true
             }
             #endif
 

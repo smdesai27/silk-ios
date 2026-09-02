@@ -103,7 +103,14 @@ struct Moonwash: View {
 /// The ground itself. By day it is flat paper; at night it is a warm near-black
 /// radial, below `lacquer` rather than above it.
 ///
-///   radial-gradient(580px 440px at 50% 32%, #1C1913 0%, #15120C 48%, #0E0C08 100%)
+///   radial-gradient(ellipse 118% 78% at 50% 34%, #1C1913 0%, #0E0C08 100%)
+///
+/// That line is `docs/design/canvas/Night.dc.html:18` verbatim, and the two
+/// stops are `Silk.Night.linen` and `Silk.Night.ground`. It replaces the older
+/// handoff geometry (580×440 at 32%, with a #15120C stop at 48%): the radii are
+/// fractions of the screen rather than points on a 390pt canvas, so the ground
+/// no longer has to be scaled to fit a phone, and the middle stop is gone
+/// because the canvas draws two.
 ///
 /// **This reverses a recorded decision.** The handoff had settled on a warm-cool
 /// slate (#262B32 → #1A1C20) because near-black "read as too harsh", and this was
@@ -120,29 +127,30 @@ struct Moonwash: View {
 struct Ground: View {
     var night: Bool
 
-    private static let high = Color(red: 0.110, green: 0.098, blue: 0.075)   // #1C1913
-    private static let mid  = Color(red: 0.082, green: 0.071, blue: 0.047)   // #15120C
-    private static let low  = Color(red: 0.055, green: 0.047, blue: 0.031)   // #0E0C08
-
     var body: some View {
         GeometryReader { geo in
-            // Authored 580×440 on a 390-wide canvas — wider than the screen and
-            // much shorter than it. `endRadiusFraction` is a single scalar and
-            // cannot express that: it stretches the vertical falloff to the frame
-            // and washes the screen out. Sizing the gradient's own frame to the
-            // ellipse keeps both axes right, and `.low` fills what it leaves.
-            let k = geo.size.width / 390
+            // CSS states an ellipse's RADII; `endRadiusFraction` is a single
+            // scalar and cannot express two, so it stays at its default .5 and
+            // the gradient's own frame carries the shape — 2r on each axis, the
+            // way `Dapple` sizes its pools. 118% of the width and 78% of the
+            // height are radii, so the frame is 2.36w × 1.56h: far larger than
+            // the screen, which is what makes the visible page the warm middle
+            // of a much wider fall rather than the whole of a small one.
+            // `Night.ground` fills whatever the ellipse leaves.
             ZStack {
-                Self.low
+                Silk.Night.ground
                 EllipticalGradient(
-                    stops: [.init(color: Self.high, location: 0),
-                            .init(color: Self.mid, location: 0.48),
-                            .init(color: Self.low, location: 1)],
+                    stops: [.init(color: Silk.Night.linen, location: 0),
+                            .init(color: Silk.Night.ground, location: 1)],
                     center: .center
                 )
-                .frame(width: 580 * k, height: 440 * k)
-                .position(x: geo.size.width / 2, y: geo.size.height * 0.32)
+                .frame(width: geo.size.width * 2.36, height: geo.size.height * 1.56)
+                .position(x: geo.size.width / 2, y: geo.size.height * 0.34)
             }
+            // A CSS background paints inside its box and this one is more than
+            // twice the box, so the overflow is cut rather than left to whatever
+            // happens to clip it — the same reason `Dapple` clips its pools.
+            .clipped()
             .opacity(night ? 1 : 0)
             .background(Silk.paper)
         }
@@ -194,7 +202,7 @@ struct Atmosphere: View {
     return ScrollView([.horizontal, .vertical]) {
         HStack(alignment: .top, spacing: 28) {
             screen("day · dapple", ground: Silk.paper) { Atmosphere(night: false) }
-            screen("night · moonwash", ground: Silk.lacquer) { Atmosphere(night: true) }
+            screen("night · moonwash", ground: Silk.Night.ground) { Atmosphere(night: true) }
             // True strength is below the threshold of notice; 10× is the proof
             // the four pools exist and land where the sheet puts them.
             screen("dapple · 10× alpha", ground: Silk.paper) { Dapple(gain: 10) }
