@@ -161,8 +161,18 @@ struct WheelPickerOverlay: View {
 
                 HStack(spacing: 8) {
                     ForEach(Array(columns.enumerated()), id: \.element.id) { i, column in
+                        // Each wheel is one adjustable element and it was
+                        // shipping with a value and no name — VoiceOver read
+                        // "10:00 PM, adjustable" with nothing saying what it
+                        // was ten of. The title is the label: it is the one
+                        // word this overlay states, the sighted reading is
+                        // exactly "title, then the value under the line", and
+                        // it costs no string. Down hours hands the same label
+                        // to both wheels, which is right — they are two ends of
+                        // one setting, and the values tell them apart with the
+                        // meridiem the tables already carry.
                         Wheel(values: column.values, selection: $selections[i], night: night,
-                              axID: "silk.picker.wheel.\(i)")
+                              label: title, axID: "silk.picker.wheel.\(i)")
                     }
                 }
                 // Drawn once for the whole overlay, not per wheel: with two
@@ -211,6 +221,10 @@ private struct Wheel: View {
     var values: [String]
     @Binding var selection: Int
     var night: Bool
+    /// What this wheel is for, spoken. The overlay's title, handed down rather
+    /// than re-derived: the label and the uppercase whisper above the wheels
+    /// have to be the same words or the spoken screen and the seen one disagree.
+    var label: String
     /// Applied inside, after the wheel folds into one element — an identifier
     /// attached from outside lands on a wrapper that is no element at all,
     /// and XCUI never sees it.
@@ -303,8 +317,10 @@ private struct Wheel: View {
         }
         // One adjustable element per wheel: swipe up or down steps the value
         // and rides it to centre on the same curve the tap uses. The rows fold
-        // into it — the resting value is the whole reading.
+        // into it — the title names the wheel and the resting value is the rest
+        // of the reading, which is the same two things the eye gets.
         .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(label))
         .accessibilityValue(Text(values[selection]))
         .accessibilityAdjustableAction { direction in
             switch direction {
