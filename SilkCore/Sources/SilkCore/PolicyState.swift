@@ -187,13 +187,16 @@ public struct PolicyState: Hashable, Codable, Sendable {
     /// which is what those call sites already mean.
     public init(budgetMinutes: Int, downHours: DownHours, doors: [Door],
                 wallEnabled: Bool = true, doorCaps: [UUID: Int] = [:]) {
-        // Observers do not fire in an initializer, so the clamp is spelled
-        // out here too; the decoder does the same.
-        self.budgetMinutes = Self.clampedDaily(budgetMinutes)
+        // RAW on purpose — the one door the ceiling does not guard. Observers
+        // do not fire in an initializer, the decoder clamps for itself, and
+        // every live writer goes through a setter or the decoder; this init
+        // is how a test hands the validator a state past the ceiling and
+        // proves its `Double` multiply is a real belt and not dead code.
+        self.budgetMinutes = budgetMinutes
         self.downHours = downHours
         self.doors = doors
         self.wallEnabled = wallEnabled
-        self.doorCaps = doorCaps.mapValues(Self.clampedDaily)
+        self.doorCaps = doorCaps
     }
 
     /// `doorCaps` postdates the first persisted policies, so it decodes as

@@ -99,6 +99,17 @@ actor SilkModelParser {
     /// act on beats a turn still pretending to think.
     static let deadline: Duration = .seconds(2)
 
+    // Outside the FoundationModels block: the seam must exist on every SDK
+    // the file builds for, or the fallback branch cannot compile in Debug.
+    #if DEBUG
+    /// Test seam: answer every parse with silence, as an unavailable model
+    /// would. The simulator this suite runs on has Apple Intelligence, so a
+    /// sentence the grammar falls silent on otherwise reaches a real model
+    /// and the refusal's wording cannot be asserted; with this set, the
+    /// bar's own four words are the only answer possible.
+    nonisolated(unsafe) static var testForceSilent = false
+    #endif
+
     #if canImport(FoundationModels)
 
     /// One session, built and warmed ahead of the sentence it will answer.
@@ -118,14 +129,6 @@ actor SilkModelParser {
     private var newestGenerationStarted: ContinuousClock.Instant?
     static let wedgedAfter: Duration = .seconds(10)
 
-    #if DEBUG
-    /// Test seam: answer every parse with silence, as an unavailable model
-    /// would. The simulator this suite runs on has Apple Intelligence, so a
-    /// sentence the grammar falls silent on otherwise reaches a real model
-    /// and the refusal's wording cannot be asserted; with this set, the
-    /// bar's own four words are the only answer possible.
-    nonisolated(unsafe) static var testForceSilent = false
-    #endif
 
     /// Build the session and let the model start loading, while the user is
     /// still typing.
@@ -181,14 +184,20 @@ actor SilkModelParser {
         // inside the work arm left a window: two sentences sent back to back
         // both read zero before either arm had run, and both generated.
         let clock = ContinuousClock()
-        if liveGenerations > 0,
-           let started = newestGenerationStarted,
-           clock.now - started < Self.wedgedAfter {
-            return .silence
+        if liveGenerations > 0 {
+            if let started = newestGenerationStarted, clock.now - started < Self.wedgedAfter {
+                return .silence
+            }
+            // Presumed wedged, and its count is DROPPED here — otherwise a
+            // generation that never returns floors the gate at one, and every
+            // admitted sentence restarts the ten-second clock against it: one
+            // sentence per ten seconds for the life of the process. Its own
+            // decrement, if it ever comes, floors at zero below.
+            liveGenerations = 0
         }
         liveGenerations += 1
         newestGenerationStarted = clock.now
-        defer { liveGenerations -= 1 }
+        defer { liveGenerations = max(0, liveGenerations - 1) }
 
         let prompt = Self.instructions(for: state)
         // The warm session is SPENT here, not reused: the 4096-token window is
@@ -238,7 +247,7 @@ actor SilkModelParser {
                 // The loser keeps the count it was given until it returns —
                 // that is what the gate at the top of `parse` reads.
                 self.liveGenerations += 1
-                defer { self.liveGenerations -= 1 }
+                defer { self.liveGenerations = max(0, self.liveGenerations - 1) }
                 let outcome: ParseOutcome
                 do {
                     let response = try await session.respond(to: utterance,

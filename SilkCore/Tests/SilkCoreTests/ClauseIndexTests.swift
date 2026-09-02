@@ -698,18 +698,6 @@ private func clauseStrings(_ text: String) -> [[String]] {
         #expect(DeterministicParser.parse(inOneBreath, state: state) == .silence)
         #expect(inTenBreaths.allSatisfy { DeterministicParser.parse($0, state: state) == .silence })
 
-        // A coarse ceiling beside the ratio. The ratio cannot see a regression
-        // that multiplies both arms alike — a per-token allocation, a regex
-        // compiled in the loop — and the bar holds a ~480 ms beat. Thirty
-        // seconds is two orders of magnitude over the ~90 ms measured, wide
-        // enough that no loaded afternoon reaches it and narrow enough that a
-        // parse that went to minutes cannot hide behind a healthy ratio.
-        let coarse = ContinuousClock()
-        let started = coarse.now
-        _ = DeterministicParser.parse(inOneBreath, state: state)
-        #expect(coarse.now - started < .seconds(30),
-                "a ten-thousand-word parse took longer than thirty seconds")
-
         // The two arms really are the same amount of work — asserted, because it
         // is the whole premise of the ratio and a change to `noise` could quietly
         // break it.
@@ -733,5 +721,18 @@ private func clauseStrings(_ text: String) -> [[String]] {
                 (\(asOneString) against \(asTenStrings)) — the rule ladder every sentence \
                 walks is no longer linear in the length of its input
                 """)
+
+        // A coarse ceiling beside the ratio, measured AFTER it so the extra
+        // parse warms nothing the two arms compare. The ratio cannot see a regression
+        // that multiplies both arms alike — a per-token allocation, a regex
+        // compiled in the loop — and the bar holds a ~480 ms beat. Thirty
+        // seconds is two orders of magnitude over the ~90 ms measured, wide
+        // enough that no loaded afternoon reaches it and narrow enough that a
+        // parse that went to minutes cannot hide behind a healthy ratio.
+        let coarse = ContinuousClock()
+        let started = coarse.now
+        _ = DeterministicParser.parse(inOneBreath, state: state)
+        #expect(coarse.now - started < .seconds(30),
+                "a ten-thousand-word parse took longer than thirty seconds")
     }
 }

@@ -135,8 +135,6 @@ final class AppModel {
         // draws. (docs/market/gaps.md #5)
         if saved == nil {
             wall.clearOrphans()
-            // Every activity is gone with the stores, the heartbeat included.
-            armedHeartbeatAnchor = nil
         }
         applyPendingIfDayTurned()
         wall.reconcile()
@@ -1892,10 +1890,10 @@ final class AppModel {
     /// job: a restored ledger must leave no schedule standing behind it. Only
     /// the schedules — every caller reaches here through a commit, and the
     /// shield that commit reconciled is already the one the ledger asks for.
-    /// So it arms directly rather than through `wall.open`, whose first act is
-    /// a second `Wall.reconcile` — four decodes and a settings-store write to
-    /// arrive at the union the commit a line earlier already wrote, on the one
-    /// frame the veil is falling and the granted app is being handed the phone.
+    /// So it arms directly: a second `Wall.reconcile` here — three decodes, a
+    /// store read and a settings-store write to arrive at the union the commit
+    /// a line earlier already wrote — would land on the one frame the veil is
+    /// falling and the granted app is being handed the phone.
     private func restateRelockLayers(for door: Door) {
         guard let grant = ledger.activeGrant(for: door, at: .now) else {
             wall.stopMonitoring(door: door)
@@ -2349,14 +2347,17 @@ final class AppModel {
     /// effective, the daemon's activity limit) must leave the next boundary
     /// free to try again, or the failure latches for the life of the process.
     private func armHeartbeatRecordingAnchor(_ downHours: DownHours) {
-        if wall.armHeartbeat(downHours: downHours) { armedHeartbeatAnchor = downHours.end }
+        guard wall.armHeartbeat(downHours: downHours) else { return }
+        armedHeartbeatAnchor = downHours.end
+        // The day is recorded here too, or the first sweep after a launch
+        // arm would restate a schedule seconds old.
+        armedHeartbeatDay = DayBoundary.dayStart(now: now, downHours: downHours)
     }
 
     private func armHeartbeatIfAnchorMoved(dayStart: Date) {
         guard armedHeartbeatAnchor != policy.downHours.end || armedHeartbeatDay != dayStart
         else { return }
         armHeartbeatRecordingAnchor(policy.downHours)
-        if armedHeartbeatAnchor == policy.downHours.end { armedHeartbeatDay = dayStart }
     }
 
     private func compactLedgerIfDayTurned() {

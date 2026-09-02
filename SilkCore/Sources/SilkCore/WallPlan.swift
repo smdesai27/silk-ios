@@ -77,10 +77,12 @@ public enum WallPlan {
     ///   - extras: the wall selection's app tokens — apps blocked without a
     ///     name or launch entry of their own.
     ///   - doors: each door's app tokens, by door id.
-    ///   - standing: the app tokens the shield store holds RIGHT NOW. Read
-    ///     by the caller off `ManagedSettingsStore`; it stands in for the
-    ///     extras when the extras blob will not decode, so a door's grant
-    ///     can still expire while nothing that is shielded now is dropped.
+    ///   - standing: the app tokens the shield store holds RIGHT NOW, or nil
+    ///     when that could not be read. Read by the caller off
+    ///     `ManagedSettingsStore`; it stands in for the extras when the extras
+    ///     blob will not decode, so a door's grant can still expire while
+    ///     nothing that is shielded now is dropped. Nil with a corrupt extras
+    ///     blob is a refusal: there is nothing to stand in.
     ///   - openDoors: the tokens belonging to doors that should be open now.
     ///     A closure and not a value because answering it needs the ledger and
     ///     the established day, which the caller already holds — and because it
@@ -89,7 +91,7 @@ public enum WallPlan {
         policy: Decoded<PolicyState>,
         extras: Decoded<Set<Token>>,
         doors: Decoded<[UUID: Set<Token>]>,
-        standing: Set<Token> = [],
+        standing: Set<Token>? = nil,
         openDoors: (PolicyState, [UUID: Set<Token>]) -> Set<Token>
     ) -> Plan<Token> {
         // The wall is apps only: every door's tokens plus the extras. An
@@ -135,8 +137,8 @@ public enum WallPlan {
         // read and nothing else can put them back. The wall holds everything
         // else; that one door waits for the next readable reconcile.
         func readable() -> (blocked: Set<Token>, doors: [UUID: Set<Token>])? {
-            guard let doorTokens = doors.orEmpty([:]) else { return nil }
-            let extraTokens = extras.orEmpty([]) ?? standing
+            guard let doorTokens = doors.orEmpty([:]),
+                  let extraTokens = extras.orEmpty([]) ?? standing else { return nil }
             return (doorTokens.values.reduce(into: extraTokens) { $0.formUnion($1) }, doorTokens)
         }
 

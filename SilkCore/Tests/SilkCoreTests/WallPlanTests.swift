@@ -160,6 +160,17 @@ private final class ExceptionProbe: @unchecked Sendable {
         #expect(probe.asked == false)
     }
 
+    @Test func corruptExtrasWithNoReadableStandInRefuses() {
+        // The store could not be read either: nothing to stand in, so
+        // nothing is written — the doors alone would drop the extras.
+        let plan = WallPlan.plan(policy: .value(policy()),
+                                 extras: Decoded<Set<Int>>.corrupt,
+                                 doors: .value(doorTokens),
+                                 standing: nil,
+                                 openDoors: nothingOpen)
+        #expect(plan == .leaveUntouched)
+    }
+
     @Test func corruptExtrasWithNothingStandingAndNoDoorsStillRefuses() {
         // The corrupt-policy empty-union rule, reached through the stand-in:
         // nothing readable and nothing standing is still nothing to write.

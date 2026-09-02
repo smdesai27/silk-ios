@@ -631,8 +631,10 @@ public enum Wall {
             doors: doors.map { $0.mapValues(\.applicationTokens) },
             // What the store holds now: the stand-in for an extras blob
             // that will not decode, so nothing shielded is ever dropped
-            // for a key this process could not read.
-            standing: store.shield.applications ?? [],
+            // for a key this process could not read. Nil is passed as
+            // nil — a stand-in that cannot be read is no stand-in, and
+            // the plan refuses rather than write the doors alone.
+            standing: store.shield.applications,
             openDoors: { policyValue, doorTokens in
                 // The ledger read the plan cannot do — and does not ask for on
                 // any path that refuses to write.
