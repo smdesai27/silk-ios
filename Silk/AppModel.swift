@@ -1987,6 +1987,14 @@ final class AppModel {
         refreshWallStanding()
         applyPendingIfDayTurned()
         compactLedgerIfDayTurned()
+        // The clock slept through the suspension, and its sleep is aimed at an
+        // instant now in the past — so it wakes the moment the loop is
+        // scheduled and does this whole paragraph a second time, milliseconds
+        // after the frame the user is looking at. Restarting it here retires
+        // that iteration: the next wake is computed against the ledger and the
+        // clock as they are now, which is what the sleep was always trying to
+        // express.
+        startClock()
     }
 
     // MARK: - The wall's standing (docs/market/gaps.md #5)
