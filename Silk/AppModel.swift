@@ -531,7 +531,14 @@ final class AppModel {
                 let turned = DayBoundary.dayStart(now: self.now,
                                                   downHours: self.policy.downHours)
                     != self.compactedDayStart
-                guard wake.forTransition || ledgerMoved || turned else { continue }
+                // Asked of the clock this wake actually landed on, not of the
+                // one it was aimed at: a sleep the system overshoots past an
+                // expiry must still close that door, and a transition tested at
+                // scheduling time would have said "not yet" and never asked
+                // again — `nextTransition` drops a row once it is in the past.
+                // Fail-closed is the only direction this may be wrong in.
+                let passed = wake.transition.map { $0 <= self.now } ?? false
+                guard passed || ledgerMoved || turned else { continue }
                 // A grant that just expired has to close its door, and a day
                 // that turned matures whatever was waiting for it.
                 self.wall.reconcile()
@@ -541,21 +548,18 @@ final class AppModel {
         }
     }
 
-    /// When to wake, and whether the LEDGER is what asked for that wake —
-    /// a grant expiring or a close lifting, as against the plain minute the
-    /// deadlines are rendered to. The tick spends its reconcile on the first
-    /// and not the second.
-    private func nextWake() -> (seconds: Double, forTransition: Bool) {
+    /// When to wake, and the instant the LEDGER wanted waking for — a grant
+    /// expiring or a close lifting, as against the plain minute the deadlines
+    /// are rendered to. The instant is carried across the sleep rather than
+    /// resolved here, because whether it has passed is a question about the
+    /// clock the tick woke on and not the one it was aimed at.
+    private func nextWake() -> (seconds: Double, transition: Date?) {
         let cal = Calendar.current
         let nextMinute = cal.nextDate(after: .now, matching: DateComponents(second: 0),
                                       matchingPolicy: .nextTime) ?? Date().addingTimeInterval(60)
         let transition = ledger.nextTransition(after: .now)
         let wake = min(nextMinute, transition ?? nextMinute)
-        // At-or-before, not equal: a transition landing exactly on the minute
-        // mark is still the reason this wake exists, and a wake the sleep
-        // overshoots is one the transition has already passed.
-        return (max(1, wake.timeIntervalSince(.now)),
-                transition.map { $0 <= nextMinute } ?? false)
+        return (max(1, wake.timeIntervalSince(.now)), transition)
     }
 
     // MARK: - The bar
