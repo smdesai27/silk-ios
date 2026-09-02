@@ -143,7 +143,10 @@ final class AppModel {
         // activity list is not documented to survive everything that can
         // happen to it, and arming is a restatement (it stops before it
         // starts) rather than a second registration.
-        if onboarded { wall.armHeartbeat(downHours: policy.downHours) }
+        if onboarded {
+            wall.armHeartbeat(downHours: policy.downHours)
+            armedHeartbeatAnchor = policy.downHours.end
+        }
         refreshDoorIcons()
         startClock()
         #if DEBUG
@@ -176,6 +179,7 @@ final class AppModel {
         // earliest point the schedule can take. Until it fires, days record
         // as unobserved — which is honest, not a bug.
         wall.armHeartbeat(downHours: downHours)
+        armedHeartbeatAnchor = downHours.end
         onboarded = true
     }
 
@@ -2207,6 +2211,23 @@ final class AppModel {
     /// pays one Date compare on every day but the one that turned.
     @ObservationIgnored private var compactedDayStart: Date?
 
+    /// The time of day the heartbeat schedule is currently anchored at — the
+    /// end of down hours, which is the only input `armHeartbeat` has. Held so
+    /// that restating the schedule is a restatement of something that moved
+    /// and not a stop-and-start of the daemon's one live activity for nothing.
+    @ObservationIgnored private var armedHeartbeatAnchor: TimeOfDay?
+
+    /// Restate the heartbeat when — and only when — its anchor has moved.
+    /// A launch and the end of setup arm unconditionally on purpose (the
+    /// daemon's activity list is not documented to survive everything that can
+    /// happen to it); this is for the paths that can run again and again
+    /// inside one process.
+    private func armHeartbeatIfAnchorMoved() {
+        guard armedHeartbeatAnchor != policy.downHours.end else { return }
+        wall.armHeartbeat(downHours: policy.downHours)
+        armedHeartbeatAnchor = policy.downHours.end
+    }
+
     private func compactLedgerIfDayTurned() {
         // The LIVE boundary, deliberately not `dayStart`: the sweep is what
         // detects the turn and stamps the established day, so it must read
@@ -2218,8 +2239,12 @@ final class AppModel {
         // The day turned, which is also the one moment the heartbeat's anchor
         // could have moved under it — down hours are the boundary. Restating
         // it here keeps the schedule pinned to the boundary the records are
-        // being cut on.
-        wall.armHeartbeat(downHours: policy.downHours)
+        // being cut on — but only when the anchor actually moved. Arming is a
+        // `stopMonitoring` and a `startMonitoring` against the DeviceActivity
+        // daemon, and this method is reachable on every tick (see the retry
+        // marker below), which made the one signal that proves the wall alive
+        // into something torn down and rebuilt once a minute.
+        armHeartbeatIfAnchorMoved()
 
         // No compaction without a record. `compact` drops every grant older
         // than its cut, and a day whose grants are gone can never be
@@ -2231,15 +2256,36 @@ final class AppModel {
         // live boundary by a couple of hours every single day), while the
         // frontier compacts exactly as far as the summarised chain reaches —
         // the same instant when the anchors agree, a day behind when not.
-        let recorded = SharedStore.recordClosedDays(
+        //
+        // The gate's own Bool is discarded, and both halves of it are asked
+        // again below off the one read-back it forces: the cut has taken the
+        // frontier rather than the gate's verdict since the paragraph above
+        // was written, and the retry marker needs the other half on its own.
+        _ = SharedStore.recordClosedDays(
             upTo: start,
             downHours: policy.downHours,
             ledger: ledger,
             wallStanding: policy.wallEnabled && wall.standing == .up
         )
-        if !recorded {
-            // Days are still owed past the frontier. Clear the marker so the
-            // next tick retries rather than treating this day as done.
+        // One decode, read back after the write, and both questions below are
+        // asked of it: what the cut may reach, and whether anything is still
+        // owed a record.
+        let sealed = Set(SharedStore.dayRecords().map(\.dayStart))
+        // A `false` from the gate is two different facts wearing one Bool.
+        // One is "a day I owe a record did not land" — a real failure, and
+        // retrying it on the next tick is exactly right. The other is "the
+        // summarised chain does not reach the live boundary", which is the
+        // standing condition of every install whose down-hours END has ever
+        // moved LATER: the chain is anchored at the OLD time of day and walks
+        // forward a day at a time, so its frontier lands short of the live
+        // boundary today and on every day after it (pinned in
+        // `AMovedBoundaryTrailsTheFrontierWithNothingOwed`). Retried, that
+        // one clears the marker on every tick — and the whole sweep, the
+        // heartbeat's stop-and-start included, ran every minute Silk was
+        // foregrounded, forever. Only the first fact is a retry.
+        if !DayLog.missingBoundaries(recorded: sealed, upTo: start).isEmpty {
+            // Days are still owed. Clear the marker so the next tick retries
+            // rather than treating this day as done.
             compactedDayStart = nil
         }
 
@@ -2258,9 +2304,7 @@ final class AppModel {
         // phantom, and a frontier lagging real time (a long absence, a
         // forward-set clock holding the walk) must not eat a grant minted
         // today.
-        let cut = DayLog.compactionFrontier(
-            recorded: Set(SharedStore.dayRecords().map(\.dayStart)),
-            upTo: start)
+        let cut = DayLog.compactionFrontier(recorded: sealed, upTo: start)
         let mayCut = DayBoundary.nextDayStart(after: cut) > now
         if mayCut { next.compact(dayStart: cut) }
 
