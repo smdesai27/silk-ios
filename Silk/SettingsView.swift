@@ -268,7 +268,7 @@ private struct DoorOverlayScaffold<Content: View>: View {
 
     var body: some View {
         ZStack {
-            (night ? WheelPickerOverlay.nightVeil.opacity(0.97) : Silk.paperAlpha(0.97))
+            WheelPickerOverlay.veil(night: night)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onClose)

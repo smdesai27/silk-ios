@@ -8,7 +8,49 @@ enum Silk {
     static let paper = Color(red: 0.965, green: 0.953, blue: 0.925)      // #F6F3EC
     static let linen = Color(red: 0.937, green: 0.914, blue: 0.859)      // #EFE9DB
     static let ink = Color(red: 0.129, green: 0.118, blue: 0.090)        // #211E17
+
+    /// Night lacquer. The token sheet calls it "the night ground" and the app
+    /// no longer draws it as one — `Ground(night:)` draws the canvas radial in
+    /// `Night` below. It survives because it is that radial's own middle: the
+    /// midpoint of #1C1913 and #0E0C08 is #15130E, one level of red off this
+    /// value. A surface that cannot carry a gradient and must still read as the
+    /// night page therefore hands over lacquer, which is exactly what
+    /// `SilkShield` does with `ShieldConfiguration.backgroundColor`.
     static let lacquer = Color(red: 0.086, green: 0.075, blue: 0.055)    // #16130E
+
+    /// **Night's cloth.** Day is cut from one material — `paper` is the ground,
+    /// `linen` the one raised surface, `ink` what is written on both, and every
+    /// day overlay is `paper` at an alpha, so a veil reads as the page itself
+    /// with the page taken out of it. Night is now cut the same way, from the
+    /// warm near-black the canvas draws (`docs/design/canvas/Night.dc.html:18`,
+    /// `radial-gradient(ellipse 118% 78% at 50% 34%, #1C1913 0%, #0E0C08 100%)`).
+    ///
+    /// **This retires the handoff's slate.** Every night overlay in the app was
+    /// still `#1A1C20` — the floor of the `#262B32 → #1A1C20` radial the handoff
+    /// specified and the ground stopped drawing — so a blue-grey sheet was being
+    /// laid over a warm black page and the join was visible on every one of
+    /// them. The two values below are the canvas's own stops and nothing else is
+    /// a night ground colour anywhere in Silk.
+    ///
+    /// The step between them is the step day takes between `paper` and `linen`:
+    /// `linen` over `ground` is 1.13:1, `linen` over `paper` is 1.09:1. Sizes of
+    /// step, not alphas — a dark face needs a little more separation to show the
+    /// same lift, which is the same asymmetry `docs/design/screentime-ui.md`
+    /// measures at the wall.
+    enum Night {
+        /// Night's `paper`: the ground itself. `Ground` fills the page with it
+        /// and lays the ellipse on top, so this is the colour under everything
+        /// and the colour every veil is cut from.
+        static let ground = Color(red: 14 / 255, green: 12 / 255, blue: 8 / 255)   // #0E0C08
+
+        /// Night's `linen`: the one step a surface takes when it is raised off
+        /// the ground. It is also the ellipse's centre — the ground's gradient
+        /// runs `linen → ground` and nothing else — so the light pooled at the
+        /// top of the page and a surface lifted off it are the same value by
+        /// construction, which is the whole reason the night face reads as one
+        /// material.
+        static let linen = Color(red: 28 / 255, green: 25 / 255, blue: 19 / 255)  // #1C1913
+    }
 
     // Pops (ration these) — one per screen. Now takes the leaf; Mirror takes
     // dusk-slate. openSky is deliberately unused on both: the handoff calls it
@@ -19,8 +61,12 @@ enum Silk {
 
     /// Mirror's pop — a value shift of the duskBlue hue family, not openSky.
     /// The week band and the score ensō share it.
+    ///
+    /// There is no night counterpart. `#9FB6C4` was one, and it went with the
+    /// slate: Mirror's night pop is paper over the hedgerow (`scoreRingNight`),
+    /// and a light blue in a warm room was the cast the night ground was taken
+    /// blacker to be rid of.
     static let duskSlate = Color(red: 0.235, green: 0.310, blue: 0.361)  // #3C4F5C
-    static let duskSlateNight = Color(red: 0.624, green: 0.714, blue: 0.769) // #9FB6C4
 
     /// The wash behind the night hero, and nothing else — the faintest green of
     /// the hedgerow, standing in for what was dusk blue. #607858 at 7.5%.
@@ -51,6 +97,16 @@ enum Silk {
     /// ink .65 → 4.98:1 on flat paper, 4.87:1 under `Dapple`, 4.79:1 on linen;
     /// paper .55 → 5.69:1 on lacquer, 4.99:1 on the ground, 4.68:1 under the
     /// moonwash.
+    ///
+    /// **Both night grounds named above are now history and the floor stands.**
+    /// The slate radial was replaced by the canvas's warm black (`Night`), whose
+    /// lightest stop #1C1913 is darker than the slate's darkest, and the
+    /// moonwash was re-cut from duskBlue to `hedgeWash` at the same .075. Every
+    /// figure moves the one way that needs no re-derivation: paper on a darker
+    /// ground gains contrast, so paper .55 clears AA on the ellipse's centre by
+    /// more than the 4.68:1 it was floored at. Nothing in the remap table below
+    /// changes, which is the point of recording it against the worst ground
+    /// rather than the current one.
     ///
     /// The whole text ramp was shifted, not just the failing floor, and that is
     /// the load-bearing part. Lifting only what failed would have collided the

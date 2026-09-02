@@ -106,19 +106,28 @@ struct WheelPickerOverlay: View {
         })
     }
 
-    /// rgba(26,28,32,.97) — the night ground's own floor, #1A1C20, not the
-    /// warm lacquer: the overlay is a veil over the slate radial, so it must
-    /// be cut from the same cloth. (Silk Mockup.dc.html:368; Ground.low)
-    /// Internal, not fileprivate: Settings' door editor is the same overlay
-    /// idiom and must wear the same veil rather than a second constant.
-    static let nightVeil = Color(red: 26 / 255, green: 28 / 255, blue: 32 / 255)
+    /// The veil, both faces: the ground itself at .97 (Silk Mockup.dc.html:368).
+    /// Day lays `paper` on paper, so the veil is invisible as a colour and only
+    /// the page under it goes; night lays `Night.ground` on the night radial and
+    /// does the same thing, dimming the ellipse's centre by the one step the
+    /// ellipse lifted it.
+    ///
+    /// It used to be `#1A1C20` at .97 under a comment claiming it was the
+    /// ground's own floor. That was true of the handoff's slate radial and false
+    /// of the ground Silk draws, so a cool blue-grey sheet was being laid over a
+    /// warm black page. Internal, not fileprivate: Settings' door editor and the
+    /// wait wear this exact veil, and they must reach one expression of it
+    /// rather than three copies of a hex.
+    static func veil(night: Bool) -> Color {
+        (night ? Silk.Night.ground : Silk.paper).opacity(0.97)
+    }
 
     var body: some View {
         ZStack {
             // The backdrop is the commit button — the whole screen, minus the
             // wheels themselves, which eat their taps the way the prototype's
             // `w.eat` stops propagation (Silk Mockup.dc.html:287).
-            (night ? Self.nightVeil.opacity(0.97) : Silk.paperAlpha(0.97))
+            Self.veil(night: night)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture { onCommit(touched ? selections : nil) }
@@ -353,9 +362,10 @@ private struct Wheel: View {
         withAnimation(Silk.motion(0.4)) { centred = next }
     }
 
-    /// The backdrop's own colour at full strength: nightVeil or paper at .97
-    /// over a ground cut from the same cloth reads as the veil itself.
-    private var veil: Color { night ? WheelPickerOverlay.nightVeil : Silk.paper }
+    /// The backdrop's own colour at full strength — the ground, not the .97
+    /// sheet: a veil laid on a ground cut from the same cloth reads as the
+    /// ground, so painting the dissolve in it is painting in the backdrop.
+    private var veil: Color { night ? Silk.Night.ground : Silk.paper }
 
     private var fullInk: Color { night ? Silk.paperAlpha(0.85) : Silk.ink }
 
