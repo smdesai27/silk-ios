@@ -147,6 +147,10 @@ struct Ground: View {
                 .frame(width: geo.size.width * 2.36, height: geo.size.height * 1.56)
                 .position(x: geo.size.width / 2, y: geo.size.height * 0.34)
             }
+            // A CSS background paints inside its box and this one is more than
+            // twice the box, so the overflow is cut rather than left to whatever
+            // happens to clip it — the same reason `Dapple` clips its pools.
+            .clipped()
             .opacity(night ? 1 : 0)
             .background(Silk.paper)
         }
