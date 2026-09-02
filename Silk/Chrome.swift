@@ -34,24 +34,16 @@ struct PageDots: View {
                     Circle()
                         .fill(i == index ? active : inactive)
                         .frame(width: 5, height: 5)      // _ds_bundle.css:315
-                        // 44 × 44, the thumb, in both directions.
-                        //
-                        // The cell was 12 wide, which is exactly the CSS's 7pt
-                        // gap around a 5pt dot (_ds_bundle.css:312, 315), with
-                        // 8pt of slop on the row's outer edges. That is a 12pt
-                        // target, and three of them cannot each be given 44
-                        // while their centres stay 12 apart — 44pt targets at a
-                        // 12pt pitch overlap two neighbours, and whichever is
-                        // drawn last simply eats the others' centres.
-                        //
-                        // So the pitch is what gives: the row is 132 wide
-                        // instead of 52, and the visible dots sit 44 apart
-                        // rather than 12. **The dot itself is untouched at
-                        // 5pt** and the row is still centred on the same axis;
-                        // what changed is the air between them, which is the
-                        // one part of this the CSS was specific about. It is
-                        // spent on being able to hit them.
-                        .frame(width: 44, height: 44)
+                        // 12 wide: the CSS's 7pt gap around a 5pt dot
+                        // (_ds_bundle.css:312, 315), so the row keeps the
+                        // pitch the design was specific about. 44 tall for
+                        // the thumb. Three 44-wide targets cannot sit on a
+                        // 12pt pitch without eating each other's centres, and
+                        // widening the pitch changes what the row looks like;
+                        // the swipe is the gesture and the dot is the
+                        // shortcut, so the narrow target is the accepted
+                        // trade. VoiceOver reaches each dot by name below.
+                        .frame(width: 12, height: 44)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

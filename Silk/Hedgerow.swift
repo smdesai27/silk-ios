@@ -507,7 +507,7 @@ struct Hedgerow: View, @MainActor Animatable {
             ForEach([550, 16_500, 200_000, 600_000, 1_000_000], id: \.self) { n in
                 ForEach([false, true], id: \.self) { night in
                     ZStack {
-                        (night ? Color(red: 0.055, green: 0.047, blue: 0.031) : Silk.paper)
+                        (night ? Silk.Night.ground : Silk.paper)
                         Hedgerow(count: n, night: night, progress: 1)
                     }
                     .frame(width: 195, height: 422)
