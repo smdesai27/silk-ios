@@ -2,9 +2,10 @@ import Foundation
 import SilkCore
 import FamilyControls
 import ManagedSettings
-#if DEBUG
+// Unconditional since `Wall.reconcile` gained a shipping log line: the
+// calibration logger below is still DEBUG-only, but the reconcile's refusal to
+// write is a Release fact and has to be visible on a shipped build.
 import os
-#endif
 
 /// The App Group bridge between the app and its three extensions.
 /// Everything the shield needs to render — and everything the monitor needs to
@@ -434,6 +435,23 @@ public enum SharedStore {
         encode(doorSelections, key: Key.doorSelections)
     }
 
+    /// The same two reads, with the corrupt case kept apart from the absent
+    /// one — the distinction `loadPolicyDecoded` exists for, for the same
+    /// reason and on the same one code path.
+    ///
+    /// The loaders above end in `?? FamilyActivitySelection()` and `?? [:]`,
+    /// which is right for every caller that is *editing* a selection (an
+    /// unreadable blob is about to be overwritten by the picker anyway) and
+    /// wrong for the one caller that is *enforcing* it: there, an empty set is
+    /// not "nothing to block", it is a torn-down wall.
+    static func loadWallSelectionDecoded() -> Decoded<FamilyActivitySelection> {
+        decoded(FamilyActivitySelection.self, key: Key.wallSelection)
+    }
+
+    static func loadDoorSelectionsDecoded() -> Decoded<[UUID: FamilyActivitySelection]> {
+        decoded([UUID: FamilyActivitySelection].self, key: Key.doorSelections)
+    }
+
     /// Every application token any door names. What the wall covers is this
     /// union plus the extras in the wall selection.
     public static func doorApplicationTokens() -> Set<ApplicationToken> {
@@ -522,6 +540,19 @@ public enum SharedStore {
         case absent          // no data at the key: never configured
         case value(T)
         case corrupt         // data present, decode threw
+
+        /// The value an enforcer may act on, with the absent key filled in by
+        /// the empty value the caller nominates — and `nil` for the corrupt
+        /// one, which is the state no default can stand in for. Reading a
+        /// corrupt blob as empty is precisely the fail-open `Wall.reconcile`
+        /// spends its longest comment refusing.
+        func orEmpty(_ empty: @autoclosure () -> T) -> T? {
+            switch self {
+            case .absent: return empty()
+            case .value(let v): return v
+            case .corrupt: return nil
+            }
+        }
     }
 
     static func decoded<T: Decodable>(_ type: T.Type, key: String) -> Decoded<T> {
@@ -575,24 +606,68 @@ public enum Wall {
         ManagedSettingsStore(named: storeName)
     }
 
+    /// The reconcile's own log, under the subsystem all four processes share
+    /// and the category `WallController` already writes the app-side wall
+    /// events to — a refusal to write from a shield extension and the app's
+    /// own arming read as one story under a single Console filter. Payload
+    /// never goes in a line here; see `calibrationLog`'s note on the c49bc17
+    /// doctrine for why.
+    private static let log = Logger(subsystem: SharedStore.logSubsystem, category: "wall")
+
     /// Reconcile the wall against the ledger. Idempotent, callable from any
     /// process — the app on foreground, the monitor on intervalDidEnd, the
     /// shield extensions on every render/tap. Fail-closed: if state can't be
     /// read, the wall goes up whole.
     public static func reconcile(now: Date = Date()) {
-        // The wall is apps only: every door's tokens plus the extras (the
-        // wall selection — apps blocked without a name or launch entry).
-        // A nil selection is an empty one, not an unconfigured wall; the
-        // doors alone can carry the whole policy.
-        let extras = SharedStore.loadWallSelection() ?? FamilyActivitySelection()
-        // Decoded once and threaded through: the exceptions below need the
-        // same dictionary, and this runs on every shield render.
-        let doorSelections = SharedStore.loadDoorSelections()
-        let blocked = doorSelections.values.reduce(into: extras.applicationTokens) {
-            $0.formUnion($1.applicationTokens)
-        }
         let store = Self.store
 
+        // The wall is apps only: every door's tokens plus the extras (the
+        // wall selection — apps blocked without a name or launch entry). An
+        // ABSENT selection is an empty one, not an unconfigured wall; the
+        // doors alone can carry the whole policy.
+        //
+        // A CORRUPT one is neither, and is why both keys come through
+        // `decoded` and not through the loaders that end in
+        // `?? FamilyActivitySelection()` / `?? [:]`. Those swallow a decode
+        // failure into an empty set, and the write at the bottom of this
+        // function turns an empty set into a torn-down wall — from ANY
+        // process, including a shield render. FamilyControls tokens are opaque
+        // OS-versioned blobs, so the realistic case is an iOS upgrade making
+        // `silk.door.selections` unreadable while the policy still decodes
+        // perfectly: the one shape where a readable policy and an unreadable
+        // selection meet. The `.corrupt` policy branch below already refuses
+        // to write an empty union for exactly this reason; it is the same
+        // refusal, and README rule 4 makes no exception for the key that
+        // happens to hold the tokens.
+        //
+        // Decoded once and threaded through: the exceptions below need the
+        // same dictionary, and this runs on every shield render.
+        //
+        // Returns nil when either key is present-and-unreadable. Read AFTER
+        // the policy, because two of the policy's three answers — absent, and
+        // a wall the user switched off — are owed regardless of what the
+        // selections say.
+        func readableSelections() -> (extras: FamilyActivitySelection,
+                                      doors: [UUID: FamilyActivitySelection],
+                                      blocked: Set<ApplicationToken>)? {
+            guard let extras = SharedStore.loadWallSelectionDecoded()
+                    .orEmpty(FamilyActivitySelection()),
+                  let doors = SharedStore.loadDoorSelectionsDecoded().orEmpty([:]) else {
+                // Which key, and what was in it, is exactly what the shipping
+                // log does not say (the c49bc17 doctrine: keep the event,
+                // redact the payload). The event is enough — it is the only
+                // way to tell this refusal apart from a reconcile that simply
+                // had nothing to do.
+                log.error("reconcile: a selection blob would not decode; wall left as it stands")
+                return nil
+            }
+            return (extras, doors, doors.values.reduce(into: extras.applicationTokens) {
+                $0.formUnion($1.applicationTokens)
+            })
+        }
+
+        let blocked: Set<ApplicationToken>
+        let extras: FamilyActivitySelection
         let exceptions: Set<ApplicationToken>
         switch SharedStore.loadPolicyDecoded() {
         case .absent:
@@ -618,15 +693,17 @@ public enum Wall {
             // forbids.
             //
             // Which is also why an empty union is a refusal to write rather than
-            // a wall of nothing. `blocked` comes from selections that swallow
-            // their own decode failures (`loadDoorSelections` ends in `?? [:]`),
-            // and FamilyControls tokens are opaque versioned blobs — the
-            // realistic failure is BOTH keys unreadable at once, after an OS
-            // upgrade. Assigning the empty union there would tear down the whole
-            // standing shield: fail-open, on the path this branch exists to keep
-            // closed. An empty union under an unreadable policy is not "nothing
-            // to block", it is a second input this process cannot read.
-            guard !blocked.isEmpty else { return }
+            // a wall of nothing. An unreadable selection no longer arrives here
+            // disguised as an empty one — `readableSelections()` above turns
+            // that case back at the door, for every policy and not just this
+            // one — but an empty union under a policy this process cannot read
+            // is still a second input it cannot reason about, and assigning it
+            // would tear down the whole standing shield: fail-open, on the path
+            // this branch exists to keep closed.
+            guard let sel = readableSelections() else { return }
+            guard !sel.blocked.isEmpty else { return }
+            extras = sel.extras
+            blocked = sel.blocked
             exceptions = []
         case .value(let policy):
             guard policy.wallEnabled else {
@@ -649,11 +726,20 @@ public enum Wall {
                 // state that cannot be READ — the `.corrupt` branch above. Here
                 // the policy decoded and said off. Obeying it is the ledger
                 // being the truth.
+                //
+                // Decided before the selections are even read, and so still
+                // owed when one of them is corrupt: off means down whatever the
+                // token blobs say, and there is nothing in an unreadable
+                // selection that could argue for keeping a shield the user
+                // switched off. Fail-closed governs the doors, not the switch.
                 store.clearAllSettings()
                 return
             }
+            guard let sel = readableSelections() else { return }
+            extras = sel.extras
+            blocked = sel.blocked
             exceptions = SharedStore.openDoorTokens(at: now, policy: policy,
-                                                    selections: doorSelections)
+                                                    selections: sel.doors)
         }
 
         store.shield.applications = blocked.subtracting(exceptions)
