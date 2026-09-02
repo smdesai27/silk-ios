@@ -175,7 +175,21 @@ public enum Validator {
             //
             // Three terms now: the pool binds, and so does the door's own
             // ceiling.
-            let asked = min(minutes, remaining, doorRemaining ?? Int.max)
+            //
+            // A FOURTH, and it is a guard rather than a rule: no grant may
+            // outlast the day it is drawn from. It is invisible in every real
+            // configuration — `relock` is already `min(now + asked,
+            // nextDownHoursStart)` and the next down-hours start is never more
+            // than a day away — and it is what makes the arithmetic below
+            // provably bounded when the pool and the ceiling are not. Both of
+            // those come out of a stored blob: `proposedState` clamps what the
+            // parser writes, but a policy persisted by an older build, or
+            // corrupted, can carry `Int.max` in either, and this arm is the one
+            // that multiplies. `askableMinutes` applies the same term, or
+            // `theWallPromisesOnlyWhatTheBarWillMint` would be a clamp the wall
+            // does not know about.
+            let asked = min(minutes, remaining, doorRemaining ?? Int.max,
+                            PolicyState.maxMinutesPerDay)
 
             // Already open, and the ask cannot reach past it. The comparison is
             // against `asked` and NOT against the ask as spoken, because
@@ -234,7 +248,18 @@ public enum Validator {
             // min(now + minutes, downStart), and we debit what was granted.
             // After the cap clamp, and only ever reducing — so the debit still
             // equals what was granted and the edge can never overdraw a ceiling.
-            let requestedEnd = now.addingTimeInterval(TimeInterval(asked * 60))
+            // `Double(asked) * 60`, and NOT `TimeInterval(asked * 60)`. The
+            // multiply used to happen in `Int`, where Swift traps on overflow:
+            // with a pool of 10^18 in the policy — two sentences from a clean
+            // install, "budget 999999999999999999" then "instagram
+            // 999999999999999999" — `asked` was 10^18 and sixty times it is not
+            // an `Int`. Floating point saturates to infinity instead of
+            // trapping, and every consumer below is a `min` against a real
+            // instant, so an absurd end is bounded back to the edge rather than
+            // killing the bar. The clamp above means this can no longer be
+            // reached; a parser can widen and a blob can arrive from anywhere,
+            // and the arithmetic must not be the thing that decides.
+            let requestedEnd = now.addingTimeInterval(Double(asked) * 60)
             let edge = nextDownHoursStart(after: now, downHours: state.downHours, calendar: calendar)
             let relock = min(requestedEnd, edge ?? requestedEnd)
             let granted = max(0, Int(relock.timeIntervalSince(now) / 60))
@@ -450,9 +475,16 @@ public enum Validator {
         if ledger.isClosed(door.id, at: now, dayStart: dayStart) { return 0 }
         let ceiling = ceilingRemaining(door: door, state: state, ledger: ledger,
                                        dayStart: dayStart, calendar: calendar)
+        // The day's ceiling is the `.spend` arm's fourth clamp term, and it is
+        // here for the reason this whole function exists: a clamp the bar
+        // applies and the wall does not is a subtitle that promises what Silk
+        // refuses. Unreachable in every real configuration — the edge below is
+        // never more than a day out — and load-bearing against a stored policy
+        // carrying an `Int.max` pool or ceiling.
         var askable = min(ledger.remainingMinutes(budget: state.budgetMinutes, dayStart: dayStart,
                                                   calendar: calendar),
-                          ceiling ?? Int.max)
+                          ceiling ?? Int.max,
+                          PolicyState.maxMinutesPerDay)
         if let edge = nextDownHoursStart(after: now, downHours: state.downHours, calendar: calendar) {
             askable = min(askable, Int(edge.timeIntervalSince(now) / 60))
         }

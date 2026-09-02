@@ -134,6 +134,47 @@ public struct PolicyState: Hashable, Codable, Sendable {
     /// it. Splitting it into a sibling App Group key would reintroduce both.
     public var doorCaps: [UUID: Int]
 
+    // MARK: - The day's ceiling
+    //
+    // ONE constant, and every daily minute number in the policy is measured
+    // against it: the pool, and every per-door ceiling. Both are counted against
+    // a Silk day and both refill at its boundary, so a number larger than the
+    // day cannot mean what it says — there is no day for the 1441st minute to
+    // be spent in.
+
+    /// The most minutes any daily number in this policy may mean: one day.
+    ///
+    /// A parsed number is unbounded, and nothing downstream bounded it. The
+    /// reader takes an eighteen-digit literal straight through `Int(tok)`
+    /// (`NumberParser.allNumbers`), and its hours multiplier already saturates
+    /// at `Int.max` rather than trapping (`NumberParser.saturating`) — so
+    /// "budget 999999999999999999" compiled, passed provenance, and parked as
+    /// an ordinary loosening. Once applied, `Validator`'s `.spend` arm clamped
+    /// the ask to a pool of 10^18 and computed `asked * 60`, which is not an
+    /// `Int`: "instagram 999999999999999999" was a SIGTRAP in the bar, reachable
+    /// in two sentences from a clean install. The clamp is the fix; the
+    /// validator's `Double` multiply is the belt behind it, because a policy can
+    /// also arrive from a stored blob this function never touched.
+    public static let maxMinutesPerDay = 1440
+
+    /// A daily minute count as this policy is willing to hold it.
+    ///
+    /// CLAMPED, NOT REFUSED, and the precedent is P4: a duration that overruns
+    /// the pool is not an error, it is bounded to what she can actually have,
+    /// and the read-back then states the bounded number ("Requested durations
+    /// clamp to the minutes actually remaining"). A budget of a billion is the
+    /// same sentence one order of absurdity further out, and answering it with
+    /// "Didn't get that." would teach nothing about why. So "budget
+    /// 999999999999999999" parks as `Tomorrow: 1440` — a day, named — and the
+    /// user can see exactly what she is getting.
+    ///
+    /// The floor is here for symmetry rather than for a live path: no parser
+    /// produces a negative, and a stored negative budget would already read as
+    /// an empty pool through `remainingMinutes`' own `max(0, …)`.
+    public static func clampedDaily(_ minutes: Int) -> Int {
+        min(max(0, minutes), maxMinutesPerDay)
+    }
+
     /// `doorCaps` goes last and carries a default, so every call site that
     /// predates caps keeps compiling — a door with no entry is simply uncapped,
     /// which is what those call sites already mean.

@@ -81,11 +81,22 @@ public enum PolarityEngine {
 
     /// Apply a rule-change command to a state, producing the proposed state.
     /// Spending is not a rule change — a grant is a debit, not a parameter.
+    ///
+    /// **This is where a parsed number becomes policy, so this is where it is
+    /// bounded.** Every command carrying minutes goes through
+    /// `PolicyState.clampedDaily`, and the two that do are the two the grammar
+    /// can write an arbitrary integer into: the pool and a door's ceiling.
+    /// Nothing further down the pipe checks magnitude — `Validator`'s
+    /// provenance guards ask where a number came from and never how big it is,
+    /// and `classify` is a pure comparison — so a bound applied anywhere else
+    /// would be one the next surface forgets. Applied here it covers the
+    /// grammar, the widener and every wheel at once, because all of them reach
+    /// the policy through this function.
     public static func proposedState(applying command: Command, to state: PolicyState) -> PolicyState? {
         var s = state
         switch command {
         case .setBudget(let m):
-            s.budgetMinutes = m
+            s.budgetMinutes = PolicyState.clampedDaily(m)
         case .setDownHoursStart(let t):
             s.downHours.start = t
         case .setDownHoursEnd(let t):
@@ -100,7 +111,10 @@ public enum PolarityEngine {
             // "present in both" restriction mandatory rather than merely wise.
             s.doorCaps.removeValue(forKey: door.id)
         case .setDoorCap(let door, let minutes):
-            s.doorCaps[door.id] = minutes   // nil removes the key: the cap is cleared
+            // nil removes the key: the cap is cleared. A number is bounded to
+            // the day like the pool is — a ceiling of 10^18 is not a lid, and
+            // it is `Int.max` in every comparison `classify` makes anyway.
+            s.doorCaps[door.id] = minutes.map(PolicyState.clampedDaily)
         case .spend, .placeBoundAsk, .closeDoorToday, .closeAllToday, .status, .downHoursQuery:
             return nil  // not rule changes
         }
