@@ -74,21 +74,49 @@ private func smoothstep(_ e0: Double, _ e1: Double, _ x: Double) -> Double {
 /// The one Silk curve, solved for a scalar — the per-leaf easing. The *outer*
 /// animation is linear on purpose: the stagger is what shapes the growth, and
 /// curving it twice reads as a lurch.
-private func silkEase(_ x: Double) -> Double {
-    if x <= 0 { return 0 }
-    if x >= 1 { return 1 }
-    let x1 = 0.22, y1 = 1.0, x2 = 0.28, y2 = 1.0
-    func cx(_ t: Double) -> Double { let u = 1 - t; return 3*u*u*t*x1 + 3*u*t*t*x2 + t*t*t }
-    func cy(_ t: Double) -> Double { let u = 1 - t; return 3*u*u*t*y1 + 3*u*t*t*y2 + t*t*t }
-    var lo = 0.0, hi = 1.0, t = x
-    for _ in 0..<22 {
-        let v = cx(t)
-        if abs(v - x) < 0.00001 { break }
-        if v < x { lo = t } else { hi = t }
-        t = (lo + hi) / 2
+///
+/// **Solved once, into a table.** A cubic Bézier's x has no closed-form
+/// inverse, so this bisects — and it used to bisect twenty-two times for every
+/// leaf on every frame, with a phone-sized planting running to roughly fifteen
+/// hundred items and the grow-in lasting 1.15s. That is about two million
+/// bisection steps for one ceremony, all of them recomputing the same 256
+/// answers over and over.
+///
+/// 256 samples with a linear read between them. The error that leaves is
+/// bounded by the curve's own bend across a 1/256 step, which on a 20pt leaf is
+/// far below a pixel; and the sampled function is a shape, not a fact — nothing
+/// downstream of it is a number anyone reads.
+private enum SilkEase {
+    private static let steps = 256
+    private static let table: [Double] = (0...steps).map { solve(Double($0) / Double(steps)) }
+
+    static func value(_ x: Double) -> Double {
+        if x <= 0 { return 0 }
+        if x >= 1 { return 1 }
+        let p = x * Double(steps)
+        let i = Int(p)
+        return table[i] + (table[i + 1] - table[i]) * (p - Double(i))
     }
-    return cy(t)
+
+    /// The bisection itself, now run 257 times in total rather than per leaf.
+    private static func solve(_ x: Double) -> Double {
+        if x <= 0 { return 0 }
+        if x >= 1 { return 1 }
+        let x1 = 0.22, y1 = 1.0, x2 = 0.28, y2 = 1.0
+        func cx(_ t: Double) -> Double { let u = 1 - t; return 3*u*u*t*x1 + 3*u*t*t*x2 + t*t*t }
+        func cy(_ t: Double) -> Double { let u = 1 - t; return 3*u*u*t*y1 + 3*u*t*t*y2 + t*t*t }
+        var lo = 0.0, hi = 1.0, t = x
+        for _ in 0..<22 {
+            let v = cx(t)
+            if abs(v - x) < 0.00001 { break }
+            if v < x { lo = t } else { hi = t }
+            t = (lo + hi) / 2
+        }
+        return cy(t)
+    }
 }
+
+private func silkEase(_ x: Double) -> Double { SilkEase.value(x) }
 
 // MARK: - Leaf forms
 
@@ -160,13 +188,35 @@ struct Planting {
         /// leaf and get exactly the time that remains, so they too are whole
         /// when the settled paths take over at progress 1.
         var window: Double = 0.40
+        /// The item where it finally sits: the leaf already translated to its
+        /// attach point, the stem exactly as drawn. Filled in by `add`, and the
+        /// same path the settled aggregate is built from, so it costs one copy
+        /// of the geometry and not two computations of it.
+        ///
+        /// It is what an item costs once it has finished unfurling. Mid-frame
+        /// a settled leaf used to be redrawn through a copied context, a
+        /// rotate, a scale and — for stems — a fresh `trimmedPath` allocation,
+        /// all to arrive at a transform that is the identity. Now it is a fill.
+        var placed = Path()
     }
 
     var items: [Item] = []
     var settledFills: [Path] = Array(repeating: Path(), count: 5)
     var settledStems: [Path] = Array(repeating: Path(), count: 5)
 
-    static func build(size: CGSize, count: Int) -> Planting {
+    /// Built off the main actor. This walks a few thousand random draws, three
+    /// spray passes and as many `Path` constructions, and it used to run
+    /// synchronously inside the view's `task` — which is main-actor isolated —
+    /// on the first frame Mirror mounted. That is a hitch on the one screen
+    /// whose whole point is a thing arriving smoothly.
+    ///
+    /// `nonisolated` and `async`: a nonisolated async function does not inherit
+    /// its caller's executor, so awaiting it from the view hands the work to
+    /// the concurrent pool. The result is `sending` because a `Planting` is
+    /// full of `Path`, which is not `Sendable` — but every one of them is built
+    /// here, from nothing, and never shared, so the region is provably the
+    /// caller's to take.
+    nonisolated static func build(size: CGSize, count: Int) async -> sending Planting {
         var out = Planting()
         let W = size.width, H = size.height
         guard W > 1, H > 1 else { return out }
@@ -231,12 +281,16 @@ struct Planting {
         }
 
         func add(_ item: Item) {
+            var item = item
+            item.placed = item.isStem
+                ? item.path
+                : item.path.applying(CGAffineTransform(translationX: item.origin.x,
+                                                       y: item.origin.y))
             out.items.append(item)
-            let t = CGAffineTransform(translationX: item.origin.x, y: item.origin.y)
             if item.isStem {
-                out.settledStems[item.band].addPath(item.path)
+                out.settledStems[item.band].addPath(item.placed)
             } else {
-                out.settledFills[item.band].addPath(item.path.applying(t))
+                out.settledFills[item.band].addPath(item.placed)
             }
         }
 
@@ -359,11 +413,19 @@ struct Hedgerow: View, @MainActor Animatable {
 
     var body: some View {
         GeometryReader { geo in
-            Canvas(opaque: false) { ctx, _ in
+            // `rendersAsynchronously` because this is scenery: nothing here is a
+            // number anyone reads, so a frame arriving off the main thread — and
+            // one frame late under load — costs nothing, while the main thread
+            // keeps the swipe that brought the page here.
+            Canvas(opaque: false, rendersAsynchronously: true) { ctx, _ in
                 Self.paint(ctx, planting, progress: progress, night: night)
             }
             .task(id: Key(w: geo.size.width.rounded(), h: geo.size.height.rounded(), count: count)) {
-                planting = Planting.build(size: geo.size, count: count)
+                let built = await Planting.build(size: geo.size, count: count)
+                // The id changed under us: a later task is already building the
+                // planting this frame actually wants.
+                guard !Task.isCancelled else { return }
+                planting = built
             }
         }
         .allowsHitTesting(false)
@@ -393,8 +455,32 @@ struct Hedgerow: View, @MainActor Animatable {
             return
         }
 
+        // Two thirds of a frame, near the end of the run, is items that have
+        // already finished — the unfurl window is 0.40 and the births are
+        // spread over 0.60, so the settled and the still-moving are always
+        // mixed rather than in phases. Folding the settled ones into an
+        // accumulated path would therefore mean a cumulative snapshot at every
+        // checkpoint of progress, which is megabytes of duplicated geometry for
+        // a minority of the frames. They get a fast path instead: the placed
+        // geometry, one fill, no ease, no trim, no copied context.
         for item in p.items {
-            let e = silkEase(min(max((progress - item.t0) / item.window, 0), 1))
+            let raw = (progress - item.t0) / item.window
+            if raw <= 0 { continue }
+
+            if raw >= 1 {
+                let a = Ladder.alpha[item.band]
+                if item.isStem {
+                    ctx.stroke(item.placed,
+                               with: .color(ladder[item.band].opacity(a * 0.9)),
+                               style: StrokeStyle(lineWidth: Ladder.stemWidth[item.band],
+                                                  lineCap: .round))
+                } else {
+                    ctx.fill(item.placed, with: .color(ladder[item.band].opacity(a)))
+                }
+                continue
+            }
+
+            let e = silkEase(raw)
             if e <= 0.001 { continue }
             let alpha = Ladder.alpha[item.band] * min(1, e * 1.35)
 
