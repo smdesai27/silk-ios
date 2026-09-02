@@ -5,7 +5,7 @@
 # waiting on a round trip, and how .githooks/pre-push catches the cheap
 # failures before they leave the machine.
 #
-#   scripts/ci.sh              all three suites + the Release build (~11 min)
+#   scripts/ci.sh              all three suites + the Release build (~25 min)
 #   scripts/ci.sh spine        SilkCore only (~15 s, no simulator, runs on Linux)
 #   scripts/ci.sh unit         SilkTests only — the app's own logic (~1 min)
 #   scripts/ci.sh ui           SilkUITests only (~5 min)

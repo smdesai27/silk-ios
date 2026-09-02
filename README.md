@@ -34,7 +34,7 @@ xcodebuild -project Silk.xcodeproj -scheme Silk \
 ## Tests
 
 ```bash
-scripts/ci.sh                    # all three suites, ~7 min
+scripts/ci.sh                    # all three suites, ~25 min
 scripts/ci.sh spine              # SilkCore only, seconds, no simulator
 scripts/ci.sh unit               # SilkTests only — the app's logic, ~1 min
 scripts/ci.sh ui                 # SilkUITests only, ~5 min

@@ -4,16 +4,22 @@
 # Everything else — all four bundle IDs, the app group, the log subsystem —
 # derives from it. To rename, change that one line and regenerate.
 #
-# Two doors close permanently and neither has reopened yet:
+# One door closes permanently and one already has:
 #   - bundle IDs lock at the FIRST build upload to App Store Connect
-#   - the FamilyControls (Distribution) entitlement is granted per bundle ID,
-#     so renaming after it lands means re-requesting all four and waiting again
-# Rename before either happens, not after.
+#   - the FamilyControls (Distribution) entitlement was granted team-level,
+#     not per bundle ID (docs/market/shipping-roadmap.md, 2026-08-17) — one
+#     submission covered all four identifiers, so renaming does not cost a
+#     re-request there
+# Rename before the App Store Connect upload, not after.
 name: Silk
 options:
   deploymentTarget:
     iOS: "26.5"
   createIntermediateGroups: true
+  # Matches DEVELOPER_DIR in .github/workflows/ci.yml. Without it, opening the
+  # generated project on any Xcode offers to update it to "recommended
+  # settings" — this pins the version XcodeGen stamps so it stops asking.
+  xcodeVersion: "26.6"
 
 settings:
   base:
