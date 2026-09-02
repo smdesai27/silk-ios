@@ -462,8 +462,8 @@ final class AppModel {
             while !Task.isCancelled {
                 // Nothing strong may be held across the sleep, or the weak
                 // capture buys nothing and the model outlives its owner.
-                guard let interval = self?.secondsUntilNextWake() else { return }
-                try? await Task.sleep(for: .seconds(interval))
+                guard let wake = self?.nextWake() else { return }
+                try? await Task.sleep(for: .seconds(wake.seconds))
                 guard !Task.isCancelled, let self else { return }
                 // A shield render can record attempts while Silk stays
                 // .active — iPad Split View — so the tick cannot blindly
@@ -475,8 +475,24 @@ final class AppModel {
                    cache.revision != SharedStore.attemptsRevision() {
                     self.weekAttemptsCache = nil
                 }
-                self.syncLedgerIfStale()
+                let ledgerMoved = self.syncLedgerIfStale()
                 self.now = .now
+                // The wall is re-applied only when something it enforces could
+                // actually have moved. `Wall.reconcile` reads the union of the
+                // selections and subtracts the doors the ledger says are open,
+                // and the only inputs to that answer which change while nobody
+                // touches Silk are `now` crossing a grant's expiry or a close's
+                // lift (both are `nextTransition`, and the sleep is aimed at
+                // them), the day boundary passing under a close (`turned`), and
+                // a write from another process (`ledgerMoved`). Every local
+                // write reconciles at its own commit. A wake that is none of
+                // those is the plain minute, and it exists to redraw a deadline
+                // — four JSON decodes and a settings-store write to change
+                // nothing was the whole cost of showing the time.
+                let turned = DayBoundary.dayStart(now: self.now,
+                                                  downHours: self.policy.downHours)
+                    != self.compactedDayStart
+                guard wake.forTransition || ledgerMoved || turned else { continue }
                 // A grant that just expired has to close its door, and a day
                 // that turned matures whatever was waiting for it.
                 self.wall.reconcile()
@@ -486,12 +502,21 @@ final class AppModel {
         }
     }
 
-    private func secondsUntilNextWake() -> Double {
+    /// When to wake, and whether the LEDGER is what asked for that wake —
+    /// a grant expiring or a close lifting, as against the plain minute the
+    /// deadlines are rendered to. The tick spends its reconcile on the first
+    /// and not the second.
+    private func nextWake() -> (seconds: Double, forTransition: Bool) {
         let cal = Calendar.current
         let nextMinute = cal.nextDate(after: .now, matching: DateComponents(second: 0),
                                       matchingPolicy: .nextTime) ?? Date().addingTimeInterval(60)
-        let wake = min(nextMinute, ledger.nextTransition(after: .now) ?? nextMinute)
-        return max(1, wake.timeIntervalSince(.now))
+        let transition = ledger.nextTransition(after: .now)
+        let wake = min(nextMinute, transition ?? nextMinute)
+        // At-or-before, not equal: a transition landing exactly on the minute
+        // mark is still the reason this wake exists, and a wake the sleep
+        // overshoots is one the transition has already passed.
+        return (max(1, wake.timeIntervalSince(.now)),
+                transition.map { $0 <= nextMinute } ?? false)
     }
 
     // MARK: - The bar
@@ -2142,7 +2167,11 @@ final class AppModel {
     /// force-quitting was enough to skip the wait. The pending change's own
     /// timestamp is the only thing a boundary can be measured against.
     private func applyPendingIfDayTurned() {
-        guard let pending = SharedStore.loadPendingLoosening() else { return }
+        // The in-memory slot, not a decode: `park` is the only writer of the
+        // pending pair and it writes both halves at once, so the slot is the
+        // store — and this runs on the minute tick, where a JSON decode to
+        // learn "still nothing parked" is the commonest answer there is.
+        guard let pending = slot.pending else { return }
         guard let proposedAt = SharedStore.loadPendingProposedAt() else {
             // Persisted by a build that stored no timestamp. Stamp it now and
             // make it wait a boundary: erring toward the edge holding is the
@@ -2298,11 +2327,17 @@ final class AppModel {
     /// mutation syncs first, so its snapshot-and-mutate runs on the ledger
     /// that actually stands; the reload bumps the generation, retiring any
     /// undo whose snapshot predates it.
-    private func syncLedgerIfStale() {
+    ///
+    /// Reports whether it actually reloaded, which is the one signal the tick
+    /// has that another process moved the truth under it — every other caller
+    /// discards the answer and is only asking to be current.
+    @discardableResult
+    private func syncLedgerIfStale() -> Bool {
         let stamp = SharedStore.ledgerStamp()
-        guard stamp != ledgerStamp else { return }
+        guard stamp != ledgerStamp else { return false }
         ledger = SharedStore.loadLedger()
         ledgerStamp = stamp
         ledgerGeneration += 1
+        return true
     }
 }
