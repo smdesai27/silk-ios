@@ -351,7 +351,34 @@ final class OnboardingUITests: XCTestCase {
     private func say(_ bar: XCUIElement, _ sentence: String,
                      file: StaticString = #filePath, line: UInt = #line) {
         tap(bar, "the bar", file: file, line: line)
+        // On a cold simulator the session's FIRST focus has been seen to take
+        // and then drop: the stage dims and the bar rises five seconds after
+        // the tap, holds for eight, and snaps back to its dock with no
+        // keyboard just as the typing starts — "neither element nor any
+        // descendant has keyboard focus". Six runs in eleven, first-in-lane
+        // or right after a build, never on a warm simulator, and the app
+        // itself has no path that resigns the field before a sentence
+        // (`SilkApp`'s tap-out catcher and the wait's veil are the only two,
+        // and neither can fire yet). The cause is not found; the recording
+        // and hierarchy are in the 2026-09-02 scout notes. So the walk waits
+        // for focus and, if it went, asks once more — a bar that will not
+        // hold focus twice is still a failure, and every other assertion in
+        // the suite is unchanged.
+        if !waitForFocus(bar, timeout: 4) {
+            tap(bar, "the bar, again", file: file, line: line)
+            _ = waitForFocus(bar, timeout: 4)
+        }
         bar.typeText(sentence)
+    }
+
+    /// Whether `element` has keyboard focus within `timeout`, polled the way
+    /// XCTest itself checks before it types.
+    @MainActor
+    @discardableResult
+    private func waitForFocus(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let focused = expectation(for: NSPredicate(format: "hasKeyboardFocus == true"),
+                                  evaluatedWith: element)
+        return XCTWaiter().wait(for: [focused], timeout: timeout) == .completed
     }
 
     /// The backdrop is the picker's commit button, but the wheels fold into
