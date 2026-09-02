@@ -235,6 +235,14 @@ private func unpinTheSeams() {
         let model = AppModel()
         model.completeSetup(doors: [Door(name: "YouTube")], doorSelections: [:],
                             wallSelection: .init(), budget: 40, downHours: noWindowTonight())
+        // The premise, and the whole subject of this test: the DETERMINISTIC
+        // grammar reads the catalogue's shorthand. Without this line a
+        // regression that took "yt" back out of the grammar would still pass on
+        // the simulator, because the sentence would fall through to the
+        // on-device widener and be granted there — a green test over the exact
+        // product defect it was written for, on a machine the user does not have.
+        #expect(DeterministicParser.parse(sentence, state: model.policy) != .silence,
+                "the grammar no longer claims \"\(sentence)\" — the widener is what answered")
 
         await model.handle(sentence)
 
@@ -252,6 +260,10 @@ private func unpinTheSeams() {
         let door = Door(name: "YouTube")
         model.completeSetup(doors: [door], doorSelections: [:], wallSelection: .init(),
                             budget: 40, downHours: noWindowTonight())
+        // As above: the grammar has to be the one that reads "yt", or this
+        // passes on the simulator's widener and says nothing about the app.
+        #expect(DeterministicParser.parse("no more yt today", state: model.policy) != .silence,
+                "the grammar no longer claims \"no more yt today\" — the widener is what answered")
 
         await model.handle("no more yt today")
 
@@ -316,6 +328,15 @@ private func unpinTheSeams() {
         await model.handle("give me 20 of instagram, im on a budget")
 
         #expect(model.policy.budgetMinutes == 40, "the sentence cut the daily allowance")
+        // Without these the test passes on a no-op: a `handle` that threw the
+        // sentence away entirely, or hung at "…", leaves the pool at 40 too,
+        // and the one assertion above cannot tell that apart from the sentence
+        // being read correctly. The turn resolving, once, is what says the
+        // pipeline actually ran — and it is all that can be said here, because
+        // the reply itself comes from the widener.
+        #expect(model.conversation.hasPendingTurn == false, "the turn was left drawing \"…\"")
+        #expect(model.conversation.turns.count == 1,
+                "one sentence produced \(model.conversation.turns.count) turns")
     }
 
     /// And the pool's own sentence still moves it.
@@ -373,9 +394,17 @@ private func unpinTheSeams() {
         #expect(model.policy.budgetMinutes == 40)
     }
 
-    /// A sentence nothing can read is refused in four words, and the refusal
-    /// arrives — the turn does not sit at "…". This is the assertion that would
-    /// go red if the widener's deadline were ever removed and the model hung.
+    /// A sentence nothing can read is ANSWERED — the turn does not sit at "…".
+    /// This is the assertion that would go red if the widener's deadline were
+    /// ever removed and the model hung.
+    ///
+    /// **What it may not assert is the reply.** The deterministic grammar falls
+    /// silent on this string, so it reaches the on-device widener, and the
+    /// simulator this suite runs on has Apple Intelligence: the answer is
+    /// whatever that model makes of "asdfgh qwerty zxcvb" on the day, which on
+    /// a CI runner without it is `Didn't get that.` and here is not guaranteed
+    /// to be. Pinning the sentence pinned the machine. What cannot vary is that
+    /// the turn resolves, exactly once, and that is now the whole test.
     @Test func anUnreadableSentenceIsRefusedAndNotLeftPending() async {
         defer { unpinTheSeams() }
         let (model, _) = freshModel()
@@ -383,7 +412,8 @@ private func unpinTheSeams() {
         await model.handle("asdfgh qwerty zxcvb")
 
         #expect(model.conversation.hasPendingTurn == false, "the turn was left drawing \"…\"")
-        #expect(model.conversation.turns.last?.reply == SilkStrings.didntGetThat)
+        #expect(model.conversation.turns.count == 1,
+                "one sentence produced \(model.conversation.turns.count) turns")
     }
 
     /// The turn is resolved on every path `handle` can take, which is what

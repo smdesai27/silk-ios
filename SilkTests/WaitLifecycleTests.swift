@@ -157,9 +157,20 @@ private func unpinTheSeams() {
     /// park must equal `watched` four hundred milliseconds later — a wall-clock
     /// wait fails there — and `watched` after the resume must equal the same
     /// number, because a resume that reset would pass every inequality above it.
+    ///
+    /// **Thirty seconds, not three.** The price is only ever a ceiling here:
+    /// the test sleeps 300 + 400 + 300 ms and asserts about a wait that is
+    /// still standing, so anything comfortably past a second would do — but at
+    /// three seconds the margin was one stall wide. A loaded runner pausing a
+    /// beat between the `handle` and the first sleep, or between the resume and
+    /// the last, lands the wait mid-test: the veil comes down, the grant is
+    /// taken, and the failure reads as "the ink moved while nobody was looking
+    /// at it" — a sentence about the feature, pointing at the machine. Thirty
+    /// cannot be reached by any stall that leaves the rest of the suite green,
+    /// and no assertion below wants a landing.
     @Test func leavingBanksTheWatchingAndComingBackGoesOnFromThere() async throws {
         defer { unpinTheSeams() }
-        UserDefaults.standard.set("3.0", forKey: "silkWait")
+        UserDefaults.standard.set("30", forKey: "silkWait")
         let (model, _) = freshModel()
 
         await model.handle("instagram for ten")
@@ -172,7 +183,7 @@ private func unpinTheSeams() {
 
         let banked = try #require(model.waiting?.wait.watched)
         #expect(banked >= 0.2, "the span she watched before leaving was not banked")
-        #expect(banked < 1.5, "a paused wait banked more than the whole price")
+        #expect(banked < 1.5, "the pause landed far later than it was asked for — the runner stalled")
         #expect(model.waiting?.wait.isWatching == false, "the departure did not stop the ink")
 
         // Away. Nothing accrues, nothing lands, nothing is spent.
@@ -192,7 +203,7 @@ private func unpinTheSeams() {
         try await Task.sleep(for: .milliseconds(300))
         let resumed = try #require(model.waiting?.wait.watched(at: Monotonic.reading))
         #expect(resumed > banked + 0.2, "the resumed wait did not accrue")
-        #expect(resumed < 1.5, "the resumed wait overran the price it was set")
+        #expect(resumed < 1.5, "the resumed reading came far later than it was asked for — the runner stalled")
 
         // Disarm: a landing left sleeping would fire into whatever runs next,
         // and `SharedStore` is process-global.

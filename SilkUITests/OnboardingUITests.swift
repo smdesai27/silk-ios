@@ -1594,10 +1594,16 @@ final class OnboardingUITests: XCTestCase {
                        "the dropped ask left the thread still thinking")
 
         // And the model is still running: the clock came back with the veil.
+        //
+        // The exact sentence, not `CONTAINS "40"`. The hero itself is a static
+        // text reading "40" and it is already on screen and already asserted
+        // three lines up — so a `CONTAINS` match was satisfied by the enso
+        // before the bar had answered anything at all, and would have stayed
+        // green with the thread stone dead. `testTypedStatusAskAnswersBalance`
+        // matches the balance answer exactly; this is the same string, for the
+        // same reason.
         say(bar, "how many left\n")
-        XCTAssertTrue(app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "40")
-        ).firstMatch.waitForExistence(timeout: Self.answer),
+        XCTAssertTrue(app.staticTexts["40 min left."].waitForExistence(timeout: Self.answer),
                       "the bar went dead after a wait was dropped")
     }
 
