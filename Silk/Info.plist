@@ -27,7 +27,10 @@
 	<key>SilkLogSubsystem</key>
 	<string>$(SILK_LOG_SUBSYSTEM)</string>
 	<key>UILaunchScreen</key>
-	<dict/>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchGround</string>
+	</dict>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

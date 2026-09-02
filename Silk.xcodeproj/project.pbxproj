@@ -9,14 +9,15 @@
 /* Begin PBXBuildFile section */
 		08F432E8544B6B2823DB14B5 /* ConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15288FA96D9B3050754D686 /* ConversationView.swift */; };
 		0F34172CD5594C0E74AF23BD /* NowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A928E6FABAA8B87E0F4C9975 /* NowView.swift */; };
+		188433E54C022E80D070356F /* BarRefusalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675C6C4CEBBB87CAFF248286 /* BarRefusalTests.swift */; };
 		192AA7C5AEA91053B6345E24 /* WallController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFF8CA4B6D8F6E393B396D1B /* WallController.swift */; };
+		20EA517C5D0C89EE8CCAD663 /* DoorRetirementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 954C198ADDFFAC1184470A4D /* DoorRetirementTests.swift */; };
 		2580302DF762798F7E8BB26F /* ApertureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B533DAEE56A4E18702C13CB /* ApertureView.swift */; };
 		295613EC78F9ACE4C039B43B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D7DA55B6A7DFC87D922C181E /* PrivacyInfo.xcprivacy */; };
 		29D791169E236E4BB1294C01 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8C8E4D9BB944356CB0771523 /* SilkCore */; };
 		42ECF7C34173F4CF8B02AC9B /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE8AE616C5B452F9B71C9309 /* OnboardingView.swift */; };
 		4432749FB254CF3A908C4E84 /* WheelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1657C506FCDDFE73884FD015 /* WheelPicker.swift */; };
 		44D77529D4F6F30068A42C1D /* MirrorParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D0B8D10154233A0BF5424C9 /* MirrorParts.swift */; };
-		7E1C0A0B00001111ABCD0001 /* Hedgerow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E1C0A0B00002222ABCD0002 /* Hedgerow.swift */; };
 		49ACAB6F16F6E0A58DA185C5 /* SpendIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C417C7CA0E5D215A9487363E /* SpendIntent.swift */; };
 		4DF4A22565FFC52E7D1BFB0A /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
 		4EFC6BA6B84C4195AA795BE9 /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
@@ -27,6 +28,7 @@
 		64ED83BCD57A669D67BEB2FE /* WaitTransactionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835D0F9CAADC49CEF71DDEC8 /* WaitTransactionTests.swift */; };
 		6838EA37D28C82DCE6808416 /* WaitModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFBBBFD0F5806BE7C321FC95 /* WaitModelTests.swift */; };
 		741F2244585AFC0424039231 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D7DA55B6A7DFC87D922C181E /* PrivacyInfo.xcprivacy */; };
+		77C84F52BBCFDD5A43AF19C8 /* Hedgerow.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA3FBD234194924E2ED701F /* Hedgerow.swift */; };
 		78526713FFB37649F392BD7E /* WaitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF62B7901CB5C69D478E1A69 /* WaitView.swift */; };
 		7F5EAEB1710BBA6C6EE3EED3 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3350D55FC9E5CD602108266F /* SilkCore */; };
 		7F785A486DF97251D6C757EC /* SpendIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3511FBC450CBBFB5B4C398D /* SpendIntentTests.swift */; };
@@ -34,6 +36,7 @@
 		887AC1C3DE1DB42BED5A67AA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 704D0FDD76C4A32996253007 /* AppModel.swift */; };
 		909C10E2DD8695AC737E92FE /* ShieldConfigurationExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7314275C7464407E4787F3B /* ShieldConfigurationExtension.swift */; };
 		969518E52EEBCC905EE6B755 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = EBD9E28473C5EB7129F8AD9A /* SilkCore */; };
+		9B91C13018275FD24DD3448D /* LedgerUndoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88C620EBDD7A30F5C31D633 /* LedgerUndoTests.swift */; };
 		9D68046401F49C696D8E8AAA /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
 		A974522AA74846A7F45F9521 /* SilkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CA53F3207E7AE5880420E33 /* SilkApp.swift */; };
 		B028428C92F3B85F24B8DFCD /* AppPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FBF0ECF1CBB627FAB4E6B33 /* AppPickerSheet.swift */; };
@@ -52,6 +55,7 @@
 		E1DD3A58842AFC7A83A3967E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D7DA55B6A7DFC87D922C181E /* PrivacyInfo.xcprivacy */; };
 		E6B4F1900C18BAC1F044851F /* OnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC55F66C7151E4B8038294C3 /* OnboardingUITests.swift */; };
 		E991680108C07B056D17D6B6 /* EnsoPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 654CED2E86E7E41374DA5E0E /* EnsoPath.swift */; };
+		F8FAED57EE0951845BEE718A /* DayTurnTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6677727EA4F00B7A7761FDA5 /* DayTurnTests.swift */; };
 		FA9BB7287ECC81A8761D23DC /* SilkModelParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 382B5C7BD5FC37F7B7734E1C /* SilkModelParser.swift */; };
 		FC88E375AB3C3A6F905AC76D /* LaunchCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A15D91F5D0F1DB70D57FE88 /* LaunchCatalog.swift */; };
 		FD54862787CE76BAE51FC78E /* MonitorExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ED1664BC1F72D50F45C0343 /* MonitorExtension.swift */; };
@@ -131,10 +135,11 @@
 		3EBD012E973AE09683DBFE68 /* SilkShieldAction.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SilkShieldAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4BD6ADCDFCF44E89DB8B2F57 /* TurnLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnLifecycleTests.swift; sourceTree = "<group>"; };
 		4D0B8D10154233A0BF5424C9 /* MirrorParts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorParts.swift; sourceTree = "<group>"; };
-		7E1C0A0B00002222ABCD0002 /* Hedgerow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hedgerow.swift; sourceTree = "<group>"; };
 		5153837888EC82703E243C5E /* Atmosphere.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atmosphere.swift; sourceTree = "<group>"; };
 		5CA53F3207E7AE5880420E33 /* SilkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilkApp.swift; sourceTree = "<group>"; };
 		654CED2E86E7E41374DA5E0E /* EnsoPath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnsoPath.swift; sourceTree = "<group>"; };
+		6677727EA4F00B7A7761FDA5 /* DayTurnTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayTurnTests.swift; sourceTree = "<group>"; };
+		675C6C4CEBBB87CAFF248286 /* BarRefusalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarRefusalTests.swift; sourceTree = "<group>"; };
 		6C6DED393598F43B120448A1 /* SilkUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SilkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D0F6128C43C9EDDB8228BBD /* WaitIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitIntentTests.swift; sourceTree = "<group>"; };
 		6ED1664BC1F72D50F45C0343 /* MonitorExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonitorExtension.swift; sourceTree = "<group>"; };
@@ -143,8 +148,10 @@
 		81BEF0341C8000B1562BB3C4 /* SilkTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SilkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		835D0F9CAADC49CEF71DDEC8 /* WaitTransactionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitTransactionTests.swift; sourceTree = "<group>"; };
 		83AFCFC6FDE154FD9AF4E017 /* SilkShield.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SilkShield.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		954C198ADDFFAC1184470A4D /* DoorRetirementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoorRetirementTests.swift; sourceTree = "<group>"; };
 		96C4334FB17778A6059FE0C6 /* SilkMonitor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SilkMonitor.entitlements; sourceTree = "<group>"; };
 		A186A7DEBA377C94B39E83B5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A88C620EBDD7A30F5C31D633 /* LedgerUndoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerUndoTests.swift; sourceTree = "<group>"; };
 		A928E6FABAA8B87E0F4C9975 /* NowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowView.swift; sourceTree = "<group>"; };
 		AC55F66C7151E4B8038294C3 /* OnboardingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingUITests.swift; sourceTree = "<group>"; };
 		B35D385C97ED1F1EE085C7D1 /* WaitLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitLifecycleTests.swift; sourceTree = "<group>"; };
@@ -157,6 +164,7 @@
 		C417C7CA0E5D215A9487363E /* SpendIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendIntent.swift; sourceTree = "<group>"; };
 		C52C47C7B53ABF04D0E30D6B /* WaitFramePerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitFramePerformanceTests.swift; sourceTree = "<group>"; };
 		C840695F3CB1140C74898A68 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		CCA3FBD234194924E2ED701F /* Hedgerow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hedgerow.swift; sourceTree = "<group>"; };
 		CF62B7901CB5C69D478E1A69 /* WaitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitView.swift; sourceTree = "<group>"; };
 		D7DA55B6A7DFC87D922C181E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		DFF8CA4B6D8F6E393B396D1B /* WallController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallController.swift; sourceTree = "<group>"; };
@@ -223,10 +231,10 @@
 				E15288FA96D9B3050754D686 /* ConversationView.swift */,
 				300E8AEF4E4B414B82D4799C /* DesignSystem.swift */,
 				654CED2E86E7E41374DA5E0E /* EnsoPath.swift */,
+				CCA3FBD234194924E2ED701F /* Hedgerow.swift */,
 				C840695F3CB1140C74898A68 /* Info.plist */,
 				7A15D91F5D0F1DB70D57FE88 /* LaunchCatalog.swift */,
 				4D0B8D10154233A0BF5424C9 /* MirrorParts.swift */,
-				7E1C0A0B00002222ABCD0002 /* Hedgerow.swift */,
 				2915B4038B33955C859B21BE /* MirrorView.swift */,
 				A928E6FABAA8B87E0F4C9975 /* NowView.swift */,
 				BE8AE616C5B452F9B71C9309 /* OnboardingView.swift */,
@@ -246,6 +254,10 @@
 		45752C9C7EF9C758A2F188D6 /* SilkTests */ = {
 			isa = PBXGroup;
 			children = (
+				675C6C4CEBBB87CAFF248286 /* BarRefusalTests.swift */,
+				6677727EA4F00B7A7761FDA5 /* DayTurnTests.swift */,
+				954C198ADDFFAC1184470A4D /* DoorRetirementTests.swift */,
+				A88C620EBDD7A30F5C31D633 /* LedgerUndoTests.swift */,
 				C3511FBC450CBBFB5B4C398D /* SpendIntentTests.swift */,
 				4BD6ADCDFCF44E89DB8B2F57 /* TurnLifecycleTests.swift */,
 				C52C47C7B53ABF04D0E30D6B /* WaitFramePerformanceTests.swift */,
@@ -472,7 +484,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 2660;
 				TargetAttributes = {
 					179612AE0E639B93F40C3C0A = {
 						DevelopmentTeam = 85Y5HLW3RN;
@@ -585,9 +597,9 @@
 				08F432E8544B6B2823DB14B5 /* ConversationView.swift in Sources */,
 				DB790AA519D804B0C5C2841A /* DesignSystem.swift in Sources */,
 				E991680108C07B056D17D6B6 /* EnsoPath.swift in Sources */,
+				77C84F52BBCFDD5A43AF19C8 /* Hedgerow.swift in Sources */,
 				FC88E375AB3C3A6F905AC76D /* LaunchCatalog.swift in Sources */,
 				44D77529D4F6F30068A42C1D /* MirrorParts.swift in Sources */,
-				7E1C0A0B00001111ABCD0001 /* Hedgerow.swift in Sources */,
 				B413BC5B70A31DCA05E3E74D /* MirrorView.swift in Sources */,
 				0F34172CD5594C0E74AF23BD /* NowView.swift in Sources */,
 				42ECF7C34173F4CF8B02AC9B /* OnboardingView.swift in Sources */,
@@ -616,6 +628,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				188433E54C022E80D070356F /* BarRefusalTests.swift in Sources */,
+				F8FAED57EE0951845BEE718A /* DayTurnTests.swift in Sources */,
+				20EA517C5D0C89EE8CCAD663 /* DoorRetirementTests.swift in Sources */,
+				9B91C13018275FD24DD3448D /* LedgerUndoTests.swift in Sources */,
 				7F785A486DF97251D6C757EC /* SpendIntentTests.swift in Sources */,
 				C89DE4288AD829A5687034ED /* TurnLifecycleTests.swift in Sources */,
 				CC127156F7044C3E89B85579 /* WaitFramePerformanceTests.swift in Sources */,
@@ -725,6 +741,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
@@ -796,6 +813,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Silk/Silk.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				INFOPLIST_FILE = Silk/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -828,6 +846,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SilkShield/SilkShield.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				INFOPLIST_FILE = SilkShield/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -984,6 +1003,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SilkShieldAction/SilkShieldAction.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				INFOPLIST_FILE = SilkShieldAction/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1000,6 +1020,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SilkMonitor/SilkMonitor.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				INFOPLIST_FILE = SilkMonitor/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
