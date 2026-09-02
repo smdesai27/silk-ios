@@ -2918,12 +2918,33 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     /// the mutant above took **1010 seconds** on the long arm. A wall clock here
     /// was a flake source and never a detector. The ratio is the instrument.
     ///
-    /// A ten-thousand-word parse is still bounded by a wall clock elsewhere —
-    /// `ClauseIndexCost.theParserDoesNotPayForWhatItDoesNotAsk`, at five seconds —
-    /// but do not read that as this one's safety net. It is the SAME five seconds
-    /// on the SAME size of input, so the 6.0–17.2 s measured above applies to it
-    /// unchanged and it is a flake waiting for a loaded afternoon. It wants the
-    /// same coarsening, and it is left for the PR that owns that suite.
+    /// **No ten-thousand-word parse is bounded by a wall clock any more.** This
+    /// comment used to name one that was — `theParserDoesNotPayForWhatItDoesNotAsk`,
+    /// over in `ClauseIndexCost`, at five seconds — and say it wanted the same
+    /// coarsening. It has it: the same 6.0–17.2 s applied to it unchanged, so it
+    /// is now the equal-window ratio over the DOORLESS path, and the pair of
+    /// bounds divides the parser between them. That one walks the ladder every
+    /// sentence walks; these arms end in a real cap sentence, so they walk the
+    /// index. When one goes red and the other does not, the pair says where.
+    ///
+    /// **Seven rounds, not three.** Three was this test's own exception to the
+    /// shared default, taken because each arm parses ten thousand words and
+    /// seven rounds costs real suite time. It bought the saving in the one
+    /// currency this file cannot spend: a minimum estimates the *uncontended*
+    /// cost, it only works if at least one round actually ran uncontended, and
+    /// this arm's window is ~0.4 s — long enough that a busy afternoon covers
+    /// three of them and the ratio is then a ratio of two contended numbers. It
+    /// is the most-cited flake on this repo's pre-push hook, and three rounds
+    /// over a long window is the mechanism. Seven rounds is four more chances at
+    /// a quiet one — the trade `PerformanceMeasurement.swift` recommends
+    /// everywhere else and this test declined.
+    ///
+    /// **It costs about eight seconds**, and the spine suite goes from roughly
+    /// eight seconds to sixteen with the doorless ratio's four beside it. Priced
+    /// deliberately: the hook's whole argument is that it is cheap enough to keep
+    /// switched on, and a gate that reddens on a busy afternoon gets switched off
+    /// long before a slow one does. Measured healthy across three full-suite
+    /// runs: **1.01, 1.03, 1.01** against the bound of 3.
     @Test func hugeInputStaysCheapAndSilent() {
         func noise(words: Int) -> String {
             Array(repeating: "lorem ipsum dolor sit amet", count: words / 5).joined(separator: " ")
@@ -2970,11 +2991,12 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         #expect(NumberParser.tokenize(inOneBreath).count == 10_006)
         #expect(inTenBreaths.allSatisfy { NumberParser.tokenize($0).count == 1_006 })
 
-        // Three rounds rather than the shared default of seven because each arm
-        // parses ten thousand words; see `PerformanceMeasurement.swift` for why
-        // the arms are interleaved and why the estimator is a minimum.
+        // The shared default of seven rounds; see `PerformanceMeasurement.swift`
+        // for why the arms are interleaved and why the estimator is a minimum,
+        // and the doc comment above for why this test's old exception of three
+        // was the flake rather than a saving.
         var sink = 0
-        let (asOneString, asTenStrings) = fastestPair(rounds: 3, {
+        let (asOneString, asTenStrings) = fastestPair({
             if DeterministicParser.parse(inOneBreath, state: state) != .silence { sink &+= 1 }
         }, {
             for piece in inTenBreaths

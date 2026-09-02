@@ -642,24 +642,84 @@ private func clauseStrings(_ text: String) -> [[String]] {
         #expect(bestOfThree { _ = NumberParser.ClauseIndex(longGap) } < .seconds(5))
     }
 
+    /// The cheap path — a sentence that names no door — stays linear in its own
+    /// length.
+    ///
+    /// **The premise this test opened with is expired, and the wall clock it
+    /// rested on was never the instrument.** It used to say "nothing in
+    /// DeterministicParser builds a ClauseIndex yet, so a sentence that asks no
+    /// clause question costs exactly what it did before", and it held that claim
+    /// with a five-second absolute over a best-of-three. Both halves are gone:
+    /// the cap rules build an index whenever a door is named — measured here,
+    /// the same ten thousand words cost **88.8 ms** with no door in them and
+    /// **403 ms** with " cap tiktok at 20 a day" on the end, a 4.5× gap that is
+    /// the index and the rule ladder behind it — and the five seconds was the
+    /// same five seconds, on the same size of input, that
+    /// `StressTests.hugeInputStaysCheapAndSilent` measured at 6.0–17.2 s under
+    /// load with a healthy parser before deleting its own copy of it. Its
+    /// comment says so and asks for this one to be coarsened; a bound a healthy
+    /// machine exceeds by 3.4× is not coarsened, it is replaced.
+    ///
+    /// So what is left is the property the doorless path deserves in its own
+    /// right, in the shape `aHugeInputStaysLinear` uses: equal total work in
+    /// both arms, interleaved, minimum of seven rounds, and a ratio rather than
+    /// a clock. It is not redundant with the stress suite's bound, which parses
+    /// arms that END in a cap sentence and therefore measures the index path.
+    /// This one measures the ladder every sentence walks — the common case, and
+    /// the one prose reaches — so when the two disagree the pair says where the
+    /// regression is rather than only that there is one.
+    ///
+    /// Measured healthy across three full-suite runs, which is the contended
+    /// case rather than the quiet one: **0.99, 1.35, 1.03** against the bound of
+    /// 3. The 1.35 is the honest number to write down — the arms are ~0.3 s
+    /// windows and the whole suite is running beside them — and it is what the
+    /// remaining margin is, not the 1.0.
     @Test func theParserDoesNotPayForWhatItDoesNotAsk() {
-        // Nothing in DeterministicParser builds a ClauseIndex yet, so a
-        // sentence that asks no clause question costs exactly what it did
-        // before. Stated as a test so that the first rule to build one has to
-        // come back here and say what it now costs.
         let state = PolicyState(budgetMinutes: 40,
                                 downHours: DownHours(start: TimeOfDay(hour: 22),
                                                      end: TimeOfDay(hour: 7)),
                                 doors: [Door(name: "TikTok")])
-        // Best of three against the same coarse five-second backstop the rest of
-        // this suite now uses. This one is the sibling of
-        // `hugeInputStaysCheapAndSilent`, which measured 1.15 s, 2.11 s and 4.45 s
-        // on a loaded machine with nothing wrong with the parser — a one-second
-        // bound on a 10k-word parse is a bound on the runner.
-        let noise = Array(repeating: "lorem ipsum dolor sit amet", count: 2000).joined(separator: " ")
-        let elapsed = bestOfThree {
-            #expect(DeterministicParser.parse(noise, state: state) == .silence)
+        // Five words per repeat and no separator anywhere, so the whole input is
+        // ONE clause and no door is named — the sentence asks nothing, which is
+        // the path under test.
+        func noise(repeats: Int) -> String {
+            Array(repeating: "lorem ipsum dolor sit amet", count: repeats).joined(separator: " ")
         }
-        #expect(elapsed < .seconds(5), "parser catastrophically slow on 10k words: \(elapsed)")
+        let inOneBreath = noise(repeats: 2000)
+        // Ten separately built strings rather than one string parsed ten times,
+        // for the reason `aHugeInputStaysLinear` states: the long arm walks its
+        // input out of cold memory, and one short string read ten times would
+        // sit in cache and win on the strength of that alone.
+        let inTenBreaths = (0..<10).map { _ in noise(repeats: 200) }
+
+        // What the parser ANSWERS, asserted outside the measurement — inside, the
+        // short arm would pay for ten of Swift Testing's bookkeeping against the
+        // long arm's one, which inflates the denominator and blinds the ratio.
+        #expect(DeterministicParser.parse(inOneBreath, state: state) == .silence)
+        #expect(inTenBreaths.allSatisfy { DeterministicParser.parse($0, state: state) == .silence })
+
+        // The two arms really are the same amount of work — asserted, because it
+        // is the whole premise of the ratio and a change to `noise` could quietly
+        // break it.
+        #expect(NumberParser.tokenize(inOneBreath).count == 10_000)
+        #expect(inTenBreaths.allSatisfy { NumberParser.tokenize($0).count == 1_000 })
+
+        var sink = 0
+        let (asOneString, asTenStrings) = fastestPair({
+            if DeterministicParser.parse(inOneBreath, state: state) == .silence { sink &+= 1 }
+        }, {
+            for piece in inTenBreaths
+            where DeterministicParser.parse(piece, state: state) == .silence { sink &+= 1 }
+        })
+        #expect(sink > 0)   // the compiler may not delete the work
+
+        let scaling = ratio(asOneString, to: asTenStrings)
+        #expect(scaling < 3,
+                """
+                ten thousand doorless words in one string cost \
+                \(String(format: "%.2f", scaling))× what the same ten thousand cost in ten \
+                (\(asOneString) against \(asTenStrings)) — the rule ladder every sentence \
+                walks is no longer linear in the length of its input
+                """)
     }
 }
