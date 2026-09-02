@@ -155,6 +155,18 @@ public enum SilkStrings {
     /// The quiet second path on the apps step: block apps Silk can't open by
     /// name (anything outside the launch catalogue).
     public static let otherApps = "Other apps"
+    /// Screen Time was asked for and refused. Without this the first step's OK
+    /// is a button that does nothing: iOS draws its own sheet, the user says no
+    /// inside it, the sheet goes, and setup sits exactly where it was with
+    /// nothing on screen admitting that anything happened.
+    ///
+    /// It states the consequence and the way out, in that order, because the
+    /// consequence is the part that is not obvious — a refusal here does not
+    /// break Silk visibly, it just leaves the wall unbuilt. No apology and no
+    /// second try at persuading: the first line already said why Screen Time is
+    /// wanted, and repeating it louder is not what a "no" is owed.
+    public static let setupPermissionRefused =
+        "Silk can't block anything without Screen Time. Tap OK to try again."
 
     // The picker sheet. Silk owns the sheet the system list sits inside, so
     // every one of these lines is on screen the whole time the list is —
