@@ -162,36 +162,62 @@ actor SilkModelParser {
 
         let options = GenerationOptions(sampling: .greedy)
 
-        // The race. `respond` honours cancellation — measured: cancelled at
+        // The race — and the deadline is a RACER, not a watchdog that then
+        // waits. `respond` honours cancellation — measured: cancelled at
         // 300 ms it returned at 321 ms, and a cancel mid-generation surfaces as
         // `CancellationError` or as a `decodingFailure` over truncated JSON,
-        // both of which the catch below already answers with silence. So the
-        // watchdog is a real bound and not a decoration.
+        // both of which the catch below already answers with silence.
         //
-        // The caller's own cancellation is forwarded the same way, so a turn
-        // the user has walked away from stops generating instead of running to
-        // completion behind whatever they do next.
-        let work = Task { () -> ParseOutcome in
-            do {
-                let response = try await session.respond(to: utterance,
-                                                         generating: ModelCommand.self,
-                                                         options: options)
-                return Self.map(response.content, state: state)
-            } catch {
-                return .silence
+        // But "it honours cancellation" is a property of the framework, not
+        // something this file can hold. The shape this used to have — cancel at
+        // the deadline, then `await work.value` — is bounded only if the cancel
+        // takes. A generation that ignored it left the turn awaiting a bound
+        // that had already expired, and `ConversationModel.blur()` refuses to
+        // clear a PENDING turn: the stage stayed dimmed and hit-dead for as
+        // long as the model took, with no way out and no sentence to point at.
+        // That is the one failure mode the deadline exists to make impossible,
+        // and the deadline could not reach it.
+        //
+        // So the clock answers on its own and the work is cancelled behind it,
+        // unwaited. An answer nobody is going to read must not be able to hold
+        // the screen. Not a task group, which cannot express this: a group may
+        // not return until every child has completed, cancelled or not, so the
+        // work would simply be awaited again at its closing brace. Two arms and
+        // a one-shot stream is the smallest thing that actually bounds.
+        //
+        // The caller's own cancellation is forwarded the same way — the stream
+        // terminates and both arms are cancelled — so a turn the user has
+        // walked away from stops generating instead of running to completion
+        // behind whatever they do next.
+        let answers = AsyncStream<ParseOutcome> { continuation in
+            let work = Task {
+                let outcome: ParseOutcome
+                do {
+                    let response = try await session.respond(to: utterance,
+                                                             generating: ModelCommand.self,
+                                                             options: options)
+                    outcome = Self.map(response.content, state: state)
+                } catch {
+                    outcome = .silence
+                }
+                continuation.yield(outcome)
+                continuation.finish()
+            }
+            let clock = Task {
+                try? await Task.sleep(for: Self.deadline)
+                // Expiry is answered exactly as an unavailable model is.
+                continuation.yield(.silence)
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                work.cancel()
+                clock.cancel()
             }
         }
-        let watchdog = Task {
-            try? await Task.sleep(for: Self.deadline)
-            work.cancel()
-        }
-        let outcome = await withTaskCancellationHandler {
-            await work.value
-        } onCancel: {
-            work.cancel()
-        }
-        watchdog.cancel()
-        return outcome
+        // The first arm home is the turn. Returning here drops the iterator,
+        // which terminates the stream, which cancels the loser.
+        for await outcome in answers { return outcome }
+        return .silence
         #else
         return .silence
         #endif
