@@ -1914,6 +1914,14 @@ final class AppModel {
             var selections = SharedStore.loadDoorSelections()
             selections[door.id] = activitySelection
             commitDoorChange(policy: policy, selections: selections)
+            // The usage-threshold layer is armed on the door's OWN tokens
+            // (`WallController.arm`, layer 3), and those tokens are what just
+            // changed. A rebind made mid-grant left that event counting the
+            // app the door no longer is — the schedules still close it, but
+            // the layer whose whole point is an independent failure mode was
+            // watching the wrong thing. `commitDoorChange` has reconciled, so
+            // this is the arming only.
+            restateRelockLayers(for: door)
             closeDoorEdit()
         case .cancelled, .retry:
             #if targetEnvironment(simulator)
@@ -2034,6 +2042,14 @@ final class AppModel {
         case .needsAuthorization(let freshDevice):
             Task {
                 let granted = await wall.requestAuthorization()
+                // Authorization is what every wall write was silently failing
+                // for, so the moment it comes back is the moment to state the
+                // wall again. Nothing else does it: this row is reached while
+                // Silk is already foregrounded, so no `foregrounded()` follows,
+                // and until the next grant or day boundary the shield stayed
+                // down, the heartbeat stayed unarmed, and a door with minutes
+                // still running had no schedule left to close it.
+                if granted { restateWall() }
                 if granted && (freshDevice || wall.standing == .needsSelection) {
                     activitySelection = SharedStore.loadWallSelection() ?? FamilyActivitySelection()
                     activityPicker = .rearm
@@ -2053,10 +2069,33 @@ final class AppModel {
         switch request {
         case .rearm:
             SharedStore.save(wallSelection: activitySelection)
-            wall.reconcile()
+            restateWall()
             refreshWallStanding()
         case .doorBinding(let door):
             finishDoorBinding(door)
+        }
+    }
+
+    /// Everything the wall consists of, stated again: the shield, the daily
+    /// heartbeat, and the re-lock layers of every door still holding a grant.
+    ///
+    /// The two places a wall comes back — authorization re-granted, extras
+    /// re-picked — used to restate only the shield. The other two are the ones
+    /// that were never going to restate themselves: `armHeartbeat` is called
+    /// at launch and at the day boundary, and the re-lock schedules are armed
+    /// only when a grant lands. A door with minutes still running, on a wall
+    /// that was just raised, had nothing scheduled to close it.
+    private func restateWall() {
+        wall.reconcile()
+        // Unconditional, and the anchor is remembered so the day sweep does
+        // not restate it again: this is the launch case, not the tick's.
+        wall.armHeartbeat(downHours: policy.downHours)
+        armedHeartbeatAnchor = policy.downHours.end
+        // Only the doors with something to close. `restateRelockLayers`
+        // answers a doorless grant with `stopMonitoring`, and disarming every
+        // resting door here would be a stop per door for nothing.
+        for door in policy.doors where ledger.activeGrant(for: door, at: .now) != nil {
+            restateRelockLayers(for: door)
         }
     }
 
