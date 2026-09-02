@@ -266,8 +266,18 @@ struct DoorRow: View {
 /// vertical middle over 450ms on the one curve; the first send glides it home
 /// in one continuous move and it stays docked while the thread lives. Both
 /// states are driven from outside: `hasTurns` is the prototype's `has-turns`
-/// class (Silk Mockup.dc.html:28, 389), and `rise` is the distance to travel,
-/// because only the container knows how much room the keyboard has left it.
+/// class (Silk Mockup.dc.html:28, 389), and the two heights, because only the
+/// container knows how tall the paper is and how much of it the keyboard took.
+///
+/// **The bar owns its whole travel.** It used to own only the residual rise:
+/// the container respected the keyboard, so the base lift was a layout change
+/// riding UIKit's ~0.25s keyboard curve while the rise was an offset on Silk's
+/// 0.45s — two curves for one move. Worse, the rise was computed from the
+/// container's height, which the reader re-delivered on every frame of the
+/// inset change, so the 0.45s ease restarted each frame toward a target that
+/// was still moving. Now the container ignores the keyboard, the keyboard's
+/// height is observed (`silkKeyboardHeight(_:)`) and arrives as one step, and
+/// the sum of the two is a single offset on the one curve.
 struct CommandBar: View {
     @Binding var text: String
     var night: Bool
@@ -275,11 +285,18 @@ struct CommandBar: View {
     /// The thread is non-empty — docked even while focused. Defaults keep the
     /// pre-conversation call sites (and their planted bar) compiling unchanged.
     var hasTurns: Bool = false
-    /// How far the focus rise travels, in points. 0 means the bar never
-    /// leaves home and only the keyboard lifts it. Compute with
-    /// `CommandBar.riseDistance(in:)` from the height of the bar's own
-    /// keyboard-avoiding container.
-    var rise: CGFloat = 0
+    /// The height of the bar's container, glass to glass and **not** shortened
+    /// by the keyboard. 0 means no rise: the bar never leaves home.
+    ///
+    /// It is the whole height and not the visible remainder on purpose. A
+    /// height the keyboard shortens is a height that changes on every frame of
+    /// the keyboard's own animation, and a rise derived from it is a target
+    /// that runs away from the ease chasing it.
+    var containerHeight: CGFloat = 0
+    /// The keyboard's height above the glass — 0 when none is up. Observe it
+    /// with `silkKeyboardHeight(_:)`, which reads the end frame off the
+    /// will-change notification, so this is a step and never a per-frame sweep.
+    var keyboard: CGFloat = 0
     /// Hoisted focus, so the root can dim the stage and clear the thread on
     /// blur. nil keeps focus private, as before.
     var focus: FocusState<Bool>.Binding? = nil
@@ -290,9 +307,13 @@ struct CommandBar: View {
     /// the docked bar's centre sits at 800 − 44 − 26 = 730, and 730 − 312
     /// lands it at 418 — the frame's middle, 18pt low. Generalised:
     /// rise(h) = (h − 70) − (h/2 + 18) = h/2 − 88, which returns exactly 312
-    /// for h = 800 and, when the container has already been shortened by a
-    /// keyboard, the residual that puts the bar mid-way up the *visible*
-    /// paper instead of stacking the full 312 on top of the keyboard's lift.
+    /// for h = 800 and, for the paper the keyboard has left standing, the
+    /// residual that puts the bar mid-way up the *visible* paper instead of
+    /// stacking the full 312 on top of the keyboard's lift.
+    ///
+    /// Called with `containerHeight − keyboard`, both of which are steps, so
+    /// this is a step too: one value while the keyboard is down, one while it
+    /// is up, and never a sequence in between.
     static func riseDistance(in containerHeight: CGFloat) -> CGFloat {
         max(0, containerHeight / 2 - 88)
     }
@@ -301,6 +322,13 @@ struct CommandBar: View {
     private var isFocused: Bool { focusBinding.wrappedValue }
     /// Rising means "say something"; docking means "we are talking now."
     private var raised: Bool { isFocused && !hasTurns }
+
+    /// The one number the bar moves by: the keyboard's lift, plus the rise up
+    /// the paper the keyboard left standing. Both terms change on the same
+    /// frame and both are steps, so one animation covers the pair.
+    private var lift: CGFloat {
+        keyboard + (raised ? Self.riseDistance(in: containerHeight - keyboard) : 0)
+    }
 
     var body: some View {
         HStack(spacing: 12) {                            // _ds_bundle.css:293
@@ -354,18 +382,18 @@ struct CommandBar: View {
             RoundedRectangle(cornerRadius: 26)           // _ds_bundle.css:275
                 .strokeBorder(night ? Silk.paperAlpha(0.12) : Silk.inkAlpha(0.14), lineWidth: 1)
         )
-        // The rise. One translate on the one curve, and the same curve back:
-        // the dock is not a second choreography, it is this one reversing
-        // (Silk Mockup.dc.html:22, 26, 28).
-        .offset(y: raised ? -rise : 0)
+        // The rise, and the keyboard's lift under it. One translate on the one
+        // curve, and the same curve back: the dock is not a second
+        // choreography, it is this one reversing (Silk Mockup.dc.html:22, 26, 28).
+        .offset(y: -lift)
         .animation(Silk.motion(0.45), value: raised)
         // The grow rides focus, not the rise — the input holds 18 while the
         // conversation is docked (Silk Mockup.dc.html:32 keys on `input:focus`).
         .animation(Silk.motion(0.45), value: isFocused)
-        // The keyboard's own arrival re-measures the container and retargets
-        // `rise` mid-flight; covering it with the same curve keeps the two
-        // motions one motion instead of a lift with a snap in it.
-        .animation(Silk.motion(0.45), value: rise)
+        // The keyboard's arrival and departure move the same offset. Same
+        // curve, same frame as `raised` flips, so the pair reads as one lift
+        // rather than a UIKit slide with a Silk ease stacked on top of it.
+        .animation(Silk.motion(0.45), value: keyboard)
     }
 }
 
@@ -387,6 +415,71 @@ struct MicGlyph: View {
             .stroke(style: StrokeStyle(lineWidth: 1.6 * s, lineCap: .round, lineJoin: .round))
         }
         .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+// ============================================================
+// The keyboard, measured
+// ============================================================
+
+/// The keyboard's height above the glass, read off its own notification.
+///
+/// **Why not the safe-area inset.** SwiftUI will hand a container the keyboard
+/// as a bottom inset, and that is how the bar used to be lifted — but an inset
+/// is delivered *interpolated*: the container is re-measured on every frame of
+/// UIKit's ~0.25s keyboard curve, so anything derived from the container's
+/// height is a value that sweeps rather than steps. The bar's rise was derived
+/// from exactly that, and a 0.45s ease re-aimed sixty times a second at a
+/// target still in motion is not one move on one curve; it is a lift with a
+/// second, faster animation showing through it.
+///
+/// The notification carries the keyboard's **end** frame, which is a fact about
+/// where the keyboard will be and not about where it is now. Read once per
+/// appearance, it is a step — and a step is the only thing an ease can honour.
+///
+/// Hide is taken from `keyboardWillHideNotification` rather than from a
+/// change-frame with an off-screen origin: an interactive dismissal delivers
+/// both, and only the named one is unambiguous about the keyboard being gone.
+private struct KeyboardHeightReader: ViewModifier {
+    @Binding var height: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(
+                for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+                guard let end = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey]
+                        as? CGRect else { return }
+                // The glass, not the window: the bar's container reaches the
+                // bottom of the screen, so the lift it needs is measured from
+                // there. `end.maxY` is the same edge for a docked keyboard and
+                // is the honest fallback when no scene will answer.
+                let glass = Self.screenBottom ?? end.maxY
+                height = max(0, glass - end.minY)
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: UIResponder.keyboardWillHideNotification)) { _ in
+                height = 0
+            }
+    }
+
+    /// The active scene's own screen height. `UIScreen.main` would say the same
+    /// thing in one line and is deprecated; this asks the scene the app is
+    /// actually on.
+    @MainActor
+    private static var screenBottom: CGFloat? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        return scene.map { $0.screen.bounds.height }
+    }
+}
+
+extension View {
+    /// Keeps `height` at the keyboard's height above the glass — 0 when none is
+    /// up. Put it on the container that owns the bar, and have that container
+    /// ignore the keyboard safe area: the point is to move the bar deliberately
+    /// rather than to be moved by a layout inset.
+    func silkKeyboardHeight(_ height: Binding<CGFloat>) -> some View {
+        modifier(KeyboardHeightReader(height: height))
     }
 }
 

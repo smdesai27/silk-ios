@@ -423,6 +423,7 @@ private struct ConversationDemo: View {
     @State private var input = ""
     @State private var page = 0
     @State private var instagramOpen = false
+    @State private var keyboard: CGFloat = 0
     @FocusState private var barFocused: Bool
 
     var body: some View {
@@ -457,10 +458,11 @@ private struct ConversationDemo: View {
             .allowsHitTesting(false)
             .ignoresSafeArea(.keyboard, edges: .bottom)
 
-            // Bar + dots, measured from the glass but answering the keyboard —
+            // Bar + dots, measured from the glass and ignoring the keyboard —
             // the same geometry RootView uses. The GeometryReader's height is
-            // therefore glass-to-glass, or glass-to-keyboard when one is up,
-            // which is exactly the space the rise is computed against.
+            // therefore glass-to-glass and constant while a keyboard arrives;
+            // the keyboard's own height is observed and handed to the bar, which
+            // sums the two into one offset on one curve.
             GeometryReader { geo in
                 ZStack(alignment: .bottom) {
                     PageDots(count: 2, index: $page, night: night)
@@ -470,7 +472,8 @@ private struct ConversationDemo: View {
                                night: night,
                                onSubmit: submit,
                                hasTurns: convo.hasTurns,
-                               rise: CommandBar.riseDistance(in: geo.size.height),
+                               containerHeight: geo.size.height,
+                               keyboard: keyboard,
                                focus: $barFocused)
                         .padding(.horizontal, 28)
                         .padding(.bottom, 44)
@@ -478,6 +481,8 @@ private struct ConversationDemo: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
             .ignoresSafeArea(.container, edges: .bottom)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            .silkKeyboardHeight($keyboard)
         }
         .background((night ? Silk.lacquer : Silk.paper).ignoresSafeArea())
         // FocusState cannot leave the view, so the model gets its shadow —
