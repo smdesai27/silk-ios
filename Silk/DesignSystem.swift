@@ -156,8 +156,48 @@ enum Silk {
     /// One motion curve for the whole system — cubic-bezier(.22,1,.28,1), no
     /// springs (docs/design/canon.md). Only the duration varies, and the
     /// stylesheet declares exactly these.
+    ///
+    /// **Reduce Motion is answered here and only here.** Every discrete change
+    /// in the app routes through this function — the bar's rise, the overlays,
+    /// the door's open, the shield's fade, the dots — so gating the curve at the
+    /// one place it is made is the whole of the feature, and no view has to
+    /// remember to ask. Turned on, a rise or a dim becomes a 0.12s cross-fade:
+    /// the state still changes visibly, and nothing travels far enough to be a
+    /// motion. It is deliberately not `nil`/instant — a state that arrives with
+    /// no transition at all is a cut, and Silk's whole argument is that nothing
+    /// slams.
+    ///
+    /// `Motion.crossing` is exempt, and it is the only exemption. Every one of
+    /// its call sites animates `value: night` and nothing else: it is the
+    /// atmosphere dissolving from day into night, no element moves, and it is
+    /// already the sanctioned substitute rather than something to be replaced by
+    /// one. Shortening it would make the room snap rather than dim, which is the
+    /// opposite of what the setting asks for. **If `crossing` is ever spent on
+    /// something that travels, this exemption has to go with it.**
+    ///
+    /// The two continuous surfaces are outside this function by construction and
+    /// stay untouched: the wait's mark is drawn at a constant brush speed and
+    /// passes `motion: nil` (see `EnsoView.motion`), and the atmosphere's own
+    /// gradients do not animate at all — only the crossing between them does.
     static func motion(_ seconds: Double) -> Animation {
-        .timingCurve(0.22, 1, 0.28, 1, duration: seconds)
+        guard reduceMotion, seconds != Motion.crossing else {
+            return .timingCurve(0.22, 1, 0.28, 1, duration: seconds)
+        }
+        return .linear(duration: 0.12)
+    }
+
+    /// `UIAccessibility` is main-actor isolated and this is not: `motion(_:)` is
+    /// called from view bodies, from `ButtonStyle.makeBody`, and from the model,
+    /// and making it `@MainActor` would colour all three. Every one of those is
+    /// on the main thread, which the guard states rather than assumes — off it,
+    /// there is no animation being applied to anything a person can see, so the
+    /// authored curve is the right answer and no hop is worth taking to confirm
+    /// it. Read live rather than cached: the setting can be changed from Control
+    /// Centre while Silk is on screen, and the next animation should already
+    /// have it.
+    private static var reduceMotion: Bool {
+        guard Thread.isMainThread else { return false }
+        return MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled }
     }
 
     /// The page transition (.55s in the prototype) is deliberately absent: the
