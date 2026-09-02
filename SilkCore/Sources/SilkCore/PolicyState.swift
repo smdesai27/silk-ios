@@ -116,7 +116,12 @@ public struct DownHours: Hashable, Codable, Sendable {
 /// The whole of Silk's policy. Small on purpose: if it doesn't fit here,
 /// Silk doesn't do it.
 public struct PolicyState: Hashable, Codable, Sendable {
-    public var budgetMinutes: Int          // one daily allowance for all distraction
+    /// One daily allowance for all distraction. Never past a day: the setter
+    /// clamps, so no writer — a parse, a wheel, a decode, a migration — can
+    /// hold a number `Validator` would refuse (see `maxMinutesPerDay`).
+    public var budgetMinutes: Int {
+        didSet { budgetMinutes = Self.clampedDaily(budgetMinutes) }
+    }
     public var downHours: DownHours        // one night window
     public var doors: [Door]               // 3–6 named doors
     public var wallEnabled: Bool           // the categories behind the wall (tokens live outside Core)
@@ -132,7 +137,9 @@ public struct PolicyState: Hashable, Codable, Sendable {
     /// exists to deliver it. Inside `PolicyState` it also rides inside
     /// `silk.policy`, so `wipeAll` needs no new entry and no extension can strip
     /// it. Splitting it into a sibling App Group key would reintroduce both.
-    public var doorCaps: [UUID: Int]
+    public var doorCaps: [UUID: Int] {
+        didSet { doorCaps = doorCaps.mapValues(Self.clampedDaily) }
+    }
 
     // MARK: - The day's ceiling
     //
@@ -180,11 +187,13 @@ public struct PolicyState: Hashable, Codable, Sendable {
     /// which is what those call sites already mean.
     public init(budgetMinutes: Int, downHours: DownHours, doors: [Door],
                 wallEnabled: Bool = true, doorCaps: [UUID: Int] = [:]) {
-        self.budgetMinutes = budgetMinutes
+        // Observers do not fire in an initializer, so the clamp is spelled
+        // out here too; the decoder does the same.
+        self.budgetMinutes = Self.clampedDaily(budgetMinutes)
         self.downHours = downHours
         self.doors = doors
         self.wallEnabled = wallEnabled
-        self.doorCaps = doorCaps
+        self.doorCaps = doorCaps.mapValues(Self.clampedDaily)
     }
 
     /// `doorCaps` postdates the first persisted policies, so it decodes as

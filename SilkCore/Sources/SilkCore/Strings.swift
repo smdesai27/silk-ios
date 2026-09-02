@@ -186,7 +186,7 @@ public enum SilkStrings {
     /// second try at persuading: the first line already said why Screen Time is
     /// wanted, and repeating it louder is not what a "no" is owed.
     public static let setupPermissionRefused =
-        "Silk can't block anything without Screen Time. Tap OK to try again."
+        "Silk can't block anything without Screen Time."
 
     // The picker sheet. Silk owns the sheet the system list sits inside, so
     // every one of these lines is on screen the whole time the list is —

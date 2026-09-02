@@ -26,20 +26,6 @@ private func performSpend(door: String, minutes: Int) async throws -> String {
     return SpendIntent.lastDialog
 }
 
-private func nightWellClearOfNow(_ now: Date = .now) -> DownHours {
-    let c = Calendar.current.dateComponents([.hour, .minute], from: now)
-    let minuteOfDay = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-    return DownHours(start: TimeOfDay(minutesSinceMidnight: minuteOfDay + 6 * 60),
-                     end: TimeOfDay(minutesSinceMidnight: minuteOfDay + 7 * 60))
-}
-
-private func nightContainingNow(_ now: Date = .now) -> DownHours {
-    let c = Calendar.current.dateComponents([.hour, .minute], from: now)
-    let minuteOfDay = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-    return DownHours(start: TimeOfDay(minutesSinceMidnight: minuteOfDay - 60),
-                     end: TimeOfDay(minutesSinceMidnight: minuteOfDay + 60))
-}
-
 @MainActor
 private func freshPolicy(budget: Int = 40,
                          downHours: DownHours? = nil,
@@ -75,17 +61,6 @@ private func freshModel(budget: Int = 40, doors: [Door]) -> AppModel {
     #expect(UIApplication.shared.applicationState != .background,
             "the host app is not foreground — a wait below will be born parked")
     return model
-}
-
-@MainActor
-private func settle(within seconds: Double = 3.0,
-                    until reached: () -> Bool) async -> Bool {
-    let deadline = ContinuousClock.now.advanced(by: .seconds(seconds))
-    while !reached() {
-        guard ContinuousClock.now < deadline else { return false }
-        try? await Task.sleep(for: .milliseconds(10))
-    }
-    return true
 }
 
 @Suite(.serialized) @MainActor struct SpendIntentDialogs {

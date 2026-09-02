@@ -44,6 +44,10 @@ struct PageDots: View {
                         // shortcut, so the narrow target is the accepted
                         // trade. VoiceOver reaches each dot by name below.
                         .frame(width: 12, height: 44)
+                        // The row's outer edges take extra slop — grown
+                        // symmetrically, which keeps the row optically centred.
+                        .padding(.leading, i == 0 ? 8 : 0)
+                        .padding(.trailing, i == count - 1 ? 8 : 0)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -426,16 +430,17 @@ struct CommandBar: View {
         // rather than a UIKit slide with a Silk ease stacked on top of it.
         .animation(Silk.motion(0.45), value: keyboard)
         // Reduce Motion: a fade in place instead of a journey. The bar's state
-        // still changes visibly — it goes and comes back on the same curve and
-        // the same 450ms — it just does not cross the page to say so.
+        // still changes visibly — it goes and comes back, each half on the
+        // short curve `Silk.motion` returns under the setting — it just does
+        // not cross the page to say so. Both halves are animated: a bare
+        // `fade = 0` was a cut to invisible, the one transition Silk never
+        // makes, on the very setting that asks for gentler ones.
         .opacity(fade)
         .onChange(of: raised) { _, _ in
             guard reduceMotion else { return }
-            fade = 0
-            // Next tick, or SwiftUI coalesces the dip and the ease into one
-            // change and nothing fades at all. Mirror's grow-in hops the same
-            // way for the same reason.
+            withAnimation(Silk.motion(0.45)) { fade = 0 }
             Task { @MainActor in
+                try? await Task.sleep(for: .seconds(0.12))
                 withAnimation(Silk.motion(0.45)) { fade = 1 }
             }
         }

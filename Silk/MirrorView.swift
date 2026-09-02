@@ -29,7 +29,7 @@ struct MirrorView: View {
     /// The hedgerow's age, in the canvas's own units. Seeded at the floor so
     /// the first frame draws a Day-one border rather than an empty one; the
     /// page's own `onChange` replaces it with the reading below.
-    @State private var age = Self.dayOne
+    @State private var age = Self.plantingAge()
 
     /// A day's growth, and therefore the floor: the border is never emptier
     /// than the day it was planted (docs/design/canvas/Main.dc.html:182).
@@ -49,10 +49,12 @@ struct MirrorView: View {
     /// which is where the cap sits, because `Hedgerow` reads lushness as
     /// `sqrt(count / 1,000,000)` and has nothing left to say past it.
     ///
-    /// Day boundaries, not 24-hour spans: the ledger's day is a calendar day
-    /// everywhere else in Silk, and a hedge that thickens at 3 a.m. because
-    /// that is when the app was first opened would be the only thing here
-    /// keeping a different clock.
+    /// Calendar days, not 24-hour spans, and deliberately not the Silk day
+    /// (`DayBoundary.dayStart`, anchored on down-hours end): that boundary
+    /// would move the border's growth by up to seven hours against the
+    /// score beside it, and nothing on this page can tell a day of hedge
+    /// from a day and seven hours of it. What must not vary is the count
+    /// itself — one more each morning, whichever morning.
     private static func plantingAge(now: Date = .now) -> Int {
         let cal = Calendar.current
         let days = cal.dateComponents([.day],
@@ -123,7 +125,12 @@ struct MirrorView: View {
                 if !reduceMotion && Self.wouldEarnCeremony() { grown = 0 }
                 return
             }
-            guard Self.wouldEarnCeremony() else { grown = 1; return }
+            // Only a page that arrives BARE plays. A border left standing —
+            // the six-hour window opened after the last leave — stays; the
+            // ceremony waits for the next arrival the leave below left bare.
+            // Clearing a standing border here was the snap this branch exists
+            // to prevent, by a wider door than the one it first closed.
+            guard Self.wouldEarnCeremony(), grown == 0 else { grown = 1; return }
             // Reduce Motion: the hedge is there, it simply did not creep in —
             // and the visit is not spent, so the ceremony waits for a viewer
             // who will see it.

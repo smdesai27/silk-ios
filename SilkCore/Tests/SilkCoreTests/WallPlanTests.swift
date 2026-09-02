@@ -114,10 +114,59 @@ private final class ExceptionProbe: @unchecked Sendable {
 // empty one.
 
 @Suite struct WallPlanSelectionTests {
-    @Test func corruptExtrasUnderAGoodPolicyLeavesTheWallAlone() {
+    @Test func corruptExtrasUnderAGoodPolicyKeepsWhatStandsAndStillWritesTheDoors() {
+        // The extras cannot be read, so the shield as it STANDS stands in
+        // for them: nothing shielded now is dropped, and the doors are still
+        // written. 7 and 8 are whatever the store held — extras, or a door
+        // since retired — and they stay.
         let plan = WallPlan.plan(policy: .value(policy()),
                                  extras: Decoded<Set<Int>>.corrupt,
                                  doors: .value(doorTokens),
+                                 standing: [7, 8, 1, 2],
+                                 openDoors: nothingOpen)
+        #expect(plan == .shield([7, 8, 1, 2, 3, 4]))
+    }
+
+    @Test func corruptExtrasStillClosesAnExpiredGrant() {
+        // The case the refusal used to get wrong. The last reconcile opened
+        // YouTube (3, 4 absent from what stands); its grant has since
+        // expired. A frozen wall would leave 3 and 4 open for as long as
+        // the extras blob stayed unreadable. The stand-in closes them.
+        let plan = WallPlan.plan(policy: .value(policy()),
+                                 extras: Decoded<Set<Int>>.corrupt,
+                                 doors: .value(doorTokens),
+                                 standing: [9, 1, 2],
+                                 openDoors: nothingOpen)
+        #expect(plan == .shield([9, 1, 2, 3, 4]))
+    }
+
+    @Test func corruptExtrasStillHonourAGrantThatIsRunning() {
+        let plan = WallPlan.plan(policy: .value(policy()),
+                                 extras: Decoded<Set<Int>>.corrupt,
+                                 doors: .value(doorTokens),
+                                 standing: [9, 1, 2, 3, 4],
+                                 openDoors: open(youtube))
+        #expect(plan == .shield([9, 1, 2]))
+    }
+
+    @Test func corruptExtrasUnderACorruptPolicyShieldWhatStandsAndTheDoorsWithNoExceptions() {
+        let probe = ExceptionProbe()
+        let plan = WallPlan.plan(policy: Decoded<PolicyState>.corrupt,
+                                 extras: Decoded<Set<Int>>.corrupt,
+                                 doors: .value(doorTokens),
+                                 standing: [9],
+                                 openDoors: probe.openDoors)
+        #expect(plan == .shield([9, 1, 2, 3, 4]))
+        #expect(probe.asked == false)
+    }
+
+    @Test func corruptExtrasWithNothingStandingAndNoDoorsStillRefuses() {
+        // The corrupt-policy empty-union rule, reached through the stand-in:
+        // nothing readable and nothing standing is still nothing to write.
+        let plan = WallPlan.plan(policy: Decoded<PolicyState>.corrupt,
+                                 extras: Decoded<Set<Int>>.corrupt,
+                                 doors: Decoded<[UUID: Set<Int>]>.absent,
+                                 standing: [],
                                  openDoors: nothingOpen)
         #expect(plan == .leaveUntouched)
     }
@@ -130,8 +179,9 @@ private final class ExceptionProbe: @unchecked Sendable {
         #expect(plan == .leaveUntouched)
     }
 
-    @Test func corruptSelectionsNeverAskWhichDoorsAreOpen() {
-        // The refusal is decided before the ledger is consulted: there is no
+    @Test func corruptDoorsNeverAskWhichDoorsAreOpen() {
+        // The refusal is decided before the ledger is consulted: without the
+        // door tokens there is no exception that could be computed, and no
         // set of open doors that could make a partial union safe to write.
         let probe = ExceptionProbe()
         _ = WallPlan.plan(policy: .value(policy()),

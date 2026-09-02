@@ -629,26 +629,15 @@ public enum Wall {
             policy: policy,
             extras: extras.map(\.applicationTokens),
             doors: doors.map { $0.mapValues(\.applicationTokens) },
+            // What the store holds now: the stand-in for an extras blob
+            // that will not decode, so nothing shielded is ever dropped
+            // for a key this process could not read.
+            standing: store.shield.applications ?? [],
             openDoors: { policyValue, doorTokens in
                 // The ledger read the plan cannot do — and does not ask for on
                 // any path that refuses to write.
                 SharedStore.openDoorTokens(at: now, policy: policyValue, selections: doorTokens)
             })
-
-        // Categories are gone from the model, and no plan branch depends on
-        // them: nil-ing them clears stale category shields on upgraded
-        // installs, retiring the documented device-verify risk that a
-        // category shield overrides per-app unshielding. It runs BEFORE the
-        // plan is consulted because the case that refuses to write — a
-        // selection blob an OS upgrade made unreadable — is exactly the
-        // upgrade this migration exists for. Not on an absent policy: an
-        // unconfigured wall has nothing to migrate.
-        switch policy {
-        case .absent: break
-        default:
-            store.shield.applicationCategories = nil
-            store.shield.webDomainCategories = nil
-        }
 
         switch plan {
         case .leaveUntouched:
@@ -658,24 +647,44 @@ public enum Wall {
             // nothing to do. Which key, and what was in it, is exactly what
             // the shipping log does not say (the c49bc17 doctrine: keep the
             // event, redact the payload).
-            if extras.isCorrupt || doors.isCorrupt {
-                log.error("reconcile: a selection blob would not decode; wall left as it stands")
+            if doors.isCorrupt {
+                log.error("reconcile: the door selections would not decode; wall left as it stands")
             }
             return
         case .clearAll:
             store.clearAllSettings()
             return
         case .shield(let blocked):
+            if extras.isCorrupt {
+                log.error("reconcile: the wall selection would not decode; the standing shield stood in for it")
+            }
             store.shield.applications = blocked
         }
 
+        // Categories are gone from the model. Nil-ing them here clears stale
+        // category shields on upgraded installs — and retires the documented
+        // device-verify risk that a category shield overrides per-app
+        // unshielding: there is no category layer left to override anything.
+        //
+        // Only here, after the app layer was written. The refusing paths above
+        // return first on purpose: a legacy category shield may be the whole
+        // wall an unreadable install still has, and clearing one layer without
+        // writing the other is the fail-open this file exists to forbid. The
+        // migration waits for the next readable reconcile, which is a stuck
+        // restriction, not an open door.
+        store.shield.applicationCategories = nil
+        store.shield.webDomainCategories = nil
+
         // Web domains never open with a grant (docs/market/gaps.md #2), which
         // is why they are no part of the plan: that decision is app tokens and
-        // exceptions, and no door has ever opened a domain. A corrupt extras
-        // blob cannot reach this line — the plan refused to write on it — so
-        // an unreadable selection never clears a standing domain shield
-        // either, and the `?? []` below is unreachable rather than a policy.
-        let webDomains = extras.orEmpty(FamilyActivitySelection())?.webDomainTokens ?? []
-        store.shield.webDomains = webDomains.isEmpty ? nil : webDomains
+        // exceptions, and no door has ever opened a domain. The domains live
+        // in the extras blob, and a corrupt one has no stand-in here (the
+        // standing shield covers apps, not domains) — so on that path the
+        // domain shield is left exactly as it stands, never cleared for a
+        // key this process could not read.
+        if let extraSelection = extras.orEmpty(FamilyActivitySelection()) {
+            let webDomains = extraSelection.webDomainTokens
+            store.shield.webDomains = webDomains.isEmpty ? nil : webDomains
+        }
     }
 }

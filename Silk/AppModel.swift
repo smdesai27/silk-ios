@@ -135,6 +135,8 @@ final class AppModel {
         // draws. (docs/market/gaps.md #5)
         if saved == nil {
             wall.clearOrphans()
+            // Every activity is gone with the stores, the heartbeat included.
+            armedHeartbeatAnchor = nil
         }
         applyPendingIfDayTurned()
         wall.reconcile()
@@ -144,10 +146,7 @@ final class AppModel {
         // happen to it, and arming is a restatement (it stops before it
         // starts) rather than a second registration.
         if onboarded {
-            // The anchor is recorded only for an arm that took. A throw here —
-            // authorization not yet effective, the daemon's activity limit — must
-            // leave the next boundary free to try again, or the failure latches.
-            if wall.armHeartbeat(downHours: policy.downHours) { armedHeartbeatAnchor = policy.downHours.end }
+            armHeartbeatRecordingAnchor(policy.downHours)
         }
         refreshDoorIcons()
         startClock()
@@ -180,10 +179,7 @@ final class AppModel {
         // First arming: authorization has just been granted, so this is the
         // earliest point the schedule can take. Until it fires, days record
         // as unobserved — which is honest, not a bug.
-        // The anchor is recorded only for an arm that took. A throw here —
-        // authorization not yet effective, the daemon's activity limit — must
-        // leave the next boundary free to try again, or the failure latches.
-        if wall.armHeartbeat(downHours: downHours) { armedHeartbeatAnchor = downHours.end }
+        armHeartbeatRecordingAnchor(downHours)
         onboarded = true
     }
 
@@ -2029,6 +2025,13 @@ final class AppModel {
         now = .now
         wall.reconcile()
         refreshWallStanding()
+        // A heartbeat that failed to arm at launch — authorization not yet
+        // effective, the daemon's activity limit — is retried here, on the
+        // next natural wake, rather than at the next day turn up to a day
+        // away. Free when it took: the anchor is set and this is a no-op.
+        if onboarded, armedHeartbeatAnchor == nil {
+            armHeartbeatRecordingAnchor(policy.downHours)
+        }
         applyPendingIfDayTurned()
         compactLedgerIfDayTurned()
         // The clock slept through the suspension, and its sleep is aimed at an
@@ -2141,10 +2144,7 @@ final class AppModel {
         wall.reconcile()
         // Unconditional, and the anchor is remembered so the day sweep does
         // not restate it again: this is the launch case, not the tick's.
-        // The anchor is recorded only for an arm that took. A throw here —
-        // authorization not yet effective, the daemon's activity limit — must
-        // leave the next boundary free to try again, or the failure latches.
-        if wall.armHeartbeat(downHours: policy.downHours) { armedHeartbeatAnchor = policy.downHours.end }
+        armHeartbeatRecordingAnchor(policy.downHours)
         // Only the doors with something to close. `restateRelockLayers`
         // answers a doorless grant with `stopMonitoring`, and disarming every
         // resting door here would be a stop per door for nothing.
@@ -2330,6 +2330,12 @@ final class AppModel {
     /// that restating the schedule is a restatement of something that moved
     /// and not a stop-and-start of the daemon's one live activity for nothing.
     @ObservationIgnored private var armedHeartbeatAnchor: TimeOfDay?
+    /// The Silk day the heartbeat was last restated on. The daemon's
+    /// activity list is not documented to survive everything that can
+    /// happen to it, so a successful arm is restated once per day turn —
+    /// the cadence the unconditional day-turn arm used to have, without
+    /// the per-minute stop-and-start a retrying sweep used to make of it.
+    @ObservationIgnored private var armedHeartbeatDay: Date?
 
     /// Restate the heartbeat when — and only when — its anchor has moved.
     /// A launch and the end of setup arm unconditionally on purpose (the
@@ -2338,12 +2344,19 @@ final class AppModel {
     /// inside one process. A failed arm records no anchor, so the next
     /// boundary retries it — the retry the unconditional day-turn arm used
     /// to be.
-    private func armHeartbeatIfAnchorMoved() {
-        guard armedHeartbeatAnchor != policy.downHours.end else { return }
-        // The anchor is recorded only for an arm that took. A throw here —
-        // authorization not yet effective, the daemon's activity limit — must
-        // leave the next boundary free to try again, or the failure latches.
-        if wall.armHeartbeat(downHours: policy.downHours) { armedHeartbeatAnchor = policy.downHours.end }
+    /// The one place the heartbeat is armed and its anchor recorded — and
+    /// recorded only for an arm that took. A throw (authorization not yet
+    /// effective, the daemon's activity limit) must leave the next boundary
+    /// free to try again, or the failure latches for the life of the process.
+    private func armHeartbeatRecordingAnchor(_ downHours: DownHours) {
+        if wall.armHeartbeat(downHours: downHours) { armedHeartbeatAnchor = downHours.end }
+    }
+
+    private func armHeartbeatIfAnchorMoved(dayStart: Date) {
+        guard armedHeartbeatAnchor != policy.downHours.end || armedHeartbeatDay != dayStart
+        else { return }
+        armHeartbeatRecordingAnchor(policy.downHours)
+        if armedHeartbeatAnchor == policy.downHours.end { armedHeartbeatDay = dayStart }
     }
 
     private func compactLedgerIfDayTurned() {
@@ -2362,7 +2375,7 @@ final class AppModel {
         // daemon, and this method is reachable on every tick (see the retry
         // marker below), which made the one signal that proves the wall alive
         // into something torn down and rebuilt once a minute.
-        armHeartbeatIfAnchorMoved()
+        armHeartbeatIfAnchorMoved(dayStart: start)
 
         // No compaction without a record. `compact` drops every grant older
         // than its cut, and a day whose grants are gone can never be

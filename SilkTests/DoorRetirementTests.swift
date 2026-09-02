@@ -29,13 +29,6 @@ import FamilyControls
 
 // MARK: - Fixtures
 
-private func nightWellClearOfNow(_ now: Date = .now) -> DownHours {
-    let c = Calendar.current.dateComponents([.hour, .minute], from: now)
-    let minuteOfDay = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-    return DownHours(start: TimeOfDay(minutesSinceMidnight: minuteOfDay + 6 * 60),
-                     end: TimeOfDay(minutesSinceMidnight: minuteOfDay + 7 * 60))
-}
-
 @MainActor
 private func freshModel(doors: [Door], budget: Int = 40) -> AppModel {
     SharedStore.wipeAll()
@@ -44,16 +37,6 @@ private func freshModel(doors: [Door], budget: Int = 40) -> AppModel {
     model.completeSetup(doors: doors, doorSelections: [:], wallSelection: .init(),
                         budget: budget, downHours: nightWellClearOfNow())
     return model
-}
-
-private func unpinTheSeams() {
-    UserDefaults.standard.removeObject(forKey: "silkWait")
-}
-
-@MainActor
-private func claimed(_ sentence: String, _ model: AppModel) {
-    #expect(DeterministicParser.parse(sentence, state: model.policy) != .silence,
-            "the grammar stopped claiming \"\(sentence)\" — this test now measures the widener")
 }
 
 // MARK: -

@@ -112,6 +112,20 @@ actor SilkModelParser {
     /// itself. Nonzero at the top of `parse` means the last clock won and
     /// its loser ignored the cancel; see the guard there.
     private var liveGenerations = 0
+    /// When the newest generation started. A generation that ignored its
+    /// cancel would otherwise hold the gate below for the life of the
+    /// process; after this long it is presumed wedged and overlapped.
+    private var newestGenerationStarted: ContinuousClock.Instant?
+    static let wedgedAfter: Duration = .seconds(10)
+
+    #if DEBUG
+    /// Test seam: answer every parse with silence, as an unavailable model
+    /// would. The simulator this suite runs on has Apple Intelligence, so a
+    /// sentence the grammar falls silent on otherwise reaches a real model
+    /// and the refusal's wording cannot be asserted; with this set, the
+    /// bar's own four words are the only answer possible.
+    nonisolated(unsafe) static var testForceSilent = false
+    #endif
 
     /// Build the session and let the model start loading, while the user is
     /// still typing.
@@ -147,6 +161,9 @@ actor SilkModelParser {
     #endif
 
     func parse(_ utterance: String, state: PolicyState) async -> ParseOutcome {
+        #if DEBUG
+        if Self.testForceSilent { return .silence }
+        #endif
         #if canImport(FoundationModels)
         guard case .available = SystemLanguageModel.default.availability else { return .silence }
         // At most one abandoned generation. The clock below returns without
@@ -154,7 +171,24 @@ actor SilkModelParser {
         // that ignored the cancel is still generating, and the next sentence
         // must not stack a second one on top of it. While one is alive the
         // bar answers as an unavailable model does; the grammar is untouched.
-        guard liveGenerations == 0 else { return .silence }
+        //
+        // Bounded, not permanent: a generation that never returns is presumed
+        // wedged after `wedgedAfter` and the next sentence overlaps it — so
+        // the worst a broken cancel can cost is ten seconds of grammar-only
+        // answers, and never the widener for the life of the process.
+        //
+        // Counted HERE, on the actor, before anything suspends. Counting it
+        // inside the work arm left a window: two sentences sent back to back
+        // both read zero before either arm had run, and both generated.
+        let clock = ContinuousClock()
+        if liveGenerations > 0,
+           let started = newestGenerationStarted,
+           clock.now - started < Self.wedgedAfter {
+            return .silence
+        }
+        liveGenerations += 1
+        newestGenerationStarted = clock.now
+        defer { liveGenerations -= 1 }
 
         let prompt = Self.instructions(for: state)
         // The warm session is SPENT here, not reused: the 4096-token window is
@@ -201,6 +235,8 @@ actor SilkModelParser {
         // behind whatever they do next.
         let answers = AsyncStream<ParseOutcome> { continuation in
             let work = Task {
+                // The loser keeps the count it was given until it returns —
+                // that is what the gate at the top of `parse` reads.
                 self.liveGenerations += 1
                 defer { self.liveGenerations -= 1 }
                 let outcome: ParseOutcome

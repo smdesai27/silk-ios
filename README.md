@@ -72,11 +72,10 @@ needs nothing else — FamilyControls is available to every team for development
 
 Bundle identity derives from a single build setting, `SILK_BUNDLE_PREFIX` in `project.yml`. All four
 bundle IDs, the App Group, and the log subsystem are built from it, so a rename is one line plus
-`xcodegen generate`. Two things make that rename one-way, and neither has happened yet:
-
-- bundle IDs lock at the **first build upload** to App Store Connect;
-- the **FamilyControls (Distribution)** entitlement is granted *per bundle ID* — four separate requests
-  here — so renaming afterward means re-requesting all four and waiting out the queue again.
+`xcodegen generate`. One thing makes that rename one-way, and it has not happened yet: bundle IDs
+lock at the **first build upload** to App Store Connect. The **FamilyControls (Distribution)**
+entitlement is not a second lock — it was granted team-level on 2026-08-17, one submission for all
+four identifiers (`docs/market/shipping-roadmap.md`), so a rename costs no re-request.
 
 Distribution is the gate, not development: TestFlight, Ad Hoc and the App Store all require that
 entitlement, and Apple must grant it by hand (see `docs/market/what-is-buildable.md` → Shipping).

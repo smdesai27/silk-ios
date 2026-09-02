@@ -27,25 +27,6 @@ import UIKit
 
 // MARK: - Fixtures
 
-/// A window the current minute sits inside — the night, wherever the suite is
-/// run. Borrowed in shape from `SpendIntentTests`, which needs the same device
-/// to reach Siri's refusals.
-private func nightContainingNow(_ now: Date = .now) -> DownHours {
-    let c = Calendar.current.dateComponents([.hour, .minute], from: now)
-    let minuteOfDay = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-    return DownHours(start: TimeOfDay(minutesSinceMidnight: minuteOfDay - 60),
-                     end: TimeOfDay(minutesSinceMidnight: minuteOfDay + 60))
-}
-
-/// And the daytime device: a window that opens six hours out, so nothing is
-/// deferred and no grant is clamped by the edge.
-private func nightWellClearOfNow(_ now: Date = .now) -> DownHours {
-    let c = Calendar.current.dateComponents([.hour, .minute], from: now)
-    let minuteOfDay = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-    return DownHours(start: TimeOfDay(minutesSinceMidnight: minuteOfDay + 6 * 60),
-                     end: TimeOfDay(minutesSinceMidnight: minuteOfDay + 7 * 60))
-}
-
 @MainActor
 private func freshModel(budget: Int = 40, downHours: DownHours) -> (AppModel, Door) {
     SharedStore.wipeAll()
@@ -54,11 +35,6 @@ private func freshModel(budget: Int = 40, downHours: DownHours) -> (AppModel, Do
     model.completeSetup(doors: [door], doorSelections: [:], wallSelection: .init(),
                         budget: budget, downHours: downHours)
     return (model, door)
-}
-
-private func unpinTheSeams() {
-    UserDefaults.standard.removeObject(forKey: "silkWait")
-    UserDefaults.standard.removeObject(forKey: "silkStale")
 }
 
 // MARK: -

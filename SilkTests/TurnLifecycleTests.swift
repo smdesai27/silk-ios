@@ -27,16 +27,6 @@ import UIKit
 
 // MARK: - Fixtures
 
-/// A window containing no minute of any day, whose edge is half a day out
-/// whatever the clock says — the same device `WaitLifecycleTests` uses, and for
-/// the same reason: the shipped 22–7 window answers every grant below with
-/// "Opens at 7 AM" when the suite runs at night.
-private func noWindowTonight(at reference: Date = .now) -> DownHours {
-    let hour = (Calendar.current.component(.hour, from: reference) + 12) % 24
-    let nowhere = TimeOfDay(hour: hour, minute: 30)
-    return DownHours(start: nowhere, end: nowhere)
-}
-
 @MainActor
 private func freshModel(budget: Int = 40,
                         downHours: DownHours = noWindowTonight()) -> (AppModel, Door) {
@@ -49,11 +39,6 @@ private func freshModel(budget: Int = 40,
                         budget: budget,
                         downHours: downHours)
     return (model, door)
-}
-
-private func unpinTheSeams() {
-    UserDefaults.standard.removeObject(forKey: "silkWait")
-    UserDefaults.standard.removeObject(forKey: "silkStale")
 }
 
 // MARK: - The conversation on its own
@@ -337,6 +322,23 @@ private func unpinTheSeams() {
         #expect(model.conversation.hasPendingTurn == false, "the turn was left drawing \"…\"")
         #expect(model.conversation.turns.count == 1,
                 "one sentence produced \(model.conversation.turns.count) turns")
+    }
+
+    /// The same sentence with the widener silenced: now the reply IS
+    /// assertable, and it is the four words README rule 2 names. This is the
+    /// only place `didntGetThat` is pinned on the `handle` path; the test
+    /// above deliberately cannot be.
+    @Test func anUnreadableSentenceIsRefusedWithTheFourWordsWhenTheWidenerIsSilent() async {
+        SilkModelParser.testForceSilent = true
+        defer { SilkModelParser.testForceSilent = false; unpinTheSeams() }
+        let (model, _) = freshModel()
+        let before = model.policy
+
+        await model.handle("asdfgh qwerty zxcvb")
+
+        #expect(model.conversation.turns.last?.reply == SilkStrings.didntGetThat)
+        #expect(model.conversation.hasPendingTurn == false)
+        #expect(model.policy == before, "a refused sentence moved the policy")
     }
 
     /// And the pool's own sentence still moves it.

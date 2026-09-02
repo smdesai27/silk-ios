@@ -51,48 +51,6 @@ private func freshModel(budget: Int = 40) -> (AppModel, Door) {
     return (model, door)
 }
 
-/// A night window that opens six hours from whenever the suite is run.
-///
-/// `WaitModelTests` keeps the shipped 22:00–7:00 and is right to: nothing it
-/// asserts is a grant. Every test below IS a grant, and the shipped window
-/// makes the arithmetic a function of the wall clock in two separate ways. Run
-/// at 11 PM and the Validator answers `.refuseDownHours` and no wait is ever
-/// raised. Run at 21:50 and the down-hours *edge* clamps a twenty-minute ask to
-/// ten, because `relock` is `min(now + asked, nextDownHoursStart)` — the grant
-/// lands, for the wrong number, and the balance assertions fail for a reason
-/// that has nothing to do with the wait. A window six hours out is outside
-/// both: `contains(now)` is false, and the edge is far past any grant these
-/// tests mint.
-private func nightWellClearOfNow(_ now: Date = .now) -> DownHours {
-    let c = Calendar.current.dateComponents([.hour, .minute], from: now)
-    let minuteOfDay = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-    return DownHours(start: TimeOfDay(minutesSinceMidnight: minuteOfDay + 6 * 60),
-                     end: TimeOfDay(minutesSinceMidnight: minuteOfDay + 7 * 60))
-}
-
-/// Wait for a state, not for a duration.
-///
-/// The landing sleeps out a monotonic remainder and then hops back to this
-/// actor, so the honest wait is "until it happens, and not one frame longer".
-/// A fixed sleep would have to be padded for the slowest runner and that
-/// padding would be paid on every green run; this returns the instant the state
-/// arrives, and hands the deadline back as `false` so the caller can fail with
-/// a sentence instead of hanging.
-///
-/// `landWait` never suspends, so anything this observes it observes whole:
-/// `waiting` goes nil at the top of it, and by the time the poll can run again
-/// the apply on the far side has already landed.
-@MainActor
-private func settle(within seconds: Double = 3.0,
-                    until reached: () -> Bool) async -> Bool {
-    let deadline = ContinuousClock.now.advanced(by: .seconds(seconds))
-    while !reached() {
-        guard ContinuousClock.now < deadline else { return false }
-        try? await Task.sleep(for: .milliseconds(10))
-    }
-    return true
-}
-
 @Suite(.serialized) @MainActor struct WaitTransactionTests {
 
     /// Long enough that the veil is provably still standing on the line after
@@ -154,7 +112,7 @@ private func settle(within seconds: Double = 3.0,
         // The wall's own derivation, asked directly. (`arm`'s two schedules are
         // the third thing §5 says is not touched yet, and they are the one part
         // no test can see — they exist only inside DeviceActivity. They ride
-        // `wall.open`, which is called from the `.grant` arm and nowhere else,
+        // `wall.arm`, reached through `restateRelockLayers` after a commit,
         // so an empty ledger is as close to that assertion as this gets.)
         #expect(!model.ledger.openDoors(at: .now, dayStart: model.dayStart)
             .contains(door.id))
@@ -355,7 +313,7 @@ private func settle(within seconds: Double = 3.0,
     /// `clock` and `startClock` are both private, so this reads the clock's
     /// *output* instead: `now`, which nothing else writes once `landWait` has
     /// set it. A grant expiring shortly gives the clock a reason to wake before
-    /// the next minute boundary (`secondsUntilNextWake` takes the sooner of the
+    /// the next minute boundary (`nextWake` takes the sooner of the
     /// two), so the poll has something to see inside a second rather than up to
     /// sixty.
     ///
@@ -365,7 +323,7 @@ private func settle(within seconds: Double = 3.0,
     /// `startClock()`'s body cannot run until `landWait` returns, so the ledger
     /// write, the re-validation and the wall reconcile all come out of the same
     /// margin. Lose that race and `nextTransition` drops the expired row
-    /// (`GrantLedger.swift:163-165`), `secondsUntilNextWake` falls back to the next
+    /// (`GrantLedger.swift:163-165`), `nextWake` falls back to the next
     /// minute boundary, and the poll below fails with a message accusing
     /// `clearWait` of a defect that is not there. It is a cliff and not a
     /// gradient: win and the tick fires at 1 s, lose and it is up to 60 s out.

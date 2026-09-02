@@ -23,26 +23,6 @@ import UIKit
 
 // MARK: - Fixtures
 
-/// A down-hours window that contains no minute of any day, and whose edge is
-/// half a day away whatever the clock says when the suite runs.
-///
-/// Every test below drives a real grant through `handle`, and the shipped
-/// 22–7 window would answer all of them with "Opens at 7 AM" whenever the
-/// suite is run at night — the hours this project is most often built in. A
-/// zero-length window contains nothing (`DownHours.contains`, start == end
-/// makes the half-open test vacuous), so `isDownHours` is false at every hour.
-///
-/// The start still matters even so: `Validator` clamps a grant at the next
-/// occurrence of it (`nextDownHoursStart`, which does not care that the window
-/// is empty), so a window pinned at midnight would silently shorten a
-/// ten-minute ask made at 23:55 to five. Anchoring it twelve hours from now
-/// puts that edge at least eleven and a half hours out, always.
-private func noWindowTonight(at reference: Date = .now) -> DownHours {
-    let hour = (Calendar.current.component(.hour, from: reference) + 12) % 24
-    let nowhere = TimeOfDay(hour: hour, minute: 30)
-    return DownHours(start: nowhere, end: nowhere)
-}
-
 @MainActor
 private func freshModel(budget: Int = 40,
                         downHours: DownHours = noWindowTonight()) -> (AppModel, Door) {
@@ -62,14 +42,6 @@ private func freshModel(budget: Int = 40,
     #expect(UIApplication.shared.applicationState != .background,
             "the host app is not foreground — every wait below will be born parked")
     return (model, door)
-}
-
-/// Both debug seams, off. `defer`red at the top of every test that touches
-/// them: a pinned wait or a pinned staleness window left behind would follow
-/// the process into whatever runs next.
-private func unpinTheSeams() {
-    UserDefaults.standard.removeObject(forKey: "silkWait")
-    UserDefaults.standard.removeObject(forKey: "silkStale")
 }
 
 @Suite(.serialized) @MainActor struct WaitLifecycle {
@@ -326,10 +298,10 @@ private func unpinTheSeams() {
     // There is no honest one to write from here, and the obstacle is timing
     // rather than access. `startClock`'s only externally visible effect is the
     // tick body — `now = .now`, a ledger sync, a reconcile, two day-turn
-    // sweeps — and the first tick fires at `secondsUntilNextWake()`, which is
+    // sweeps — and the first tick fires at `nextWake()`, which is
     // `max(1, min(next minute boundary, ledger.nextTransition))`: between one
     // and sixty seconds out, and not steerable from a test. `clock` and
-    // `secondsUntilNextWake` are private, `ledger` is `private(set)`, and the
+    // `nextWake` are private, `ledger` is `private(set)`, and the
     // soonest transition the app can be talked into minting through `handle` is
     // a one-minute grant. A test could only sample `model.now` and hope, which
     // passes on a coin flip and fails no bug.

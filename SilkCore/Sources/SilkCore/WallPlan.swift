@@ -77,6 +77,10 @@ public enum WallPlan {
     ///   - extras: the wall selection's app tokens — apps blocked without a
     ///     name or launch entry of their own.
     ///   - doors: each door's app tokens, by door id.
+    ///   - standing: the app tokens the shield store holds RIGHT NOW. Read
+    ///     by the caller off `ManagedSettingsStore`; it stands in for the
+    ///     extras when the extras blob will not decode, so a door's grant
+    ///     can still expire while nothing that is shielded now is dropped.
     ///   - openDoors: the tokens belonging to doors that should be open now.
     ///     A closure and not a value because answering it needs the ledger and
     ///     the established day, which the caller already holds — and because it
@@ -85,6 +89,7 @@ public enum WallPlan {
         policy: Decoded<PolicyState>,
         extras: Decoded<Set<Token>>,
         doors: Decoded<[UUID: Set<Token>]>,
+        standing: Set<Token> = [],
         openDoors: (PolicyState, [UUID: Set<Token>]) -> Set<Token>
     ) -> Plan<Token> {
         // The wall is apps only: every door's tokens plus the extras. An
@@ -110,9 +115,28 @@ public enum WallPlan {
         // Asked AFTER the policy's first two answers, because both are owed
         // regardless of what the selections say — and never asked at all on
         // those two paths.
+        //
+        // The two keys are not symmetric, and the first shape of this rule
+        // treated them as if they were. The DOORS are the policy: without
+        // their tokens no exception can be computed and no door re-shielded,
+        // so an unreadable doors blob is a refusal. The EXTRAS are apps
+        // blocked without a name, and an unreadable extras blob has a
+        // stand-in that loses nothing: the shield as it STANDS. Every token
+        // shielded now stays shielded, the doors are re-added, and the
+        // exceptions are recomputed — which is the whole point. Refusing
+        // here instead froze the wall with the last reconcile's grant
+        // exception in it: a door that never closed, for as long as the
+        // blob stayed unreadable. That is the fail-open README rule 4
+        // forbids, on the one path this function exists to keep closed.
+        //
+        // What the stand-in cannot reach, named rather than hidden: an
+        // unreadable DOORS blob leaves a live grant exception standing past
+        // its grant, because the door's tokens are the thing that cannot be
+        // read and nothing else can put them back. The wall holds everything
+        // else; that one door waits for the next readable reconcile.
         func readable() -> (blocked: Set<Token>, doors: [UUID: Set<Token>])? {
-            guard let extraTokens = extras.orEmpty([]),
-                  let doorTokens = doors.orEmpty([:]) else { return nil }
+            guard let doorTokens = doors.orEmpty([:]) else { return nil }
+            let extraTokens = extras.orEmpty([]) ?? standing
             return (doorTokens.values.reduce(into: extraTokens) { $0.formUnion($1) }, doorTokens)
         }
 

@@ -228,8 +228,9 @@ private let absurd = 999_999_999_999_999_999
     /// A policy persisted before the ceiling existed — or hand-corrupted — must
     /// decode to the same day the bar enforces, or the hero draws a number the
     /// bar refuses (README rule 2: the screen must not lie). The memberwise
-    /// init stays raw on purpose so the validator tests above can still hand
-    /// it an absurd state and prove nothing traps.
+    /// init clamps too, so the validator tests above hand it an absurd number
+    /// and get a bounded state either way; the `Double` multiply in the
+    /// validator is the belt behind that.
     @Test func aBudgetAndACapPastTheDayReadBackAsOneDay() throws {
         let raw = PolicyState(budgetMinutes: Int.max, downHours: night, doors: [instagram],
                               doorCaps: [instagram.id: Int.max])

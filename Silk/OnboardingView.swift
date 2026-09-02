@@ -72,7 +72,8 @@ struct OnboardingView: View {
     @State private var columnHeight: CGFloat = 0
     /// True while a step is fading into the next one.
     @State private var crossFading = false
-    @State private var holdGeneration = 0
+    @State private var hold: Task<Void, Never>?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Screen Time was asked for and refused, and setup is still on step one.
     /// Cleared by a grant, which is the same moment the step advances.
     @State private var permissionRefused = false
@@ -132,14 +133,16 @@ struct OnboardingView: View {
         // scale is recomputed from a height that is briefly neither step's.
         .onChange(of: step) { _, _ in
             crossFading = true
-            // Keyed to this change: a second step inside the 450 ms must not
-            // let the first hold end early and hand the scale a height that
-            // is briefly neither step's.
-            holdGeneration += 1
-            let mine = holdGeneration
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(0.45))
-                guard mine == holdGeneration else { return }
+            // A second step inside the 450 ms cancels the first hold, so it
+            // cannot end early and hand the scale a height that is briefly
+            // neither step's.
+            hold?.cancel()
+            hold = Task { @MainActor in
+                // As long as the fade it holds for: 450 ms, or the short curve
+                // under Reduce Motion — a hold that outlives its fade rescales
+                // a column whose content has already changed.
+                try? await Task.sleep(for: .seconds(reduceMotion ? 0.12 : 0.45))
+                guard !Task.isCancelled else { return }
                 crossFading = false
                 columnHeight = liveHeight
             }

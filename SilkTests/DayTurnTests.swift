@@ -29,19 +29,6 @@ import UIKit
 
 // MARK: - Fixtures
 
-/// A night window that opens six hours from whenever the suite is run — the
-/// same device the other suites use, and here for a third reason on top of
-/// theirs: `DayBoundary.dayStart` is derived from `downHours.end`, so a window
-/// pinned to the wall clock would make "yesterday" a different number of hours
-/// ago on every run. Six hours out, the boundary is a fixed offset from `now`
-/// whichever side of midnight the run lands on.
-private func nightWellClearOfNow(_ now: Date = .now) -> DownHours {
-    let c = Calendar.current.dateComponents([.hour, .minute], from: now)
-    let minuteOfDay = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-    return DownHours(start: TimeOfDay(minutesSinceMidnight: minuteOfDay + 6 * 60),
-                     end: TimeOfDay(minutesSinceMidnight: minuteOfDay + 7 * 60))
-}
-
 /// Seed the App Group the way a previous launch would have left it, and build
 /// nothing. The model under test is the one the *next* `AppModel()` makes —
 /// `applyPendingIfDayTurned` runs inside `init`, so a fixture that constructs

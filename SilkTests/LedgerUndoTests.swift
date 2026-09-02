@@ -35,15 +35,6 @@ import UIKit
 
 // MARK: - Fixtures
 
-/// A window six hours out, so no grant below is refused by the night or clamped
-/// by its edge — the same device `WaitLifecycleTests` and `SpendIntentTests` use.
-private func nightWellClearOfNow(_ now: Date = .now) -> DownHours {
-    let c = Calendar.current.dateComponents([.hour, .minute], from: now)
-    let minuteOfDay = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-    return DownHours(start: TimeOfDay(minutesSinceMidnight: minuteOfDay + 6 * 60),
-                     end: TimeOfDay(minutesSinceMidnight: minuteOfDay + 7 * 60))
-}
-
 /// Two doors, and the wait pinned off. A grant's price is seconds of watching
 /// and `landWait` re-runs the whole verdict on the far side of them; this file
 /// is about what the ledger holds afterwards, not about the wait, so the veil
@@ -59,17 +50,6 @@ private func twoDoorModel(budget: Int = 40) -> (AppModel, Door, Door) {
                         wallSelection: .init(), budget: budget,
                         downHours: nightWellClearOfNow())
     return (model, instagram, youtube)
-}
-
-private func unpinTheSeams() {
-    UserDefaults.standard.removeObject(forKey: "silkWait")
-    UserDefaults.standard.removeObject(forKey: "silkStale")
-}
-
-@MainActor
-private func claimed(_ sentence: String, _ model: AppModel) {
-    #expect(DeterministicParser.parse(sentence, state: model.policy) != .silence,
-            "the grammar stopped claiming \"\(sentence)\" — this test now measures the widener")
 }
 
 // MARK: - An older ledger pill may not undo a newer one
