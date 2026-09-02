@@ -253,6 +253,36 @@ final class AppModel {
 
     // MARK: - Mirror
 
+    /// The closed-day records, decoded and sorted once and then held — the
+    /// same bargain `weekAttemptBuckets` strikes with the attempts blob, under
+    /// the counter `SharedStore.daysRevision` keeps for exactly this. Mirror's
+    /// body reads `lastClosedScore`, `closedWeekScores` and `daysHeld` several
+    /// times a pass and each one was a full decode and sort of the whole blob.
+    ///
+    /// The revision is read BEFORE the blob, as the attempts cache reads its
+    /// own: a record written between the two reads then shows as a mismatch on
+    /// the next tick and the cache falls, which errs toward a redundant decode
+    /// rather than a stale band.
+    private var dayRecords: [DayRecord] {
+        if let cache = dayRecordsCache { return cache.records }
+        let revision = SharedStore.daysRevision()
+        let records = SharedStore.dayRecords()
+        dayRecordsCache = (revision, records)
+        return records
+    }
+
+    @ObservationIgnored private var dayRecordsCache: (revision: Int, records: [DayRecord])?
+
+    /// Drop the cache when the blob's own counter says it moved — one integer
+    /// read against a decode of up to a week of records. A day sealed by the
+    /// Spend intent in another process is the case this exists for; nothing
+    /// else can move the counter.
+    private func invalidateDayRecordsIfStale() {
+        if let cache = dayRecordsCache, cache.revision != SharedStore.daysRevision() {
+            dayRecordsCache = nil
+        }
+    }
+
     /// **Days held** — the accumulating hero, over closed observed days only.
     ///
     /// Not yet on screen. `MirrorView` still draws `lastClosedScore`, and the
@@ -267,7 +297,7 @@ final class AppModel {
     /// granted minutes, so the current hero is strictly higher on a day you
     /// spent than a day you resisted. This one charges a granted minute.
     var daysHeld: Int {
-        DayLog.daysHeld(SharedStore.dayRecords())
+        DayLog.daysHeld(dayRecords)
     }
 
     /// A day is scored once, when it closes, so the hero prefers the last
@@ -327,11 +357,12 @@ final class AppModel {
     var closedWeekScores: [Int?] {
         let cal = Calendar.current
         let installed = SharedStore.firstRun()
-        // One decode for the whole band. An observed record is the day's
+        // One decode for the whole band — and now not even that on most
+        // passes, the cache above holding it. An observed record is the day's
         // number — the equation with the granted-minutes term, frozen when
         // the day closed. The attempts bucket is only the fallback for a day
         // no record vouches for.
-        let records = SharedStore.dayRecords()
+        let records = dayRecords
         return weekAttemptBuckets.dropLast().enumerated().map { i, bucket in
             // Bucket i covers [dayStart - (6 - i) days, +1 day).
             guard let end = cal.date(byAdding: .day, value: i - 5, to: dayStart),
@@ -479,6 +510,10 @@ final class AppModel {
                    cache.revision != SharedStore.attemptsRevision() {
                     self.weekAttemptsCache = nil
                 }
+                // The records blob is the same bargain under its own counter:
+                // the Spend intent's sweep can seal a day in another process
+                // while Silk sits on Mirror.
+                self.invalidateDayRecordsIfStale()
                 let ledgerMoved = self.syncLedgerIfStale()
                 self.now = .now
                 // The wall is re-applied only when something it enforces could
@@ -1977,6 +2012,7 @@ final class AppModel {
         // again" after the hitch rather than inside it.
         resumeWait()
         weekAttemptsCache = nil
+        invalidateDayRecordsIfStale()
         // The suspension is where external writes accumulate — a Shortcuts
         // grant performed against the store while this copy slept — so the
         // return is where the copy has to catch up, before anything on
@@ -2339,6 +2375,9 @@ final class AppModel {
         // asked of it: what the cut may reach, and whether anything is still
         // owed a record.
         let sealed = Set(SharedStore.dayRecords().map(\.dayStart))
+        // The gate may have written; Mirror's copy is stale exactly when it
+        // did, and the counter is what says so.
+        invalidateDayRecordsIfStale()
         // A `false` from the gate is two different facts wearing one Bool.
         // One is "a day I owe a record did not land" — a real failure, and
         // retrying it on the next tick is exactly right. The other is "the
