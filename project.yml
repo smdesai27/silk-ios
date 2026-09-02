@@ -90,7 +90,7 @@ targets:
         CFBundleDisplayName: Silk
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        UILaunchScreen: {}
+        UILaunchScreen: { UIColorName: LaunchGround }
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         SilkAppGroup: $(SILK_APP_GROUP)
         SilkLogSubsystem: $(SILK_LOG_SUBSYSTEM)
