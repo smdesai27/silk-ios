@@ -106,19 +106,28 @@ struct WheelPickerOverlay: View {
         })
     }
 
-    /// rgba(26,28,32,.97) — the night ground's own floor, #1A1C20, not the
-    /// warm lacquer: the overlay is a veil over the slate radial, so it must
-    /// be cut from the same cloth. (Silk Mockup.dc.html:368; Ground.low)
-    /// Internal, not fileprivate: Settings' door editor is the same overlay
-    /// idiom and must wear the same veil rather than a second constant.
-    static let nightVeil = Color(red: 26 / 255, green: 28 / 255, blue: 32 / 255)
+    /// The veil, both faces: the ground itself at .97 (Silk Mockup.dc.html:368).
+    /// Day lays `paper` on paper, so the veil is invisible as a colour and only
+    /// the page under it goes; night lays `Night.ground` on the night radial and
+    /// does the same thing, dimming the ellipse's centre by the one step the
+    /// ellipse lifted it.
+    ///
+    /// It used to be `#1A1C20` at .97 under a comment claiming it was the
+    /// ground's own floor. That was true of the handoff's slate radial and false
+    /// of the ground Silk draws, so a cool blue-grey sheet was being laid over a
+    /// warm black page. Internal, not fileprivate: Settings' door editor and the
+    /// wait wear this exact veil, and they must reach one expression of it
+    /// rather than three copies of a hex.
+    static func veil(night: Bool) -> Color {
+        (night ? Silk.Night.ground : Silk.paper).opacity(0.97)
+    }
 
     var body: some View {
         ZStack {
             // The backdrop is the commit button — the whole screen, minus the
             // wheels themselves, which eat their taps the way the prototype's
             // `w.eat` stops propagation (Silk Mockup.dc.html:287).
-            (night ? Self.nightVeil.opacity(0.97) : Silk.paperAlpha(0.97))
+            Self.veil(night: night)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture { onCommit(touched ? selections : nil) }
@@ -152,8 +161,18 @@ struct WheelPickerOverlay: View {
 
                 HStack(spacing: 8) {
                     ForEach(Array(columns.enumerated()), id: \.element.id) { i, column in
+                        // Each wheel is one adjustable element and it was
+                        // shipping with a value and no name — VoiceOver read
+                        // "10:00 PM, adjustable" with nothing saying what it
+                        // was ten of. The title is the label: it is the one
+                        // word this overlay states, the sighted reading is
+                        // exactly "title, then the value under the line", and
+                        // it costs no string. Down hours hands the same label
+                        // to both wheels, which is right — they are two ends of
+                        // one setting, and the values tell them apart with the
+                        // meridiem the tables already carry.
                         Wheel(values: column.values, selection: $selections[i], night: night,
-                              axID: "silk.picker.wheel.\(i)")
+                              label: title, axID: "silk.picker.wheel.\(i)")
                     }
                 }
                 // Drawn once for the whole overlay, not per wheel: with two
@@ -202,6 +221,10 @@ private struct Wheel: View {
     var values: [String]
     @Binding var selection: Int
     var night: Bool
+    /// What this wheel is for, spoken. The overlay's title, handed down rather
+    /// than re-derived: the label and the uppercase whisper above the wheels
+    /// have to be the same words or the spoken screen and the seen one disagree.
+    var label: String
     /// Applied inside, after the wheel folds into one element — an identifier
     /// attached from outside lands on a wrapper that is no element at all,
     /// and XCUI never sees it.
@@ -294,8 +317,10 @@ private struct Wheel: View {
         }
         // One adjustable element per wheel: swipe up or down steps the value
         // and rides it to centre on the same curve the tap uses. The rows fold
-        // into it — the resting value is the whole reading.
+        // into it — the title names the wheel and the resting value is the rest
+        // of the reading, which is the same two things the eye gets.
         .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(label))
         .accessibilityValue(Text(values[selection]))
         .accessibilityAdjustableAction { direction in
             switch direction {
@@ -353,9 +378,10 @@ private struct Wheel: View {
         withAnimation(Silk.motion(0.4)) { centred = next }
     }
 
-    /// The backdrop's own colour at full strength: nightVeil or paper at .97
-    /// over a ground cut from the same cloth reads as the veil itself.
-    private var veil: Color { night ? WheelPickerOverlay.nightVeil : Silk.paper }
+    /// The backdrop's own colour at full strength — the ground, not the .97
+    /// sheet: a veil laid on a ground cut from the same cloth reads as the
+    /// ground, so painting the dissolve in it is painting in the backdrop.
+    private var veil: Color { night ? Silk.Night.ground : Silk.paper }
 
     private var fullInk: Color { night ? Silk.paperAlpha(0.85) : Silk.ink }
 

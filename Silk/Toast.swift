@@ -136,7 +136,13 @@ final class ToastCenter {
 
 /// Ink on paper flips here, and only here. A toast is laid *on* the page, so
 /// it takes the opposite ground of whatever it covers — dark on the day paper,
-/// light on the night lacquer. (Interactive.html:158, 164)
+/// light on the night ground. (Interactive.html:158, 164)
+///
+/// So the night pill wears `Silk.linen` and `Silk.ink`, the DAY cloth, and that
+/// is not an oversight left over from the slate: the flip is the whole design of
+/// this component, and it is the one surface in Silk that a night token would
+/// spoil. `Silk.Night.linen` is for surfaces raised off the night ground; this
+/// one is laid over it, face down.
 ///
 /// **It may not wrap and it may not truncate** — `.lineLimit(1)` plus
 /// `.fixedSize(horizontal: true, …)` means an over-long capsule grows past the
@@ -306,7 +312,7 @@ private struct ToastGallery: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(night ? Silk.lacquer : Silk.paper)
+            .background(night ? Silk.Night.ground : Silk.paper)
             .contentShape(Rectangle())
             .onTapGesture { center.show(refusal) }
             .onLongPressGesture {

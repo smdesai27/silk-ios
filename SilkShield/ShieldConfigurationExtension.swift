@@ -30,6 +30,28 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     /// the button visible only as prominent glass's blue rim.
     private var dayGround: UIColor { linen }
 
+    /// The night ground, and the one figure in this file that answers to a
+    /// design change made after it was measured. The app's night ground is no
+    /// longer `lacquer`: `Silk.Night` draws the canvas radial, #1C1913 → #0E0C08
+    /// (docs/design/README.md, Build status). `ShieldConfiguration` takes one
+    /// flat colour and cannot draw a gradient, so this hands over that
+    /// gradient's own middle — and the middle of #1C1913 and #0E0C08 is #15130E,
+    /// one level of red off `lacquer`. The value did not move because it was
+    /// already the right one; what moved is that it is now derived rather than
+    /// inherited from a ground the app stopped drawing.
+    ///
+    /// The alternative — handing over #0E0C08, the radial's floor — was
+    /// computed and rejected. It puts the fill at `flatten(paper, over: it,
+    /// .16)` = **#33312C**, luma 49.1 against a wall that renders at 46.6:
+    /// +2.5, inside the α ≈ 0.122 floor's own margin of error and a fifth of
+    /// the +8.5 the shipping fill clears by. The floor is a function of the
+    /// ground, so taking the ground to the darkest value in the palette moves
+    /// the break-even from α ≈ 0.122 to α ≈ 0.149 and pushes `--silk-paper-16`
+    /// under it — the capsule would read as a hole punched in the wall, or as
+    /// nothing but prominent glass's blue rim. The mid value keeps every
+    /// measured figure in docs/design/screentime-ui.md valid.
+    private var nightGround: UIColor { lacquer }
+
     // The ink and paper ramps. The two MARK values are still the tokens
     // tokens/color.css names; the two CAPTION values are the AA-floored ramp
     // Silk/DesignSystem.swift now states, and they diverge from the token
@@ -78,9 +100,17 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
 
         // Down hours: the night answers with the hour it opens, not the app.
         // There is nothing to go ask Silk for until then.
+        //
+        // `displayWithMeridiem`, as the handoff spells this line — "☾ 7:00 AM"
+        // (handoff README.md:242) — and as the in-app shield preview and the
+        // bar's refusal already say it. `display` is the meridiem-less form for
+        // hours inside a sentence that carries the context, and this label has
+        // no sentence: a bare "☾ 7:00" on a wall met at eleven at night is read
+        // as the evening, which is a wall promising to open eight hours before
+        // it will. The nbsp the form carries is why it cannot wrap.
         guard let p = policy else { return day(subtitle: SilkStrings.openSilk) }
         if p.downHours.contains(currentTimeOfDay(now)) {
-            return night(subtitle: "☾  \(p.downHours.end.display)")
+            return night(subtitle: "☾  \(p.downHours.end.displayWithMeridiem)")
         }
 
         // A door with balance shows it — "Open Silk · 30 left today" is the
@@ -136,7 +166,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
         // The same two faces as apps — a domain is not a door, so the day
         // face carries no balance, and the night face answers with the hour.
         if let p = SharedStore.loadPolicy(), p.downHours.contains(currentTimeOfDay(now)) {
-            return night(subtitle: "☾  \(p.downHours.end.display)")
+            return night(subtitle: "☾  \(p.downHours.end.displayWithMeridiem)")
         }
         return day(subtitle: SilkStrings.openSilk)
     }
@@ -178,7 +208,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     private func night(subtitle: String) -> ShieldConfiguration {
         ShieldConfiguration(
             backgroundBlurStyle: .systemChromeMaterialDark,
-            backgroundColor: lacquer,
+            backgroundColor: nightGround,
             icon: nightEnso,
             title: .init(text: SilkStrings.brand, color: paperTitle),
             subtitle: .init(text: subtitle, color: paperCaption),
@@ -187,8 +217,11 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
             // border — laid down against the ground because the fill cannot
             // carry an alpha. Below α ≈ 0.122 the blend comes out darker than
             // the wall it sits on, and the capsule reads as a hole punched in
-            // the wall rather than as a button.
-            primaryButtonBackgroundColor: Self.flatten(paper, over: lacquer, alpha: 0.16)
+            // the wall rather than as a button. #3A3732, +8.5 luma on a wall
+            // that renders #2F2F29; against the palette's floor stop instead it
+            // would be #33312C at +2.5, which is why `nightGround` is the
+            // radial's middle and says so at length.
+            primaryButtonBackgroundColor: Self.flatten(paper, over: nightGround, alpha: 0.16)
         )
     }
 
