@@ -34,27 +34,51 @@ struct PageDots: View {
                     Circle()
                         .fill(i == index ? active : inactive)
                         .frame(width: 5, height: 5)      // _ds_bundle.css:315
-                        // 12 wide leaves exactly the 7pt gap the CSS asks for
-                        // (_ds_bundle.css:312, 12 − 5); 44 tall is the thumb.
-                        // The dot stays 5pt, so the row's centre is still the
-                        // dot's centre. The interior frames already abut, so
-                        // only the row's outer edges take extra slop — grown
-                        // symmetrically, which keeps the row optically centred.
-                        .frame(width: 12, height: 44)
-                        .padding(.leading, i == 0 ? 8 : 0)
-                        .padding(.trailing, i == count - 1 ? 8 : 0)
+                        // 44 × 44, the thumb, in both directions.
+                        //
+                        // The cell was 12 wide, which is exactly the CSS's 7pt
+                        // gap around a 5pt dot (_ds_bundle.css:312, 315), with
+                        // 8pt of slop on the row's outer edges. That is a 12pt
+                        // target, and three of them cannot each be given 44
+                        // while their centres stay 12 apart — 44pt targets at a
+                        // 12pt pitch overlap two neighbours, and whichever is
+                        // drawn last simply eats the others' centres.
+                        //
+                        // So the pitch is what gives: the row is 132 wide
+                        // instead of 52, and the visible dots sit 44 apart
+                        // rather than 12. **The dot itself is untouched at
+                        // 5pt** and the row is still centred on the same axis;
+                        // what changed is the air between them, which is the
+                        // one part of this the CSS was specific about. It is
+                        // spent on being able to hit them.
+                        .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                // A page number is user-facing data, not a sentence — labelling
-                // these "Page 1 of 2" would spend a string off a budget of
-                // twenty-five. The traits already say button and selected.
-                .accessibilityLabel(Text("\(i + 1)"))
+                // Named, not numbered. "1", "2", "3" is what the row looks
+                // like, not what it is: a page number tells someone who cannot
+                // see the pages nothing about where the tap goes. A label is a
+                // thing Silk says, so the three names live in SilkStrings with
+                // everything else it says. The traits still carry button and
+                // selected; the name only has to answer "which page".
+                .accessibilityLabel(Text(Self.name(of: i)))
                 .accessibilityAddTraits(i == index ? [.isSelected] : [])
                 .accessibilityIdentifier("silk.dot.\(i)")
             }
         }
         .animation(Silk.motion(Silk.Motion.dots), value: index)
+    }
+
+    /// The pages in the handoff's order (README.md:54-56). Anything past the
+    /// three — the two-page preview harness aside, there is nothing — falls
+    /// back to its seat number, which is user data rather than a sentence.
+    private static func name(of i: Int) -> String {
+        switch i {
+        case 0: SilkStrings.pageNow
+        case 1: SilkStrings.pageMirror
+        case 2: SilkStrings.pageSettings
+        default: "\(i + 1)"
+        }
     }
 
     private var active: Color { night ? Silk.paperAlpha(0.50) : Silk.inkAlpha(0.60) }
@@ -336,7 +360,7 @@ struct CommandBar: View {
                 .accessibilityIdentifier("silk.bar")
                 // The empty hairline asks nothing on screen; VoiceOver still
                 // needs the field named. "Bar" is what the mic's label calls it.
-                .accessibilityLabel("Bar")
+                .accessibilityLabel(SilkStrings.bar)
                 .focused(focusBinding)
                 .submitLabel(.send)
                 .autocorrectionDisabled()
@@ -367,7 +391,7 @@ struct CommandBar: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Focus the bar")
+            .accessibilityLabel(SilkStrings.focusTheBar)
             .padding(.trailing, -13)
         }
         .padding(.horizontal, 20)                        // _ds_bundle.css:274

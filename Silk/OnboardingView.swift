@@ -291,8 +291,8 @@ struct OnboardingView: View {
         }
         var parts = doorNames.map(displayName)
         let extras = wallSelection.applicationTokens.count
-        if extras > 0 { parts.append("\(extras) more") }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        if extras > 0 { parts.append(SilkStrings.andMore(extras)) }
+        return parts.isEmpty ? nil : parts.joined(separator: SilkStrings.separator)
     }
 
     private func chip(_ name: String) -> some View {
@@ -443,10 +443,12 @@ struct OnboardingView: View {
             HStack(spacing: 6) {
                 Text("☾").font(Silk.serif(13))
                     .accessibilityHidden(true)
-                timeWheel(binding: $downStart, spoken: "\(SilkStrings.lockedOvernight) start")
+                timeWheel(binding: $downStart,
+                          spoken: "\(SilkStrings.lockedOvernight) \(SilkStrings.windowStart)")
                 Text("–").font(Silk.serif(13.5))
                     .accessibilityHidden(true)
-                timeWheel(binding: $downEnd, spoken: "\(SilkStrings.lockedOvernight) end")
+                timeWheel(binding: $downEnd,
+                          spoken: "\(SilkStrings.lockedOvernight) \(SilkStrings.windowEnd)")
             }
             .foregroundStyle(Silk.duskBlue)
         }

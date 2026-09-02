@@ -252,8 +252,8 @@ struct NowView: View {
     /// The dot and the rule say nothing.
     private func doorLabel(name: String, state: DoorState) -> String {
         let word = switch state {
-        case .open: "open"
-        case .live: "in use"
+        case .open: SilkStrings.open
+        case .live: SilkStrings.inUse
         case .rest: SilkStrings.closed
         }
         guard var time = state.displayTime(now: model.now) else { return "\(name), \(word)" }
