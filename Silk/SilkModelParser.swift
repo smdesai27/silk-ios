@@ -108,6 +108,10 @@ actor SilkModelParser {
     /// would answer with the wrong doors in it, so a mismatch throws it away
     /// rather than using it.
     private var warm: (instructions: String, session: LanguageModelSession)?
+    /// Generations still running, counted on this actor by the work arm
+    /// itself. Nonzero at the top of `parse` means the last clock won and
+    /// its loser ignored the cancel; see the guard there.
+    private var liveGenerations = 0
 
     /// Build the session and let the model start loading, while the user is
     /// still typing.
@@ -145,6 +149,12 @@ actor SilkModelParser {
     func parse(_ utterance: String, state: PolicyState) async -> ParseOutcome {
         #if canImport(FoundationModels)
         guard case .available = SystemLanguageModel.default.availability else { return .silence }
+        // At most one abandoned generation. The clock below returns without
+        // waiting for the work it cancelled — that is the point — but a model
+        // that ignored the cancel is still generating, and the next sentence
+        // must not stack a second one on top of it. While one is alive the
+        // bar answers as an unavailable model does; the grammar is untouched.
+        guard liveGenerations == 0 else { return .silence }
 
         let prompt = Self.instructions(for: state)
         // The warm session is SPENT here, not reused: the 4096-token window is
@@ -191,6 +201,8 @@ actor SilkModelParser {
         // behind whatever they do next.
         let answers = AsyncStream<ParseOutcome> { continuation in
             let work = Task {
+                self.liveGenerations += 1
+                defer { self.liveGenerations -= 1 }
                 let outcome: ParseOutcome
                 do {
                     let response = try await session.respond(to: utterance,

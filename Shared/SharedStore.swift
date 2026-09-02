@@ -635,6 +635,21 @@ public enum Wall {
                 SharedStore.openDoorTokens(at: now, policy: policyValue, selections: doorTokens)
             })
 
+        // Categories are gone from the model, and no plan branch depends on
+        // them: nil-ing them clears stale category shields on upgraded
+        // installs, retiring the documented device-verify risk that a
+        // category shield overrides per-app unshielding. It runs BEFORE the
+        // plan is consulted because the case that refuses to write — a
+        // selection blob an OS upgrade made unreadable — is exactly the
+        // upgrade this migration exists for. Not on an absent policy: an
+        // unconfigured wall has nothing to migrate.
+        switch policy {
+        case .absent: break
+        default:
+            store.shield.applicationCategories = nil
+            store.shield.webDomainCategories = nil
+        }
+
         switch plan {
         case .leaveUntouched:
             // A selection blob that would not decode is the one refusal
@@ -653,13 +668,6 @@ public enum Wall {
         case .shield(let blocked):
             store.shield.applications = blocked
         }
-
-        // Categories are gone from the model. Nil-ing them here clears stale
-        // category shields on upgraded installs — and retires the documented
-        // device-verify risk that a category shield overrides per-app
-        // unshielding: there is no category layer left to override anything.
-        store.shield.applicationCategories = nil
-        store.shield.webDomainCategories = nil
 
         // Web domains never open with a grant (docs/market/gaps.md #2), which
         // is why they are no part of the plan: that decision is app tokens and

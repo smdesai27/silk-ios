@@ -72,6 +72,7 @@ struct OnboardingView: View {
     @State private var columnHeight: CGFloat = 0
     /// True while a step is fading into the next one.
     @State private var crossFading = false
+    @State private var holdGeneration = 0
     /// Screen Time was asked for and refused, and setup is still on step one.
     /// Cleared by a grant, which is the same moment the step advances.
     @State private var permissionRefused = false
@@ -131,8 +132,14 @@ struct OnboardingView: View {
         // scale is recomputed from a height that is briefly neither step's.
         .onChange(of: step) { _, _ in
             crossFading = true
+            // Keyed to this change: a second step inside the 450 ms must not
+            // let the first hold end early and hand the scale a height that
+            // is briefly neither step's.
+            holdGeneration += 1
+            let mine = holdGeneration
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(0.45))
+                guard mine == holdGeneration else { return }
                 crossFading = false
                 columnHeight = liveHeight
             }

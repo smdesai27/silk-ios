@@ -144,8 +144,10 @@ final class AppModel {
         // happen to it, and arming is a restatement (it stops before it
         // starts) rather than a second registration.
         if onboarded {
-            wall.armHeartbeat(downHours: policy.downHours)
-            armedHeartbeatAnchor = policy.downHours.end
+            // The anchor is recorded only for an arm that took. A throw here —
+            // authorization not yet effective, the daemon's activity limit — must
+            // leave the next boundary free to try again, or the failure latches.
+            if wall.armHeartbeat(downHours: policy.downHours) { armedHeartbeatAnchor = policy.downHours.end }
         }
         refreshDoorIcons()
         startClock()
@@ -178,8 +180,10 @@ final class AppModel {
         // First arming: authorization has just been granted, so this is the
         // earliest point the schedule can take. Until it fires, days record
         // as unobserved — which is honest, not a bug.
-        wall.armHeartbeat(downHours: downHours)
-        armedHeartbeatAnchor = downHours.end
+        // The anchor is recorded only for an arm that took. A throw here —
+        // authorization not yet effective, the daemon's activity limit — must
+        // leave the next boundary free to try again, or the failure latches.
+        if wall.armHeartbeat(downHours: downHours) { armedHeartbeatAnchor = downHours.end }
         onboarded = true
     }
 
@@ -1079,12 +1083,12 @@ final class AppModel {
             // counts today's grants off the ledger, which needs no write at
             // all — but the journal keeps the entry as a record.
             //
-            // Deferred off this frame precisely because nothing reads it
-            // synchronously: it is a 2000-date decode and re-encode, and the
-            // budget it was spending is the landing's whole frame (wait.md
-            // §3.3). The hop is to this same actor at the next turn of the
-            // loop, so the ordering against any later journal write is kept.
-            Task { SharedStore.recordKeyUse() }
+            // Synchronous on purpose, even though nothing reads it here: the
+            // next line hands the phone to the granted app, and a hop to the
+            // next turn of this actor's loop is a hop that may never come
+            // before the scene suspends. A dropped entry is the record going
+            // missing on the one path it exists for.
+            SharedStore.recordKeyUse()
             LaunchCatalog.open(doorName: door.name)
             return ("\(door.name) \(SilkStrings.isOpenFor) \(minutes) \(SilkStrings.minutes).",
                     { [weak self] in
@@ -2137,8 +2141,10 @@ final class AppModel {
         wall.reconcile()
         // Unconditional, and the anchor is remembered so the day sweep does
         // not restate it again: this is the launch case, not the tick's.
-        wall.armHeartbeat(downHours: policy.downHours)
-        armedHeartbeatAnchor = policy.downHours.end
+        // The anchor is recorded only for an arm that took. A throw here —
+        // authorization not yet effective, the daemon's activity limit — must
+        // leave the next boundary free to try again, or the failure latches.
+        if wall.armHeartbeat(downHours: policy.downHours) { armedHeartbeatAnchor = policy.downHours.end }
         // Only the doors with something to close. `restateRelockLayers`
         // answers a doorless grant with `stopMonitoring`, and disarming every
         // resting door here would be a stop per door for nothing.
@@ -2329,11 +2335,15 @@ final class AppModel {
     /// A launch and the end of setup arm unconditionally on purpose (the
     /// daemon's activity list is not documented to survive everything that can
     /// happen to it); this is for the paths that can run again and again
-    /// inside one process.
+    /// inside one process. A failed arm records no anchor, so the next
+    /// boundary retries it — the retry the unconditional day-turn arm used
+    /// to be.
     private func armHeartbeatIfAnchorMoved() {
         guard armedHeartbeatAnchor != policy.downHours.end else { return }
-        wall.armHeartbeat(downHours: policy.downHours)
-        armedHeartbeatAnchor = policy.downHours.end
+        // The anchor is recorded only for an arm that took. A throw here —
+        // authorization not yet effective, the daemon's activity limit — must
+        // leave the next boundary free to try again, or the failure latches.
+        if wall.armHeartbeat(downHours: policy.downHours) { armedHeartbeatAnchor = policy.downHours.end }
     }
 
     private func compactLedgerIfDayTurned() {

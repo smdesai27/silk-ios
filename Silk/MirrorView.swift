@@ -118,13 +118,17 @@ struct MirrorView: View {
                 // can open while the app is alive and Mirror is never left
                 // again, and that one visit still snaps. Closing it would mean
                 // waking a timer for a border nobody is looking at.
-                if Self.wouldEarnCeremony() { grown = 0 }
+                // Never under Reduce Motion: a bare arrival there is a cut to
+                // full at the settle, the one transition Silk never makes.
+                if !reduceMotion && Self.wouldEarnCeremony() { grown = 0 }
                 return
             }
             guard Self.wouldEarnCeremony() else { grown = 1; return }
-            Self.spendCeremony()
-            // Reduce Motion: the hedge is there, it simply did not creep in.
+            // Reduce Motion: the hedge is there, it simply did not creep in —
+            // and the visit is not spent, so the ceremony waits for a viewer
+            // who will see it.
             guard !reduceMotion else { grown = 1; return }
+            Self.spendCeremony()
             grown = 0
             Task { @MainActor in
                 withAnimation(.linear(duration: 1.15)) { grown = 1 }

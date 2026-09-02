@@ -221,3 +221,28 @@ private let absurd = 999_999_999_999_999_999
         }
     }
 }
+
+// MARK: - The stored blob
+
+@Suite struct AStoredPolicyReadsBackInsideTheDay {
+    /// A policy persisted before the ceiling existed — or hand-corrupted — must
+    /// decode to the same day the bar enforces, or the hero draws a number the
+    /// bar refuses (README rule 2: the screen must not lie). The memberwise
+    /// init stays raw on purpose so the validator tests above can still hand
+    /// it an absurd state and prove nothing traps.
+    @Test func aBudgetAndACapPastTheDayReadBackAsOneDay() throws {
+        let raw = PolicyState(budgetMinutes: Int.max, downHours: night, doors: [instagram],
+                              doorCaps: [instagram.id: Int.max])
+        let back = try JSONDecoder().decode(PolicyState.self, from: JSONEncoder().encode(raw))
+        #expect(back.budgetMinutes == PolicyState.maxMinutesPerDay)
+        #expect(back.doorCaps[instagram.id] == PolicyState.maxMinutesPerDay)
+    }
+
+    @Test func aBudgetInsideTheDayIsUntouched() throws {
+        let raw = PolicyState(budgetMinutes: 90, downHours: night, doors: [instagram],
+                              doorCaps: [instagram.id: 20])
+        let back = try JSONDecoder().decode(PolicyState.self, from: JSONEncoder().encode(raw))
+        #expect(back.budgetMinutes == 90)
+        #expect(back.doorCaps[instagram.id] == 20)
+    }
+}

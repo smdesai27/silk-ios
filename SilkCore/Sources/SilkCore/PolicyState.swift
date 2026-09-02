@@ -199,14 +199,19 @@ public struct PolicyState: Hashable, Codable, Sendable {
     /// pending and the baseline, and this one init covers all three keys.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        budgetMinutes = try c.decode(Int.self, forKey: .budgetMinutes)
+        // Clamped on the way in, so a blob written before the ceiling existed
+        // (or one hand-corrupted) reads back as the same day the bar enforces:
+        // every surface that draws the budget draws the number `Validator`
+        // will honour, and the hero cannot show a figure the bar refuses.
+        budgetMinutes = Self.clampedDaily(try c.decode(Int.self, forKey: .budgetMinutes))
         downHours     = try c.decode(DownHours.self, forKey: .downHours)
         doors         = try c.decode([Door].self, forKey: .doors)
         wallEnabled   = try c.decode(Bool.self, forKey: .wallEnabled)
         // `decodeIfPresent` maps an absent key and a JSON null to no caps, and
         // still throws on a present-but-malformed value — so this is a
         // migration and not a blanket catch.
-        doorCaps      = try c.decodeIfPresent([UUID: Int].self, forKey: .doorCaps) ?? [:]
+        doorCaps      = (try c.decodeIfPresent([UUID: Int].self, forKey: .doorCaps) ?? [:])
+            .mapValues(Self.clampedDaily)
     }
 
     public func door(named utteranceToken: String) -> Door? {
