@@ -503,7 +503,7 @@ private struct KeyboardHeightReader: ViewModifier {
                 // bottom of the screen, so the lift it needs is measured from
                 // there. `end.maxY` is the same edge for a docked keyboard and
                 // is the honest fallback when no scene will answer.
-                let glass = Self.screenBottom ?? end.maxY
+                let glass = Glass.height ?? end.maxY
                 height = max(0, glass - end.minY)
             }
             .onReceive(NotificationCenter.default.publisher(
@@ -515,8 +515,23 @@ private struct KeyboardHeightReader: ViewModifier {
     /// The active scene's own screen height. `UIScreen.main` would say the same
     /// thing in one line and is deprecated; this asks the scene the app is
     /// actually on.
+}
+
+/// The glass, read off the scene rather than measured by a reader.
+///
+/// The bar's rise is derived from the height of the paper the keyboard leaves
+/// standing, and a `GeometryReader` ignoring the keyboard is meant to report
+/// that height as a constant. On a cold simulator it did not: for the first
+/// focus of a session the reader answered with a frame still in transit —
+/// the keyboard inset applied, the page squeezed — and `riseDistance` clamps to
+/// nothing under 176pt, so the bar took focus and stayed at its dock until the
+/// next re-render found the real height a minute later. Seen live on
+/// 2026-09-02, and the shape of the first-focus walk flake before it. The
+/// screen's height is not a layout; it cannot be in transit. So the rise is
+/// floored at it: the reader may only ever make the container taller.
+enum Glass {
     @MainActor
-    private static var screenBottom: CGFloat? {
+    static var height: CGFloat? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
         return scene.map { $0.screen.bounds.height }

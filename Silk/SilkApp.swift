@@ -208,7 +208,11 @@ struct RootView: View {
                                                night: night,
                                                onSubmit: submit,
                                                hasTurns: model.conversation.hasTurns,
-                                               containerHeight: geo.size.height,
+                                               // Floored at the glass: the reader is what
+                                               // reaches it, but a reader can answer mid-
+                                               // layout on a cold start and clamp the rise
+                                               // to nothing (see `Glass`). The screen cannot.
+                                               containerHeight: max(geo.size.height, Glass.height ?? 0),
                                                keyboard: keyboard,
                                                focus: $barFocused)
                                         .padding(.horizontal, 28)
