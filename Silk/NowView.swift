@@ -116,6 +116,19 @@ struct NowView: View {
                     .tracking(Silk.track(-0.045, 92))
                     .frame(height: 92)
                     .foregroundStyle(night ? Silk.paperAlpha(0.92) : Silk.ink)
+                    // The stroke around it eases the same change over 450ms —
+                    // `EnsoView.motion` is `Silk.motion(0.45)` — and the numeral
+                    // hard-cut, so the two halves of one hero disagreed about
+                    // whether anything had happened: the ring was still crossing
+                    // while the number had already arrived.
+                    //
+                    // `.opacity` and not the numeric roll. The face is
+                    // `monospacedDigit`, deliberately, so that a counting budget
+                    // cannot shift width; a roll animates each digit vertically
+                    // past its neighbours, which at 92pt is the largest motion
+                    // on the screen and undoes the reason the digits are tabular.
+                    .contentTransition(.opacity)
+                    .animation(Silk.motion(0.45), value: model.remainingMinutes)
                     // VoiceOver reads the pair as one element — "40, min left
                     // today". The unit rides as the value so the numeral keeps
                     // its own label, which the UI tests match by.

@@ -326,6 +326,13 @@ struct CommandBar: View {
     var focus: FocusState<Bool>.Binding? = nil
 
     @FocusState private var innerFocus: Bool
+    /// The rise is the largest translation in the app. Under Reduce Motion it
+    /// is not taken at all; see `lift` and `fade`.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The cross-fade that stands in for the rise. 1 at rest; dipped to 0 and
+    /// eased back on the frame the bar changes state, and only when Reduce
+    /// Motion is on.
+    @State private var fade: Double = 1
 
     /// The CSS's -312 is measured on the keyboardless 800pt design frame:
     /// the docked bar's centre sits at 800 − 44 − 26 = 730, and 730 − 312
@@ -350,8 +357,16 @@ struct CommandBar: View {
     /// The one number the bar moves by: the keyboard's lift, plus the rise up
     /// the paper the keyboard left standing. Both terms change on the same
     /// frame and both are steps, so one animation covers the pair.
+    ///
+    /// Reduce Motion drops the rise and keeps the keyboard's lift. The 312pt
+    /// travel is the single largest move Silk makes and is exactly what the
+    /// setting is asking about; the keyboard's own lift is not Silk's motion to
+    /// decline, and refusing it would only leave the bar underneath the
+    /// keyboard. What replaces the travel is `fade`.
     private var lift: CGFloat {
-        keyboard + (raised ? Self.riseDistance(in: containerHeight - keyboard) : 0)
+        keyboard + (raised && !reduceMotion
+                    ? Self.riseDistance(in: containerHeight - keyboard)
+                    : 0)
     }
 
     var body: some View {
@@ -418,6 +433,20 @@ struct CommandBar: View {
         // curve, same frame as `raised` flips, so the pair reads as one lift
         // rather than a UIKit slide with a Silk ease stacked on top of it.
         .animation(Silk.motion(0.45), value: keyboard)
+        // Reduce Motion: a fade in place instead of a journey. The bar's state
+        // still changes visibly — it goes and comes back on the same curve and
+        // the same 450ms — it just does not cross the page to say so.
+        .opacity(fade)
+        .onChange(of: raised) { _, _ in
+            guard reduceMotion else { return }
+            fade = 0
+            // Next tick, or SwiftUI coalesces the dip and the ease into one
+            // change and nothing fades at all. Mirror's grow-in hops the same
+            // way for the same reason.
+            Task { @MainActor in
+                withAnimation(Silk.motion(0.45)) { fade = 1 }
+            }
+        }
     }
 }
 
