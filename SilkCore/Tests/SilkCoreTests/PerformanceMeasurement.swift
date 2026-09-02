@@ -73,10 +73,18 @@ func bestOfThree(_ body: () -> Void) -> Duration {
 /// measures both arms back to back, microseconds apart, so a spike lands on both
 /// or neither; and taking each arm's minimum across the rounds means one quiet
 /// round anywhere in the sequence is enough for both. Seven rounds rather than
-/// three for the same reason — more chances at a quiet one. Callers whose arms
-/// are expensive enough that seven rounds would cost real suite time pass a
-/// smaller number; `hugeInputStaysCheapAndSilent` parses ten thousand words per
-/// arm and asks for three.
+/// three for the same reason — more chances at a quiet one.
+///
+/// **The `rounds:` knob is for cheap arms, not for expensive ones**, and this
+/// paragraph used to say the opposite: it offered a smaller number to callers
+/// whose arms cost real suite time, and named
+/// `hugeInputStaysCheapAndSilent` — ten thousand words per arm — as the caller
+/// taking the offer. That is backwards. The longer an arm's window, the *less*
+/// likely any single round of it ran uncontended, so a long window is precisely
+/// where the extra rounds are load-bearing; three rounds over a ~0.4 s window
+/// made that test the most-cited flake on this repo's pre-push hook. It now
+/// takes the default like everyone else. Lower the count only for an arm whose
+/// window is short and whose round count is therefore already redundant.
 ///
 /// **What interleaving does not fix.** A ratio still needs a denominator that
 /// differs from its numerator by the thing under test. Two of the four ratios
