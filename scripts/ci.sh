@@ -173,8 +173,8 @@ fi
 # Three of the four lanes are built out of xcodebuild, which exists only on a
 # Mac. The spine is not: SilkCore is a plain SwiftPM package importing
 # Foundation and nothing else, so `swift test` answers for it on Linux exactly
-# as it does here — 859 of the repo's 945 cases, one short of the spine's whole
-# 860 because a single Darwin-shaped ratio names itself and skips. That is
+# as it does here — 899 of the repo's 1,000 cases, one short of the spine's whole
+# 900 because a single Darwin-shaped ratio names itself and skips. That is
 # deliberate, and .github/workflows/ci.yml has a job holding it true: it is what
 # lets the tests that matter most run in a container or a cloud session instead
 # of waiting on a runner.
