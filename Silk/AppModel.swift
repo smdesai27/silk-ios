@@ -984,8 +984,13 @@ final class AppModel {
             // a tighten the user has been answered for is never dropped.
             let close: (inout GrantLedger) -> Void = { $0.closeDoor(door, at: .now, until: until) }
             close(&ledger)
-            commit(reapplying: close)
+            // Fired off the mutation, not off the write. The door is shut the
+            // instant the line above runs — `persist` re-applies the closure
+            // over any reload, so there is no path where this lands and the
+            // close does not — and the tap belongs to the moment it shut, not
+            // to the far side of a settings-store write.
             Silk.Haptic.tighten()
+            commit(reapplying: close)
             let t = Validator.timeOfDay(until, calendar: .current)
             return (SilkStrings.closedUntil(door.name, until: t),
                     restore(previous, ifStill: generation))
@@ -1002,8 +1007,8 @@ final class AppModel {
                 }
             }
             closeAll(&ledger)
+            Silk.Haptic.tighten()   // off the mutation, as `.close` explains
             commit(reapplying: closeAll)
-            Silk.Haptic.tighten()
             let t = Validator.timeOfDay(until, calendar: .current)
             return (SilkStrings.closedUntil(SilkStrings.everything, until: t),
                     restore(previous, ifStill: generation))
@@ -1016,19 +1021,31 @@ final class AppModel {
             let grant = Grant(door: door, minutes: minutes, issuedAt: .now, expiresAt: relockAt)
             let record: (inout GrantLedger) -> Void = { $0.record(grant) }
             record(&ledger)
+            // The door is open in memory here, and this is the landing frame —
+            // the veil starts its fall and the phone is handed to the granted
+            // app. The tap goes with the opening, ahead of the write and the
+            // arming, for the reason `.close` gives: `persist` re-applies the
+            // closure over any reload, so nothing between here and the return
+            // can leave the haptic describing a grant that did not land.
+            Silk.Haptic.grant()
             commit(reapplying: record)
             // Off the committed ledger, not off `relockAt`: `commit` may have
             // reloaded and re-applied over another process's write, and a door
             // that already had a longer grant running keeps ITS deadline.
             restateRelockLayers(for: door)
-            Silk.Haptic.grant()
             // Every unlock is an exception spent, so the journal takes one
             // here, at the landing, not only on the key-tap path. Sanil's call
             // (2026-08-25): the counter must visibly rise each time an unlock
             // is used. The counter is no longer read from here — the footnote
             // counts today's grants off the ledger, which needs no write at
             // all — but the journal keeps the entry as a record.
-            SharedStore.recordKeyUse()
+            //
+            // Deferred off this frame precisely because nothing reads it
+            // synchronously: it is a 2000-date decode and re-encode, and the
+            // budget it was spending is the landing's whole frame (wait.md
+            // §3.3). The hop is to this same actor at the next turn of the
+            // loop, so the ordering against any later journal write is kept.
+            Task { SharedStore.recordKeyUse() }
             LaunchCatalog.open(doorName: door.name)
             return ("\(door.name) \(SilkStrings.isOpenFor) \(minutes) \(SilkStrings.minutes).",
                     { [weak self] in
@@ -1836,12 +1853,16 @@ final class AppModel {
     /// job: a restored ledger must leave no schedule standing behind it. Only
     /// the schedules — every caller reaches here through a commit, and the
     /// shield that commit reconciled is already the one the ledger asks for.
+    /// So it arms directly rather than through `wall.open`, whose first act is
+    /// a second `Wall.reconcile` — four decodes and a settings-store write to
+    /// arrive at the union the commit a line earlier already wrote, on the one
+    /// frame the veil is falling and the granted app is being handed the phone.
     private func restateRelockLayers(for door: Door) {
         guard let grant = ledger.activeGrant(for: door, at: .now) else {
             wall.stopMonitoring(door: door)
             return
         }
-        wall.open(door: door, until: grant.expiresAt)
+        wall.arm(door: door, until: grant.expiresAt)
     }
 
     /// Add: the chip tap makes the door (name-only, exactly as setup allows),
