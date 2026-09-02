@@ -66,8 +66,13 @@ struct SpendIntent: AppIntent {
         // `let` since the day-turn sweep moved off this path: nothing between
         // here and the grant save writes the ledger, so the stamp read here is
         // still the one that save must compare against.
+        // `let` too, and for the same reason as the stamp: this copy is read
+        // for the idempotence check and the validator and never mutated. The
+        // one path that used to reassign it — the rollback below — reads its
+        // own fresh copy under its own stamp instead, so a stale snapshot from
+        // before the `await` cannot be handed to a writer at all.
         let stamp = SharedStore.ledgerStamp()
-        var ledger = SharedStore.loadLedger()
+        let ledger = SharedStore.loadLedger()
         let now = Date()
 
         // The day-turn sweep USED to run here, and could not stay: at this
@@ -153,12 +158,23 @@ struct SpendIntent: AppIntent {
                 // ledger write that landed during it — the user closing a door
                 // at the bar — must survive this failure path. So reload what
                 // stands NOW, take out exactly the grant this intent recorded,
-                // and save (stamped, as every ledger write is). That reconcile
-                // is also this background launch's one free chance to close a
-                // door some earlier expiry left standing open.
-                ledger = SharedStore.loadLedger()
-                ledger.removeGrant(id: grant.id)
-                SharedStore.save(ledger: ledger)
+                // and save through the same compare-and-swap the grant leg
+                // used. That reconcile is also this background launch's one
+                // free chance to close a door some earlier expiry left
+                // standing open.
+                //
+                // The reload alone was not enough, and this is the second
+                // window, not the first: a main-actor write landing between
+                // the reload and the save — the same close, a beat later —
+                // was flattened by a wholesale put of the copy read before it.
+                // Stamp first and blob second (the DayLog.recordClosedDays
+                // doctrine, as at the top of this method), so a write that
+                // lands in EITHER gap fails the compare and the removal is
+                // reapplied on top of what stands.
+                let rollbackStamp = SharedStore.ledgerStamp()
+                SharedStore.save(ledger: SharedStore.loadLedger(),
+                                 knownStamp: rollbackStamp,
+                                 applying: { $0.removeGrant(id: grant.id) })
                 Wall.reconcile(now: now)
                 // "Blocking is off." is said only when it is. Revocation is the
                 // likeliest reason a schedule will not take, but the other
