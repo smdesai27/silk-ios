@@ -201,23 +201,19 @@ final class ConversationModel {
 // ============================================================
 
 /// The page yielding to the conversation: opacity .05, blur 7, hit-testing
-/// off, both over 450ms on the one curve (Silk Mockup.dc.html:21, 24-25). The
-/// root wraps the pager and the dots in this; the wordmark is never wrapped —
-/// it is the one thing that never yields (README.md:203-205).
-///
-/// **The radius animates with the veil.** It used to snap, on the argument
-/// that an animating radius re-renders the stage offscreen every frame and
-/// that behind a fade to .05 nobody could see it. The second half was wrong:
-/// the fade and the blur start on the same frame, so on frame one the page is
-/// still at full opacity and already fully blurred — the pop is at the *top*
-/// of the transition, where the stage is at its most visible, not at the
-/// bottom where it is at .05. The prototype animates the filter; so does this.
+/// off, the opacity over 450ms on the one curve (Silk Mockup.dc.html:21,
+/// 24-25). The blur radius snaps rather than animating — an animating radius
+/// re-renders the whole stage offscreen every frame, and behind a fade to .05
+/// the difference cannot be seen. The root wraps the pager and the dots in
+/// this; the wordmark is never wrapped — it is the one thing that never
+/// yields (README.md:203-205).
 private struct SilkStage: ViewModifier {
     var dimmed: Bool
 
     func body(content: Content) -> some View {
         content
             .blur(radius: dimmed ? 7 : 0)
+            .animation(nil, value: dimmed)
             .opacity(dimmed ? 0.05 : 1)
             .allowsHitTesting(!dimmed)
             .animation(Silk.motion(0.45), value: dimmed)

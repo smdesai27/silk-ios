@@ -229,19 +229,11 @@ struct RootView: View {
                         // the shield covers is the same light arriving the same
                         // way. CSS's filter radius *is* the Gaussian sigma —
                         // unlike box-shadow, whose stated blur ApertureView halves
-                        // — so 20 ports as 20, unhalved.
-                        //
-                        // The radius rides the veil's own curve. Snapping it put
-                        // the pager fully blurred on the frame the veil was still
-                        // transparent, which is the one frame the stage is fully
-                        // visible — the pop was at the top of the fade, not hidden
-                        // under it. The curve is named here rather than inherited
-                        // from the `withAnimation` that raises the shield, so the
-                        // blur cannot be left behind by a caller that forgets it;
-                        // it is the same 0.45, and this is the only value it is
-                        // scoped to.
+                        // — so 20 ports as 20, unhalved. The radius itself snaps:
+                        // animating it re-renders the whole pager offscreen every
+                        // frame, and the veil's own fade is what the eye reads.
                         .blur(radius: model.shield == nil ? 0 : 20)
-                        .animation(Silk.motion(Silk.Motion.shield), value: model.shield)
+                        .animation(nil, value: model.shield)
                         // The wait's other wall, and the one nobody sees.
                         //
                         // `.accessibilityAddTraits(.isModal)` on the overlay is
