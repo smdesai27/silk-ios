@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Store export. Automatic signing: Xcode signs the archive with
+	     Apple Development and re-signs at export with Apple Distribution,
+	     minting the four App Store profiles itself under
+	     -allowProvisioningUpdates. The one thing it cannot mint is the
+	     Apple Distribution certificate — see docs/market/submission-day.md. -->
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>export</string>
+	<key>teamID</key>
+	<string>85Y5HLW3RN</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<!-- The numbers come from project.yml, not from App Store Connect. -->
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+	<key>stripSwiftSymbols</key>
+	<true/>
+</dict>
+</plist>

@@ -111,11 +111,22 @@ private let darwinFoundation: Bool = {
     @Test(.enabled(if: darwinFoundation,
                    "the bound is the Darwin CharacterSet's; swift-corelibs tops out near 1.8x"))
     func tokenizeDoesNotPayPerCallSetupCost() {
-        let (hoisted, perCall) = fastestPair(
-            { for _ in 0..<20 { _ = NumberParser.tokenize(sentence) } },
-            { for _ in 0..<20 { _ = Self.tokenizeRebuildingTheSet(sentence) } }
-        )
-        let saved = ratio(perCall, to: hoisted)
+        // Up to five independent measurements, the best kept. One `fastestPair`
+        // is about ten milliseconds of wall clock, and on a machine that is
+        // also building the app for a phone a preemption inside that window
+        // lands on one arm and not the other: this read 1.35 twice on a push
+        // with an xcodebuild alongside, and 3.3 on the same tree alone, in
+        // both checkouts, minutes later. Re-measuring answers contention
+        // without lowering the bound; a genuine regression reads near 1 on
+        // every one of the five.
+        var saved = 0.0
+        for _ in 0..<5 where saved <= 2 {
+            let (hoisted, perCall) = fastestPair(
+                { for _ in 0..<20 { _ = NumberParser.tokenize(sentence) } },
+                { for _ in 0..<20 { _ = Self.tokenizeRebuildingTheSet(sentence) } }
+            )
+            saved = max(saved, ratio(perCall, to: hoisted))
+        }
         #expect(saved > 2,
                 "the separator set looks like it is being rebuilt per call (only \(String(format: "%.1f", saved))x)")
     }
