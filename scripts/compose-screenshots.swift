@@ -215,6 +215,22 @@ let shots = [
          and locks again.
          """,
          capture: "shot-03.png", slack: 0),
+    // Broken short and even rather than at the sentence's own comma. One
+    // size is fitted across every captioned page and it is the smallest any
+    // one of them needs, so a single long line here does not just set this
+    // caption — it re-typesets 01, 02 and 03 with it. "The score for the last
+    // full day," is 32 characters and costs the whole set ten points (102 →
+    // 92); the break below is three lines of about the same measure as the
+    // three above it, and the other pages do not move at all. Both halves of
+    // the sentence still land whole: the score, what it is of, and what
+    // stands next to it.
+    Shot(number: "04",
+         caption: """
+         The score
+         for the last full day,
+         and the week beside it.
+         """,
+         capture: "shot-04.png", slack: 0),
     // The two pages with no phone on them are set larger, and the measure is
     // what buys the size: a line of about seventeen characters at this width
     // carries type half again as big as the captions do. So both are broken

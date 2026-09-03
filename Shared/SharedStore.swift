@@ -417,6 +417,20 @@ public enum SharedStore {
         return now
     }
 
+    /// Debug/QA only: move the stamp back, so a store that was wiped a second
+    /// ago can stand in for one that has been kept for a week.
+    ///
+    /// The one thing `firstRun()` cannot do is be re-stamped — it is written
+    /// once and then only ever read, which is exactly the property the week
+    /// band and the hedgerow rely on. So the back-date is a separate door, it
+    /// is `#if DEBUG`, and its only caller is `AppModel`'s `-silkSeedDays`
+    /// seam, which is itself reachable only from inside the `-silkReset` wipe.
+    #if DEBUG
+    static func seedFirstRun(_ date: Date) {
+        defaults.set(date, forKey: Key.firstRunAt)
+    }
+    #endif
+
     // MARK: - Screen Time selections
 
     public static func loadWallSelection() -> FamilyActivitySelection? {

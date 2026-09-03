@@ -38,9 +38,25 @@ import XCTest
 //      -scheme Silk -destination "platform=iOS Simulator,id=$U" \
 //      -only-testing:SilkUITests/ScreenshotWalk/testShot02NowDay \
 //      -only-testing:SilkUITests/ScreenshotWalk/testShot03Grant \
+//      -only-testing:SilkUITests/ScreenshotWalk/testShot04Mirror \
 //      -derivedDataPath "$W/DerivedData/shots" -resultBundlePath /tmp/shots-day.xcresult
 //
 //    xcrun simctl status_bar "$U" clear
+//
+//  The seams the walk launches through. All `#if DEBUG`, all read straight off
+//  the argument domain in `AppModel.init`, and none of them compiled into a
+//  Release build:
+//
+//    -silkReset YES     wipe the App Group store and re-onboard
+//    -silkWait 0        turn the wait off (every shot here is a settled screen)
+//    -silkNight YES     pin the night face (shot 01)
+//    -silkSeedDays 7    seat seven closed days ending yesterday, with plausible
+//                       varied scores, and back-date the install to eight days
+//                       ago so the hedgerow has that much growth (shot 04).
+//                       Reachable ONLY from inside the -silkReset wipe, so it
+//                       can never write over a store anyone is keeping.
+//    -silkPage 1        open on Mirror — unused here; the walk taps the dot,
+//                       which is the arrival the grow-in is keyed to
 //
 //  The attachments out, named. `export attachments` writes UUID filenames and a
 //  manifest mapping each to the name this file gave it ("shot-01_0_<uuid>.png"):
@@ -184,6 +200,45 @@ final class ScreenshotWalk: XCTestCase {
 
         settle(1.2)
         capture("shot-03")
+    }
+
+    /// 04 — Mirror, day. The score for the last full day, the week beside it,
+    /// and a hedgerow with a week of growth in it.
+    ///
+    /// The seeded week is what makes this a shot at all. A fresh install shows
+    /// today's running score under the word "Today", six bare seats and a
+    /// day-one border — honest, and not the page. `-silkSeedDays 7` seats seven
+    /// closed days ending yesterday and back-dates the install eight days
+    /// (`AppModel.seedClosedDays`, DEBUG-only, and only ever inside the
+    /// `-silkReset` wipe), so the page here is the page after a week.
+    @MainActor
+    func testShot04Mirror() throws {
+        let app = launchFresh(["-silkSeedDays", "7"])
+        completeSetup(app)
+
+        // The dot, not a swipe: the same shortcut OnboardingUITests navigates
+        // by, and it lands the page without a drag that could be read as a
+        // scroll.
+        let week = app.staticTexts["Week"]
+        tap(app.buttons["silk.dot.1"], "the Mirror dot", raising: week, "Mirror")
+
+        // The seed's own last day. Asserting the number rather than "some
+        // numeral" is the point of the assertion: 81 can only be on screen if
+        // the seeded records went in through the store and came back out
+        // through the real decode. Its spoken value is the weekday name, so a
+        // hero that had fallen back to today's running score would read
+        // "Today" here and fail.
+        let hero = app.staticTexts["81"]
+        XCTAssertTrue(hero.waitForExistence(timeout: Self.appear),
+                      "the hero is not showing the seeded last closed day")
+        XCTAssertNotEqual(hero.value as? String, "Today",
+                          "the hero fell back to today's running score")
+
+        // Longer than the others: the planting is built off the main actor and
+        // then creeps in over 1.15s, and a capture mid-creep is a border in
+        // transit rather than the one the page settles on.
+        settle(2.4)
+        capture("shot-04")
     }
 
     // MARK: - Capture
