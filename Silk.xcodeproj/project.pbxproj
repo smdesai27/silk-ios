@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		08F432E8544B6B2823DB14B5 /* ConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15288FA96D9B3050754D686 /* ConversationView.swift */; };
 		0F34172CD5594C0E74AF23BD /* NowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A928E6FABAA8B87E0F4C9975 /* NowView.swift */; };
+		13B8BB8A239A8F21FF4990A2 /* ScreenshotWalk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D46B73860571942851FA71C /* ScreenshotWalk.swift */; };
 		188433E54C022E80D070356F /* BarRefusalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675C6C4CEBBB87CAFF248286 /* BarRefusalTests.swift */; };
 		192AA7C5AEA91053B6345E24 /* WallController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFF8CA4B6D8F6E393B396D1B /* WallController.swift */; };
 		20EA517C5D0C89EE8CCAD663 /* DoorRetirementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 954C198ADDFFAC1184470A4D /* DoorRetirementTests.swift */; };
@@ -150,6 +151,7 @@
 		81BEF0341C8000B1562BB3C4 /* SilkTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SilkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		835D0F9CAADC49CEF71DDEC8 /* WaitTransactionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitTransactionTests.swift; sourceTree = "<group>"; };
 		83AFCFC6FDE154FD9AF4E017 /* SilkShield.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SilkShield.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		8D46B73860571942851FA71C /* ScreenshotWalk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotWalk.swift; sourceTree = "<group>"; };
 		954C198ADDFFAC1184470A4D /* DoorRetirementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoorRetirementTests.swift; sourceTree = "<group>"; };
 		96C4334FB17778A6059FE0C6 /* SilkMonitor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SilkMonitor.entitlements; sourceTree = "<group>"; };
 		A186A7DEBA377C94B39E83B5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -341,6 +343,7 @@
 			isa = PBXGroup;
 			children = (
 				AC55F66C7151E4B8038294C3 /* OnboardingUITests.swift */,
+				8D46B73860571942851FA71C /* ScreenshotWalk.swift */,
 			);
 			path = SilkUITests;
 			sourceTree = "<group>";
@@ -585,6 +588,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E6B4F1900C18BAC1F044851F /* OnboardingUITests.swift in Sources */,
+				13B8BB8A239A8F21FF4990A2 /* ScreenshotWalk.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
