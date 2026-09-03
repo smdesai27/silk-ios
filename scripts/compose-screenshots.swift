@@ -196,49 +196,43 @@ struct Shot {
 let shots = [
     Shot(number: "01",
          caption: """
-         When the day\u{2019}s minutes
-         are gone, this is the
-         whole conversation.
+         When the budget is spent,
+         the blocked app shows
+         when it opens again.
          """,
          capture: "shot-01.png", slack: 0),
     Shot(number: "02",
          caption: """
-         Two numbers, total.
-         Minutes left today.
-         Yesterday\u{2019}s score.
+         Minutes left today,
+         and which apps
+         are open right now.
          """,
          capture: "shot-02.png", slack: 0),
     Shot(number: "03",
          caption: """
-         You said \u{201C}Instagram, ten.\u{201D}
-         The ink paid out
-         and the door opened.
+         Type \u{201C}Instagram, ten.\u{201D}
+         It opens for ten minutes
+         and locks again.
          """,
          capture: "shot-03.png", slack: 0),
     // The two pages with no phone on them are set larger, and the measure is
     // what buys the size: a line of about seventeen characters at this width
     // carries type half again as big as the captions do. So both are broken
-    // short, and read as verse rather than as a paragraph — which is the
-    // register these two claims are making anyway.
+    // short.
     Shot(number: "05",
          caption: """
-         No notifications.
-         No streaks.
-         No leaderboard.
-         No character
-         to disappoint.
+         Silk sends
+         no notifications
+         and keeps
+         no streaks.
          """,
          capture: nil, slack: 0),
     Shot(number: "06",
          caption: """
-         Free.
-         If that ever
-         changes, the wall
-         is not the part
-         you would be
-         paying for.
-         You never paid
-         for the wall.
+         Silk is free.
+         The blocking
+         never depends
+         on a payment.
          """,
          capture: nil, slack: 0)
 ]
