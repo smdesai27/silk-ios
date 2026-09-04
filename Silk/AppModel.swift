@@ -117,6 +117,21 @@ final class AppModel {
             // on a Debug build, even if the argument is passed alone.
             AppModel.seedClosedDays(UserDefaults.standard.integer(forKey: "silkSeedDays"))
         }
+        // QA: -silkNoModel YES runs the app as a phone with no Apple
+        // Intelligence does — the widener answers `.silence` for every
+        // sentence, exactly as `SilkModelParser.parse`'s availability guard
+        // makes it (SilkModelParser.swift:180), and the deterministic grammar
+        // is the whole parser.
+        //
+        // It exists because the simulator HAS the model, so a walk that types
+        // a paraphrase reaches a real generation and the reply it asserts is a
+        // property of the machine rather than of the app. Same shape as
+        // -silkReset and -silkWait, and debug-only for the same reason: a
+        // launch argument that switches off half the parser has no business in
+        // a shipped build.
+        if UserDefaults.standard.bool(forKey: "silkNoModel") {
+            SilkModelParser.testForceSilent = true
+        }
         #endif
         let saved = SharedStore.loadPolicy()
         self.onboarded = saved != nil
