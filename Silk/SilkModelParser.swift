@@ -144,6 +144,15 @@ actor SilkModelParser {
     /// Safe to call on every focus: a session already warmed against these
     /// instructions is left alone.
     func prewarm(state: PolicyState) {
+        #if DEBUG
+        // The seam covers the warm-up too, or it is not a simulation of an
+        // unavailable model: a run under `testForceSilent` would otherwise
+        // still build a session and page the assets in on every bar focus,
+        // while answering silence — the cost of having a model and none of
+        // the use. The real unavailable path is guarded by the line below and
+        // does not depend on this.
+        if Self.testForceSilent { return }
+        #endif
         guard case .available = SystemLanguageModel.default.availability else { return }
         let prompt = Self.instructions(for: state)
         if warm?.instructions == prompt { return }
