@@ -110,6 +110,12 @@ final class AppModel {
         // Silk has, so wipeAll() there is unrecoverable.
         if UserDefaults.standard.bool(forKey: "silkReset") {
             SharedStore.wipeAll()
+            // QA: -silkSeedDays 7 seats a week of closed days behind the wipe.
+            // INSIDE the reset branch on purpose, and this is the whole of its
+            // safety: the seed only ever writes over a store that was destroyed
+            // one line above, so no install anyone is keeping can meet it, even
+            // on a Debug build, even if the argument is passed alone.
+            AppModel.seedClosedDays(UserDefaults.standard.integer(forKey: "silkSeedDays"))
         }
         // QA: -silkNoModel YES runs the app as a phone with no Apple
         // Intelligence does — the widener answers `.silence` for every
@@ -174,6 +180,80 @@ final class AppModel {
         clock?.cancel()
         waitTask?.cancel()
     }
+
+    #if DEBUG
+    // MARK: - The seeded week (QA only)
+
+    /// The scores a seeded week wears, newest last — read from the END of this
+    /// list, so however many days are asked for, the most recent one is always
+    /// 81 and the hero is always a good day. A store page should not open on
+    /// somebody's worst Tuesday, and it should not open on a flawless week
+    /// either: 100 sits in the middle, where it reads as one day that went
+    /// well rather than as a product claim.
+    private static let seededScores = [92, 78, 85, 100, 64, 88, 81]
+
+    /// **`-silkSeedDays 7` — a week of use, behind a wipe.**
+    ///
+    /// The reason this exists: a fresh install is Mirror's least representative
+    /// state. Before any day has closed the hero falls back to today's running
+    /// score under the word "Today", the week band is seven bare seats, and the
+    /// hedgerow stands at its day-one floor — all honest, and none of it what
+    /// the screen is. The App Store shot wants the page after a week, and a
+    /// simulator has no way to have lived one.
+    ///
+    /// Reachable only from the `-silkReset` branch above, so the wipe is always
+    /// the line before it. `Release` never compiles it at all.
+    ///
+    /// The records go in through `SharedStore.save(dayRecords:)` — the same
+    /// call the compaction gate writes with — so Mirror reads them back through
+    /// the real decode, the real sort and the real revision counter, and a shot
+    /// cannot be of a path the product does not have.
+    private static func seedClosedDays(_ days: Int, now: Date = .now) {
+        guard days > 0 else { return }
+        let cal = Calendar.current
+        // The boundary the wiped store will compute for itself: no policy is
+        // saved yet and no ledger has stamped a day, so `dayStart` reduces to
+        // the default down hours' end, which is what onboarding will save.
+        let start = DayBoundary.dayStart(now: now, downHours: defaultPolicy.downHours,
+                                         calendar: cal)
+        var records: [DayRecord] = []
+        for back in 1...days {
+            guard let dayStart = cal.date(byAdding: .day, value: -back, to: start) else { continue }
+            let score = seededScores[(seededScores.count - back % seededScores.count)
+                                     % seededScores.count]
+            records.append(seededRecord(dayStart: dayStart, score: score))
+        }
+        SharedStore.save(dayRecords: records.sorted { $0.dayStart < $1.dayStart })
+        // One day further back than the oldest record, so the first seeded day
+        // is itself a day the band is allowed to draw — `closedWeekScores`
+        // requires the day to END after the install, not merely to start after
+        // it. It is also what the hedgerow counts: `MirrorView.plantingAge` is
+        // calendar days since this stamp, at 550 a day.
+        if let installed = cal.date(byAdding: .day, value: -(days + 1), to: start) {
+            SharedStore.seedFirstRun(installed)
+        }
+    }
+
+    /// One seeded day, composed backwards from the number it should read.
+    ///
+    /// A score is not a field — `DayRecord.score` is
+    /// `round((1 − cost / DayLog.allowance) × 100)` over the day's own terms —
+    /// so the cost is solved for first and then spent on terms a real day would
+    /// have: mostly minutes bought, a handful of reaches at the wall, and one or
+    /// two of those late on the days that cost the most. `unlocks` stays at 1 so
+    /// the fragmentation term is zero and the arithmetic is only what is named
+    /// here; a day with no cost at all took no grant, so it gets zero unlocks
+    /// and stays a clean 100.
+    private static func seededRecord(dayStart: Date, score: Int) -> DayRecord {
+        let cost = Int((Double(100 - score) / 100 * DayLog.allowance).rounded())
+        let late = cost >= 40 ? 2 : (cost >= 20 ? 1 : 0)
+        let reaches = min(cost - late, cost / 6 + 1)
+        return DayRecord(dayStart: dayStart,
+                         grantedMinutes: max(0, cost - reaches - late),
+                         reaches: max(0, reaches), lateReaches: late,
+                         unlocks: cost > 0 ? 1 : 0, observed: true)
+    }
+    #endif
 
     /// The end of setup — permission, apps, limits — persisted in one motion,
     /// the wall raised, and never asked again. `wallSelection` is the extras:
