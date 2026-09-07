@@ -9,7 +9,15 @@ import Testing
 
 // MARK: - Fixtures
 
-private let instagram = Door(name: "Instagram", aliases: ["ig", "insta", "the gram"])
+private let instagram = Door(name: "Instagram")
+
+/// The guidance refusal, asked without naming the door: these loops run one
+/// expectation over sentences that name different doors, so the verdict's
+/// payload varies and only its shape is the thing under test.
+private func writesItOut(_ v: Verdict) -> Bool {
+    if case .refuseWriteItOut = v { return true }
+    return false
+}
 private let tiktok = Door(name: "TikTok")
 private let reddit = Door(name: "Reddit")
 private let youtube = Door(name: "YouTube")
@@ -92,42 +100,53 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
 
 @Suite struct SpendStress {
     @Test func paraphrases() {
-        expectSpend("instagram ten", door: "Instagram", minutes: 10)
-        expectSpend("Instagram, ten.", door: "Instagram", minutes: 10)
-        expectSpend("ten minutes of instagram", door: "Instagram", minutes: 10)
-        expectSpend("give me 10 on ig", door: "Instagram", minutes: 10)
+        // SPEND now requires an opening verb, and aliases ("ig", "insta") are
+        // gone — every row below keeps its number and its door but adds the
+        // verb (and, where the row leaned on a dead alias, the door's real
+        // name) that a bare mention no longer implies.
+        expectSpend("give me ten minutes of instagram", door: "Instagram", minutes: 10)
+        expectSpend("Unlock Instagram, ten.", door: "Instagram", minutes: 10)
+        expectSpend("i want ten minutes of instagram", door: "Instagram", minutes: 10)
+        expectSpend("give me 10 on instagram", door: "Instagram", minutes: 10)
         expectSpend("can i have twenty minutes of tiktok", door: "TikTok", minutes: 20)
-        expectSpend("gimme 15 on insta", door: "Instagram", minutes: 15)
-        expectSpend("15 mins insta", door: "Instagram", minutes: 15)
-        expectSpend("youtube for 45 minutes", door: "YouTube", minutes: 45)
-        expectSpend("reddit 5", door: "Reddit", minutes: 5)
+        expectSpend("gimme 15 on instagram", door: "Instagram", minutes: 15)
+        expectSpend("gimme 15 mins of instagram", door: "Instagram", minutes: 15)
+        expectSpend("give me youtube for 45 minutes", door: "YouTube", minutes: 45)
+        expectSpend("give me 5 of reddit", door: "Reddit", minutes: 5)
     }
 
     @Test func casePunctuationEmoji() {
-        expectSpend("INSTAGRAM TEN!!!", door: "Instagram", minutes: 10)
-        expectSpend("tiktok... 20?", door: "TikTok", minutes: 20)
-        expectSpend("ten minutes of instagram 🙏", door: "Instagram", minutes: 10)
-        expectSpend("  instagram   ten  ", door: "Instagram", minutes: 10)
+        // Verbed so the opening-verb gate lets them through; the case,
+        // ellipsis, emoji and whitespace quirks under test are untouched.
+        expectSpend("GIVE ME TEN MINUTES OF INSTAGRAM!!!", door: "Instagram", minutes: 10)
+        expectSpend("unlock tiktok... 20?", door: "TikTok", minutes: 20)
+        expectSpend("give me ten minutes of instagram 🙏", door: "Instagram", minutes: 10)
+        expectSpend("  give me   instagram   ten  ", door: "Instagram", minutes: 10)
     }
 
     @Test func idiomsAndCompounds() {
-        expectSpend("half an hour of tiktok", door: "TikTok", minutes: 30)
-        expectSpend("an hour of youtube", door: "YouTube", minutes: 60)
-        expectSpend("an hour and a half of youtube", door: "YouTube", minutes: 90)
-        expectSpend("a quarter of an hour on reddit", door: "Reddit", minutes: 15)
-        expectSpend("twenty five on instagram", door: "Instagram", minutes: 25)
-        expectSpend("twenty-five on instagram", door: "Instagram", minutes: 25)
-        expectSpend("forty five minutes of youtube", door: "YouTube", minutes: 45)
+        // Verbed so the opening-verb gate lets them through; the idiom
+        // spellings under test are untouched.
+        expectSpend("give me half an hour of tiktok", door: "TikTok", minutes: 30)
+        expectSpend("give me an hour of youtube", door: "YouTube", minutes: 60)
+        expectSpend("give me an hour and a half of youtube", door: "YouTube", minutes: 90)
+        expectSpend("give me a quarter of an hour on reddit", door: "Reddit", minutes: 15)
+        expectSpend("give me twenty five on instagram", door: "Instagram", minutes: 25)
+        expectSpend("give me twenty-five on instagram", door: "Instagram", minutes: 25)
+        expectSpend("give me forty five minutes of youtube", door: "YouTube", minutes: 45)
     }
 
-    @Test func twoTokenAlias() {
-        expectSpend("ten on the gram", door: "Instagram", minutes: 10)
+    @Test func twoTokenAliasesAreUnknownWords() {
+        // Aliases are gone: "the gram" is no longer a two-token spelling of
+        // Instagram, so a request built on it names no door and no rule can
+        // fund it — verbed or not.
+        #expect(DeterministicParser.parse("give me ten on the gram", state: makeState()) == .silence)
     }
 
     @Test func numberWithPlaceStillSpends() {
         // A number outranks the place-phrase: bounded ask with a duration is
         // just a spend. (Place binding requires number == nil.)
-        expectSpend("instagram 20 while im at the gym", door: "Instagram", minutes: 20)
+        expectSpend("give me 20 of instagram while im at the gym", door: "Instagram", minutes: 20)
     }
 
     @Test func ambiguityIsSilence() {
@@ -135,32 +154,40 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // Two numbers → no guess.
         #expect(DeterministicParser.parse("instagram 10 or 20", state: s) == .silence)
         #expect(DeterministicParser.parse("ten or twenty minutes of tiktok", state: s) == .silence)
-        // A bare door is a mention, not a request.
-        #expect(DeterministicParser.parse("instagram", state: s) == .silence)
+        // A bare door with no opening verb writes itself out rather than
+        // guessing at a grant.
+        #expect(DeterministicParser.parse("instagram", state: s)
+                == .writeItOut(door: instagram, minutes: nil))
+        // Real mention prose — more than a bare door — is still silence.
         #expect(DeterministicParser.parse("i was on instagram earlier", state: s) == .silence)
-        // A bare number has no door.
-        #expect(DeterministicParser.parse("10", state: s) == .silence)
-        #expect(DeterministicParser.parse("ten minutes", state: s) == .silence)
+        // A bare number borrows the first door to write itself out.
+        #expect(DeterministicParser.parse("10", state: s)
+                == .writeItOut(door: instagram, minutes: 10))
+        #expect(DeterministicParser.parse("ten minutes", state: s)
+                == .writeItOut(door: instagram, minutes: 10))
     }
 
     @Test func ellipticalAsksGetHowLong() {
         for v in ["give me instagram", "i want tiktok", "can i open reddit",
                   "let me on youtube", "unlock instagram"] {
-            #expect(verdict(v) == .refuseSayHowManyMinutes, "failed: \(v)")
+            #expect(writesItOut(verdict(v)), "failed: \(v)")
         }
-        // Without an opening verb there is no ask, so no question either.
-        #expect(verdict("youtube please") == .silence)
+        // Without an opening verb there is still a door, and a bare door
+        // writes itself out rather than falling silent.
+        #expect(writesItOut(verdict("youtube please")))
     }
 
     @Test func zeroMinutesIsSilence() {
         // spend(door, 0) exists as a parse but dies on the validator's floor.
-        #expect(verdict("instagram 0") == .silence)
-        #expect(verdict("0 minutes of tiktok") == .silence)
+        // Verbed, since a bare "instagram 0" is a `.writeItOut` guidance
+        // reply now rather than a spend the validator gets a chance to floor.
+        #expect(verdict("give me 0 of instagram") == .silence)
+        #expect(verdict("give me 0 minutes of tiktok") == .silence)
     }
 
     @Test func overAsksClampNeverExceed() {
         // 500, 10000: parses fine, grant is the balance, never more.
-        for v in ["instagram 500", "tiktok 300", "give me 100 minutes of youtube"] {
+        for v in ["give me 500 of instagram", "give me 300 of tiktok", "give me 100 minutes of youtube"] {
             guard case .grant(_, let m, _) = verdict(v) else {
                 Issue.record("expected clamped grant: \(v)")
                 continue
@@ -175,15 +202,15 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         ledger.record(Grant(door: tiktok, minutes: 25, issuedAt: now.addingTimeInterval(-3600),
                             expiresAt: now.addingTimeInterval(-1800)))
         // 15 left; ask 20 → 15. Ask exactly 15 → 15. Ask 10 → 10.
-        guard case .grant(_, let clamped, _) = verdict("instagram 20", ledger: ledger) else {
+        guard case .grant(_, let clamped, _) = verdict("give me 20 of instagram", ledger: ledger) else {
             Issue.record("expected grant"); return
         }
         #expect(clamped == 15)
-        guard case .grant(_, let exact, _) = verdict("instagram 15", ledger: ledger) else {
+        guard case .grant(_, let exact, _) = verdict("give me 15 of instagram", ledger: ledger) else {
             Issue.record("expected grant"); return
         }
         #expect(exact == 15)
-        guard case .grant(_, let under, _) = verdict("instagram 10", ledger: ledger) else {
+        guard case .grant(_, let under, _) = verdict("give me 10 of instagram", ledger: ledger) else {
             Issue.record("expected grant"); return
         }
         #expect(under == 10)
@@ -199,7 +226,9 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         expectClose("shut reddit", door: "Reddit")
         expectClose("lock youtube", door: "YouTube")
         expectClose("no more instagram today", door: "Instagram")
-        expectClose("no more ig", door: "Instagram")
+        // Aliases are gone: "ig" no longer means Instagram, so the paraphrase
+        // is the door's real name rather than its dead nickname.
+        expectClose("no more instagram", door: "Instagram")
         expectClose("im done with tiktok", door: "TikTok")
         expectClose("i'm done with reddit for the day", door: "Reddit")
         expectClose("cut off youtube", door: "YouTube")
@@ -237,8 +266,8 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // opener detection must win every one of these.
         let s = makeState()
         #expect(DeterministicParser.parse("unlock instagram", state: s)
-                == .command(.placeBoundAsk(door: instagram)))
-        for v in ["unlock instagram for ten minutes", "open tiktok, ten", "let me on ig for 10"] {
+                == .writeItOut(door: instagram, minutes: nil))
+        for v in ["unlock instagram for ten minutes", "open tiktok, ten", "let me on instagram for 10"] {
             guard case .command(.spend) = DeterministicParser.parse(v, state: s) else {
                 Issue.record("opener lost to a closer substring: \(v)")
                 continue
@@ -264,16 +293,17 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         ledger.closeDoor(instagram, at: now.addingTimeInterval(-600), until: lift)
         // Named, and with the hour the close actually lifts. "0 left today."
         // was false here: the other door below grants out of the same pool.
-        #expect(verdict("instagram ten", ledger: ledger, at: now)
+        #expect(verdict("give me ten minutes of instagram", ledger: ledger, at: now)
                 == .refuseDoorClosed(door: instagram, until: lift))
         // Other doors are untouched.
-        guard case .grant(let d, _, _) = verdict("tiktok ten", ledger: ledger, at: now) else {
+        guard case .grant(let d, _, _) = verdict("give me ten minutes of tiktok", ledger: ledger, at: now) else {
             Issue.record("expected the other door to still grant")
             return
         }
         #expect(d.name == "TikTok")
         // After the lift, back in play.
-        guard case .grant = verdict("instagram ten", ledger: ledger, at: lift.addingTimeInterval(60)) else {
+        guard case .grant = verdict("give me ten minutes of instagram", ledger: ledger,
+                                    at: lift.addingTimeInterval(60)) else {
             Issue.record("expected grant after lift")
             return
         }
@@ -334,9 +364,11 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         let s = makeState()
         #expect(DeterministicParser.parse("add snapchat", state: s) == .command(.addDoor(name: "snapchat")))
         #expect(DeterministicParser.parse("add focus friend", state: s) == .command(.addDoor(name: "focus friend")))
-        // Adding what exists — by name or alias — is a no-op ask.
+        // Adding what exists — by name — is a no-op ask. Aliases are gone,
+        // so "ig" no longer means the existing Instagram door: it proposes a
+        // brand new door literally named "ig".
         #expect(DeterministicParser.parse("add reddit", state: s) == .silence)
-        #expect(DeterministicParser.parse("add ig", state: s) == .silence)
+        #expect(DeterministicParser.parse("add ig", state: s) == .command(.addDoor(name: "ig")))
         #expect(DeterministicParser.parse("remove reddit", state: s) == .command(.removeDoor(door: reddit)))
         #expect(DeterministicParser.parse("drop youtube", state: s) == .command(.removeDoor(door: youtube)))
         // Removing a non-door proposes nothing.
@@ -492,12 +524,12 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // grant and no open app — README rule 1, the hot path — and a list of
         // opening frames could not see them, because "i need" and a bare "tiktok
         // for …" were never on it.
-        expectSpend("20 minutes of tiktok max", door: "TikTok", minutes: 20)
+        expectSpend("give me 20 minutes of tiktok max", door: "TikTok", minutes: 20)
         expectSpend("i need 20 minutes of tiktok max", door: "TikTok", minutes: 20)
         expectSpend("gimme 20 minutes of tiktok max", door: "TikTok", minutes: 20)
-        expectSpend("tiktok for 20 minutes max", door: "TikTok", minutes: 20)
-        expectSpend("10 minutes of tiktok, at most", door: "TikTok", minutes: 10)
-        expectSpend("20 minutes of tiktok and thats my limit", door: "TikTok", minutes: 20)
+        expectSpend("give me tiktok for 20 minutes max", door: "TikTok", minutes: 20)
+        expectSpend("give me 10 minutes of tiktok, at most", door: "TikTok", minutes: 10)
+        expectSpend("give me 20 minutes of tiktok and thats my limit", door: "TikTok", minutes: 20)
         // The mirror image, which the same test decides.
         expectCap("20 minute limit on tiktok", door: "TikTok", minutes: 20)
         expectCap("max 20 minutes of tiktok", door: "TikTok", minutes: 20)
@@ -942,13 +974,15 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         #expect(DeterministicParser.parse("give me 20 of tiktok, uncap instagram",
                                           state: makeState())
                 == .command(.spend(door: tiktok, minutes: 20)))
-        #expect(DeterministicParser.parse("20 of tiktok please, uncap instagram",
+        #expect(DeterministicParser.parse("give me 20 of tiktok please, uncap instagram",
                                           state: makeState())
                 == .command(.spend(door: tiktok, minutes: 20)))
-        // The same door named twice, by name and by alias — whether the second
-        // breath happens to spell the same app is not what decides whether the
-        // first breath was heard.
-        #expect(DeterministicParser.parse("give me 20 of the gram, uncap instagram",
+        // The same door named twice — aliases are gone, so the second
+        // spelling has to be the door's own name rather than a nickname, but
+        // the property is the same one: whether the second breath happens to
+        // name the same app is not what decides whether the first breath was
+        // heard.
+        #expect(DeterministicParser.parse("give me 20 of instagram, uncap instagram",
                                           state: makeState())
                 == .command(.spend(door: instagram, minutes: 20)))
         // A removal states the sentence's first intent, and a ceiling in a later
@@ -971,11 +1005,16 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
                      "hey, drop instagram, no limit on tiktok"] {
             #expect(DeterministicParser.parse(text, state: makeState()) == .silence, "\(text)")
         }
-        // Neither of these may loosen on the way past.
+        // Neither of these may loosen on the way past. ("give me 20 of the
+        // gram, uncap instagram" is deliberately not among them: "the gram"
+        // is an unknown word now that aliases are gone, so that ask names no
+        // door at all and the "uncap instagram" clause is left standing
+        // alone — the same pre-existing gap "give me 20 of snapchat, uncap
+        // instagram" has on `main`, and not what this guard is about.)
         for text in ["give me 20 of tiktok, uncap instagram",
                      "give me 20 of tiktok, cap instagram at 30",
                      "20 of tiktok please, uncap instagram",
-                     "give me 20 of the gram, uncap instagram",
+                     "give me 20 of instagram, uncap instagram",
                      "remove instagram, no cap on tiktok",
                      "hey, remove instagram, no cap on tiktok",
                      "hi, remove instagram, no cap on tiktok",
@@ -1052,7 +1091,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // The mood gate declines; it does not swallow. What the rest of the
         // ladder owes the sentence, the sentence still gets.
         #expect(DeterministicParser.parse("can i uncap tiktok", state: makeState())
-                == .command(.placeBoundAsk(door: tiktok)))
+                == .writeItOut(door: tiktok, minutes: nil))
         // And the imperative that says the same words still clears, so the gate
         // is not passing by having stopped clearing anything.
         expectCap("uncap tiktok", door: "TikTok", minutes: nil)
@@ -1119,7 +1158,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // word, answered with that word.
         for text in ["i want a limit on tiktok", "can i get a cap on tiktok"] {
             #expect(DeterministicParser.parse(text, state: makeState())
-                    == .command(.placeBoundAsk(door: tiktok)), "failed: \(text)")
+                    == .writeItOut(door: tiktok, minutes: nil), "failed: \(text)")
         }
         // The number is what a ceiling needs, and a clause carrying one is still
         // read as one — including the idiom, whose quantity occupies no token.
@@ -1142,12 +1181,37 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
                      "i need under 20 minutes of tiktok", "i need max 20 of tiktok",
                      "i need at most 20 of tiktok", "can i have under 20 of tiktok",
                      "give me under 20 of tiktok", "can you give me under 20 of tiktok",
-                     "20 minutes max on tiktok", "20 max on tiktok", "just 20 max on tiktok",
-                     "gimme max 20 of tiktok", "i need 20 max of tiktok",
-                     "20 minutes of tiktok max"] {
+                     "gimme max 20 of tiktok", "i need 20 max of tiktok"] {
             expectSpend(text, door: "TikTok", minutes: 20)
         }
-        expectSpend("30 minutes max on instagram", door: "Instagram", minutes: 30)
+        // SPEND now requires an opening verb, so a bare hedge with no ask
+        // verb around it is not a grant candidate at all — the cap rules,
+        // which sit ahead of SPEND, read it as a ceiling instead (pinned
+        // below), and it never reaches this rule. What used to be a fourth
+        // shape of spend is now `.writeItOut`, every row kept rather than
+        // dropped, re-pinned to what the parser now says.
+        for text in ["20 minutes max on tiktok", "20 max on tiktok", "just 20 max on tiktok",
+                     "20 minutes of tiktok max"] {
+            guard case .writeItOut(let d, let m) = DeterministicParser.parse(text, state: makeState())
+            else {
+                Issue.record("\"\(text)\" stopped writing itself out")
+                continue
+            }
+            #expect(d.name == "TikTok" && m == 20, "\"\(text)\"")
+        }
+        guard case .writeItOut(let d, let m) =
+            DeterministicParser.parse("30 minutes max on instagram", state: makeState()) else {
+            Issue.record("\"30 minutes max on instagram\" stopped writing itself out")
+            return
+        }
+        #expect(d.name == "Instagram" && m == 30)
+        // And the identical hedges, verbed, still grant in every word order —
+        // the shortcut is refused with the hint and the whole sentence lands.
+        expectSpend("give me 20 minutes max on tiktok", door: "TikTok", minutes: 20)
+        expectSpend("give me 20 max on tiktok", door: "TikTok", minutes: 20)
+        expectSpend("just give me 20 max on tiktok", door: "TikTok", minutes: 20)
+        expectSpend("give me 20 minutes of tiktok max", door: "TikTok", minutes: 20)
+        expectSpend("give me 30 minutes max on instagram", door: "Instagram", minutes: 30)
         // The clause is the unit: a hedge in one breath and an ask in another
         // are two sentences, and the ceiling is the one the hedge is in.
         expectCap("tiktok max 20, give me instagram", door: "TikTok", minutes: 20)
@@ -1563,13 +1627,13 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
 
     @Test func todayIsNotADay() {
         // "today" is not " a day", "per day" or "daily", so the closers keep
-        // every sentence about the rest of today — and "instagram 20 for the
-        // day" keeps its grant, because a bare "day" token is not a period
-        // phrase either.
+        // every sentence about the rest of today — and "give me instagram 20
+        // for the day" keeps its grant, because a bare "day" token is not a
+        // period phrase either.
         let boundary = at(7, 0, day: 30)
         #expect(verdict("no more tiktok today") == .close(door: tiktok, until: boundary))
         #expect(verdict("im done with instagram for the day") == .close(door: instagram, until: boundary))
-        expectSpend("instagram 20 for the day", door: "Instagram", minutes: 20)
+        expectSpend("give me instagram 20 for the day", door: "Instagram", minutes: 20)
     }
 
     @Test func windowWordsNeverBecomeACap() {
@@ -1707,7 +1771,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
             .command(.spend(door: instagram, minutes: 10))),
         row("give me under 20 of tiktok", .command(.spend(door: tiktok, minutes: 20))),
         row("let me on tiktok, max 20", .command(.spend(door: tiktok, minutes: 20))),
-        row("instagram 20 for the day", .command(.spend(door: instagram, minutes: 20))),
+        row("give me instagram 20 for the day", .command(.spend(door: instagram, minutes: 20))),
         // Unchanged — the budget rule keeps its own.
         row("20 minutes a day", .command(.setBudget(minutes: 20))),
         row("budget of 40", .command(.setBudget(minutes: 40))),
@@ -1759,10 +1823,10 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         row("i want tiktok capped at 20", .command(.setDoorCap(door: tiktok, minutes: 20))),
         row("i want my instagram limit to be 20", .command(.setDoorCap(door: instagram, minutes: 20))),
         // …and a trailing hedge is still a spend.
-        row("20 minutes of tiktok max", .command(.spend(door: tiktok, minutes: 20))),
+        row("give me 20 minutes of tiktok max", .command(.spend(door: tiktok, minutes: 20))),
         row("i need 20 minutes of tiktok max", .command(.spend(door: tiktok, minutes: 20))),
-        row("tiktok for 20 minutes max", .command(.spend(door: tiktok, minutes: 20))),
-        row("10 minutes of tiktok, at most", .command(.spend(door: tiktok, minutes: 10))),
+        row("give me tiktok for 20 minutes max", .command(.spend(door: tiktok, minutes: 20))),
+        row("give me 10 minutes of tiktok, at most", .command(.spend(door: tiktok, minutes: 10))),
         // A stated cap noun outranks the pool.
         row("put a 20 minute daily limit on tiktok",
             .command(.setDoorCap(door: tiktok, minutes: 20))),
@@ -1859,7 +1923,9 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // A clause has no such closing point, and both spellings now read as
         // what they say.
         row("20 a day on tiktok", .command(.setDoorCap(door: tiktok, minutes: 20))),
-        row("20 a day on the gram", .command(.setDoorCap(door: instagram, minutes: 20))),
+        // Aliases are gone: "the gram" no longer names Instagram, so the
+        // second spelling of this row is the door's own name.
+        row("20 a day on instagram", .command(.setDoorCap(door: instagram, minutes: 20))),
         // Held: `.silence`, from a `tokens.first != "add"` carve-out. Reddit is
         // already a door, so ADD's own answer to this sentence is silence — the
         // cap reading takes nothing from it, and is the only reading that does
@@ -1891,7 +1957,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         row("tiktok is not capped", .silence),
         // The mood gate declines, and the sentence keeps whatever the rest of
         // the ladder owes it — rule 8's "How long?" here.
-        row("can i uncap tiktok", .command(.placeBoundAsk(door: tiktok))),
+        row("can i uncap tiktok", .writeItOut(door: tiktok, minutes: nil)),
         // A REMOVAL PREDICATED OF THE CEILING is what the negation landed on.
         row("i dont want the tiktok cap removed", .silence),
         row("i dont want the cap off tiktok", .silence),
@@ -1925,8 +1991,8 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
             .command(.spend(door: tiktok, minutes: 20))),
         row("give me 20 minutes of tiktok, im at my limit on tiktok",
             .command(.spend(door: tiktok, minutes: 20))),
-        row("i want a limit on tiktok", .command(.placeBoundAsk(door: tiktok))),
-        row("can i get a cap on tiktok", .command(.placeBoundAsk(door: tiktok))),
+        row("i want a limit on tiktok", .writeItOut(door: tiktok, minutes: nil)),
+        row("can i get a cap on tiktok", .writeItOut(door: tiktok, minutes: nil)),
         // A BARE QUANTIFIER INSIDE AN ASK, in both word orders. The veto read
         // six frames over the whole utterance; "i need" was not one of them, and
         // a "give me" in another clause vetoed a real ceiling.
@@ -1934,8 +2000,8 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         row("gimme under 20 of tiktok", .command(.spend(door: tiktok, minutes: 20))),
         row("i need max 20 of tiktok", .command(.spend(door: tiktok, minutes: 20))),
         row("can i have under 20 of tiktok", .command(.spend(door: tiktok, minutes: 20))),
-        row("20 minutes max on tiktok", .command(.spend(door: tiktok, minutes: 20))),
-        row("20 max on tiktok", .command(.spend(door: tiktok, minutes: 20))),
+        row("give me 20 minutes max on tiktok", .command(.spend(door: tiktok, minutes: 20))),
+        row("give me 20 max on tiktok", .command(.spend(door: tiktok, minutes: 20))),
         row("i need 20 max of tiktok", .command(.spend(door: tiktok, minutes: 20))),
         row("tiktok max 20, give me instagram", .command(.setDoorCap(door: tiktok, minutes: 20))),
         // A DOORLESS CLOSE WITH A PERIOD WORD is an allowance, and the hoist
@@ -2042,8 +2108,11 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         row("remove tiktok past my limit 20 times", .silence),
         // A CAP CLAUSE DOES NOT SPEAK FOR AN EARLIER BREATH.
         row("give me 20 of tiktok, uncap instagram", .command(.spend(door: tiktok, minutes: 20))),
-        row("20 of tiktok please, uncap instagram", .command(.spend(door: tiktok, minutes: 20))),
-        row("give me 20 of the gram, uncap instagram",
+        row("give me 20 of tiktok please, uncap instagram",
+            .command(.spend(door: tiktok, minutes: 20))),
+        // Aliases are gone, so the second door-named-twice row uses
+        // instagram's own name rather than "the gram".
+        row("give me 20 of instagram, uncap instagram",
             .command(.spend(door: instagram, minutes: 20))),
         row("remove instagram, no cap on tiktok", .command(.removeDoor(door: instagram))),
         // A CEILING NAMED ABOUT ANOTHER APP does not spare this one. Rule 5's
@@ -2071,15 +2140,21 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // door lands in one breath and its number in the next. A silence, which
         // the user can repair by saying it again.
         row("cap tiktok so i only get 20 a day", .silence),
-        // A REPORT WITH A VERBLESS ASK BEHIND IT. The comma'd spelling spends
-        // and is pinned two rows down; without the comma this is one clause
-        // holding a report and an ask, and the mood gate terminates on it. Main
-        // GRANTED it; the held attempt raised the ceiling to twenty. Silence is
-        // the third answer and the only one that is not a loosening, and it is
-        // the mood termination's cost stated as a row rather than a footnote.
+        // A REPORT WITH A VERBLESS ASK BEHIND IT. The comma'd spelling used to
+        // spend and is pinned two rows down; without the comma this is one
+        // clause holding a report and an ask, and the mood gate terminates on
+        // it. Main GRANTED it; the held attempt raised the ceiling to twenty.
+        // Silence is the third answer and the only one that is not a
+        // loosening, and it is the mood termination's cost stated as a row
+        // rather than a footnote.
         row("the tiktok cap is fine 20 minutes of tiktok", .silence),
+        // SPEND now requires an opening verb, so the comma'd spelling's
+        // second clause — "20 minutes of tiktok", still verbless — is no
+        // longer a mint either: it writes itself out rather than granting or
+        // falling silent. The comma still matters; it is what keeps the mood
+        // gate from swallowing this clause the way it swallows the one above.
         row("the tiktok cap is fine, 20 minutes of tiktok",
-            .command(.spend(door: tiktok, minutes: 20))),
+            .writeItOut(door: tiktok, minutes: 20)),
         // ONE SENTENCE THE NEGATION MODEL STILL DOES NOT REACH. "stop" is not a
         // negator and not a closing verb, and the refusal it states is of the
         // ASKING rather than of the ceiling. Pinned wrong so a change is loud.
@@ -2163,7 +2238,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
                   "instagram while i'm at work",
                   "let me on tiktok as long as im at the office",
                   "reddit when im at the gym"] {
-            #expect(verdict(v) == .refuseSayHowManyMinutes, "failed: \(v)")
+            #expect(writesItOut(verdict(v)), "failed: \(v)")
         }
     }
 }
@@ -2173,7 +2248,8 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
 @Suite struct ClockEdgeStress {
     @Test func grantShrinksToTheNightEdge() {
         // 21:59 + "thirty" → one minute, relock 22:00.
-        guard case .grant(_, let m, let relock) = verdict("instagram thirty", at: at(21, 59)) else {
+        guard case .grant(_, let m, let relock) = verdict("give me thirty minutes of instagram",
+                                                           at: at(21, 59)) else {
             Issue.record("expected sliver grant"); return
         }
         #expect(m == 1)
@@ -2183,14 +2259,18 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
 
     @Test func exactDownHoursStartRefuses() {
         // 22:00:00 is inside the window (closed-open interval).
-        #expect(verdict("instagram ten", at: at(22)) == .refuseDownHours(until: TimeOfDay(hour: 7)))
-        #expect(verdict("instagram ten", at: at(23, 59)) == .refuseDownHours(until: TimeOfDay(hour: 7)))
-        #expect(verdict("instagram ten", at: at(6, 59, day: 30)) == .refuseDownHours(until: TimeOfDay(hour: 7)))
+        #expect(verdict("give me ten minutes of instagram", at: at(22))
+                == .refuseDownHours(until: TimeOfDay(hour: 7)))
+        #expect(verdict("give me ten minutes of instagram", at: at(23, 59))
+                == .refuseDownHours(until: TimeOfDay(hour: 7)))
+        #expect(verdict("give me ten minutes of instagram", at: at(6, 59, day: 30))
+                == .refuseDownHours(until: TimeOfDay(hour: 7)))
     }
 
     @Test func exactDownHoursEndGrants() {
         // 7:00:00 is outside the window: the day has started, budget fresh.
-        guard case .grant(_, let m, _) = verdict("instagram ten", at: at(7, 0, day: 30)) else {
+        guard case .grant(_, let m, _) = verdict("give me ten minutes of instagram",
+                                                 at: at(7, 0, day: 30)) else {
             Issue.record("expected grant at the day's first second"); return
         }
         #expect(m == 10)
@@ -2207,7 +2287,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
 
     @Test func zeroBudgetRefusesEverySpend() {
         let s = makeState(budget: 0)
-        #expect(verdict("instagram ten", state: s) == .refuseNothingLeft)
+        #expect(verdict("give me ten minutes of instagram", state: s) == .refuseNothingLeft)
         // But closes and status still work with nothing left.
         guard case .close = verdict("block instagram", state: s) else {
             Issue.record("expected close with zero budget"); return
@@ -2583,12 +2663,16 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // A CLEARING IN A SECOND BREATH, behind an ask that came first. The cap
         // rules walk every clause and sit ahead of SPEND, so the clearing
         // answered the sentence and the twenty minutes returned nothing at all.
-        // The alias spelling is here because the first cut of the guard asked
-        // whether the second breath named ANOTHER door, and one door named twice
-        // slipped straight through it.
+        // The alias spelling that used to live here ("give me 20 of the gram,
+        // uncap instagram") is gone: aliases are dead now, so "the gram" is an
+        // unknown word, the ask clause names no door at all, and the "uncap
+        // instagram" clause is left standing alone — the same pre-existing gap
+        // "give me 20 of snapchat, uncap instagram" has on `main`, not a
+        // property this list is testing. Re-pinned to a known door so the
+        // invariant tests what it means.
         "give me 20 of tiktok, uncap instagram",
         "20 of tiktok please, uncap instagram",
-        "give me 20 of the gram, uncap instagram",
+        "give me 20 of tiktok, uncap instagram",
         // A ceiling word with no number of its own, which claimed the whole
         // sentence and left the ask with nothing.
         "im at my limit on tiktok, give me 20 minutes",
@@ -2690,6 +2774,12 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
             seen += 1
             switch DeterministicParser.parse(text, state: makeState()) {
             case .silence, .command(.setDoorCap), .command(.setBudget):
+                break
+            // The guidance reply is legal here for the reason silence is: it
+            // changes no rule and debits no minute. It is what a period-word
+            // sentence that reached the spend rule without an opening verb
+            // now gets instead of a grant.
+            case .writeItOut:
                 break
             // A close is the one other legal answer, and only because it is
             // decided ABOVE every cap rule — the close executes first by design.
@@ -2802,8 +2892,8 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         ledger.record(Grant(door: tiktok, minutes: 4, issuedAt: now.addingTimeInterval(-3600),
                             expiresAt: now.addingTimeInterval(-3360)))
         var grants = 0
-        for text in ["instagram 500", "tiktok 300", "give me 100 minutes of tiktok",
-                     "instagram ninety", "an hour and a half of instagram",
+        for text in ["give me 500 of instagram", "give me 300 of tiktok", "give me 100 minutes of tiktok",
+                     "give me ninety minutes of instagram", "give me an hour and a half of instagram",
                      "cap tiktok at 20", "tiktok 20 a day"] {
             guard case .grant(let d, let m, _) = verdict(text, state: capped, ledger: ledger,
                                                         at: now) else { continue }
@@ -2823,8 +2913,8 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
 
     @Test func grantsNeverExceedTheBalance() {
         // Any string that does grant grants at most the remaining budget.
-        let asks = ["instagram 500", "tiktok 299", "give me 41 minutes of youtube",
-                    "an hour and a half of reddit", "instagram ninety"]
+        let asks = ["give me 500 of instagram", "give me 299 of tiktok", "give me 41 minutes of youtube",
+                    "give me an hour and a half of reddit", "give me ninety minutes of instagram"]
         for text in asks {
             if case .grant(_, let m, _) = verdict(text) {
                 #expect(m <= 40, "grant exceeded balance: \(text) → \(m)")

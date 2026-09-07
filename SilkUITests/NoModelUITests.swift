@@ -7,9 +7,16 @@ import XCTest
 /// the product. It launches the app under `-silkNoModel YES` — which sets
 /// `SilkModelParser.testForceSilent` in `AppModel.init` (AppModel.swift:126),
 /// making the widener answer `.silence` exactly as an unavailable one does —
-/// walks setup, and types four sentences at the bar: a spend, a paraphrase only
-/// a model could read, a budget change and a balance question. Each reply is
-/// read off the screen and photographed.
+/// walks setup, and types five sentences at the bar: half a spend, the whole
+/// sentence it is answered with, a paraphrase only a model could read, a budget
+/// change and a balance question. Each reply is read off the screen and
+/// photographed.
+///
+/// The first two are one fact in two turns. "instagram 10" names a door and a
+/// number and asks for neither, so it grants nothing and is answered with the
+/// sentence that would — and that sentence, typed next, opens the door. Silence
+/// on the first turn is what the design cannot afford: it would reach the
+/// widener, and a model reads "instagram 10" as the grant the grammar declined.
 ///
 /// The simulator carries Apple Intelligence, so without the seam the paraphrase
 /// would reach a real generation and whatever it answered would be a property
@@ -35,6 +42,13 @@ final class NoModelUITests: XCTestCase {
     /// normalises quotes cannot silently turn this assertion into a different
     /// one.
     private static let didntGetThat = "Didn\u{2019}t get that."
+
+    /// The guidance reply, composed by `SilkStrings.writeItOut(_:minutes:)` for
+    /// Instagram and the ten minutes the user herself typed. Plain ASCII, and
+    /// spelled out here rather than built, so this walk asserts the sentence a
+    /// person reads off the glass and not a call to the same function that
+    /// produced it.
+    private static let writeItOut = "Write it out: unlock Instagram for 10 min."
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -239,8 +253,33 @@ final class NoModelUITests: XCTestCase {
                       "the Instagram row is missing from Now")
         shoot("00 — Now, no model")
 
-        // 1. THE SPEND. The grammar's hot path, and the widener never sees it.
+        // 1. THE SHORTCUT, WRITTEN OUT. A door beside a number is not an ask:
+        //    it names the app and the amount and asks for neither. The grammar
+        //    answers it with the sentence that WOULD grant — in her own door
+        //    and her own number — and this is the row the tightening rests on,
+        //    because silence here would hand "instagram 10" to a model that
+        //    reads it as the grant the grammar just declined.
         say(bar, "instagram 10\n")
+        let guidance = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Write it out")
+        ).firstMatch
+        XCTAssertTrue(guidance.waitForExistence(timeout: Self.answer),
+                      "half a spend was left unanswered with no model behind the bar")
+        XCTAssertEqual(guidance.label, Self.writeItOut,
+                       "the guidance read \"\(guidance.label)\"")
+        // Nothing moved: the whole budget is still on the ring, no door row
+        // carries a re-lock time, and there is nothing to take back.
+        XCTAssertTrue(app.staticTexts["40"].waitForExistence(timeout: Self.appear),
+                      "a sentence that granted nothing moved the balance")
+        XCTAssertFalse(labelled(app, beginsWith: "Instagram, open till").exists,
+                       "a sentence that granted nothing opened the door")
+        XCTAssertFalse(app.buttons["silk.turn.undo"].exists,
+                       "a reply that moved nothing offered a way back")
+        shoot("01 — instagram 10 — \(guidance.label)")
+
+        // 2. THE SPEND, in the sentence the reply just spelled out. The
+        //    grammar's hot path, and the widener never sees it.
+        say(bar, "unlock Instagram for 10 min\n")
         let grant = app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS %@", "Instagram is open for 10")
         ).firstMatch
@@ -255,9 +294,9 @@ final class NoModelUITests: XCTestCase {
                       "the Instagram row does not show a re-lock time after the grant")
         XCTAssertTrue(app.staticTexts["30"].waitForExistence(timeout: Self.appear),
                       "the ensō did not debit to 30")
-        shoot("01 — instagram 10 — \(row.label)")
+        shoot("02 — unlock Instagram for 10 min — \(row.label)")
 
-        // 2. THE PARAPHRASE. Nothing in the grammar reads this sentence, and
+        // 3. THE PARAPHRASE. Nothing in the grammar reads this sentence, and
         //    with no model there is nothing behind the grammar — so the answer
         //    is the four words, and it must arrive on the beat rather than on
         //    the widener's two-second clock.
@@ -288,22 +327,22 @@ final class NoModelUITests: XCTestCase {
                           "the refusal took \(sinceTyping)s to appear — a silent widener "
                           + "must not put a turn behind its two-second deadline")
         XCTAssertTrue(app.staticTexts["30"].exists, "a refused sentence moved the balance")
-        shoot(String(format: "02 — paraphrase refused in %.2fs", sinceTyping))
+        shoot(String(format: "03 — paraphrase refused in %.2fs", sinceTyping))
 
-        // 3. THE BUDGET. A raise is a loosening, so canon parks it and the
+        // 4. THE BUDGET. A raise is a loosening, so canon parks it and the
         //    receipt names the day and the number.
         say(bar, "budget 60\n")
         let parked = app.staticTexts["Tomorrow: 60"]
         XCTAssertTrue(parked.waitForExistence(timeout: Self.answer),
                       "the budget change was not answered with its receipt")
-        shoot("03 — budget 60 — Tomorrow: 60")
+        shoot("04 — budget 60 — Tomorrow: 60")
 
-        // 4. THE BALANCE. Ten spent out of forty, and the raise is not in force
+        // 5. THE BALANCE. Ten spent out of forty, and the raise is not in force
         //    until tomorrow.
         say(bar, "how much is left\n")
         let balance = app.staticTexts["30 min left."]
         XCTAssertTrue(balance.waitForExistence(timeout: Self.answer),
                       "the balance question was not answered")
-        shoot("04 — how much is left — 30 min left.")
+        shoot("05 — how much is left — 30 min left.")
     }
 }

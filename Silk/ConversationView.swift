@@ -398,6 +398,7 @@ private struct TurnCell: View {
 // Preview — the whole choreography on a fake page
 // ============================================================
 
+#if DEBUG
 #Preview("Conversation — day") {
     ConversationDemo(night: false)
 }
@@ -563,3 +564,4 @@ private struct ConversationDemo: View {
         }
     }
 }
+#endif

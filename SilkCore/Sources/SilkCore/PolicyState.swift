@@ -30,50 +30,35 @@ public struct TimeOfDay: Hashable, Codable, Sendable, Comparable {
 public struct Door: Hashable, Codable, Sendable, Identifiable {
     public let id: UUID
     public var name: String          // display name, user-chosen from the catalogue
-    public var aliases: [String]     // learned shorthand (the alias table)
 
-    public init(id: UUID = UUID(), name: String, aliases: [String] = []) {
+    public init(id: UUID = UUID(), name: String) {
         self.id = id
         self.name = name
-        self.aliases = aliases
     }
 
-    /// All spoken forms, lowercased, for matching: the name, whatever aliases
-    /// the door carries, and **the catalogue's own names for it**.
+    /// The door's spoken form, lowercased: **its name and nothing else**.
     ///
-    /// That last clause is the whole of this comment. `aliases` is declared,
-    /// plumbed through here, through `DoorRoster.canAdd`, and through the
-    /// grammar's one door matcher — and no code path in the app has ever
-    /// written one. Doors are made `Door(name: display)` at both creation sites,
-    /// so every door that has ever existed on a device shipped with an empty
-    /// alias list. Meanwhile `LaunchCatalog` has always known that "ig" and
-    /// "insta" mean Instagram, that "yt" means YouTube and that "twitter" means
-    /// X — it uses those names to OPEN the app — and the parser could not see
-    /// any of them. "give me 10 minutes of ig" answered "Didn't get that.",
-    /// while `CatalogueNamesAgainstTheGrammar` passed in CI on every one of
-    /// those spellings, because the test builds its doors as
-    /// `Door(name: e.display, aliases: e.names)` and the app does not. A green
-    /// suite over a broken product, and the gap was one initializer wide.
+    /// It used to be a union — the name, a per-user `aliases` table, and the
+    /// launch catalogue's own nicknames ("ig", "insta", "yt", "the gram").
+    /// Every one of those is gone, and the reason is the spend grammar above
+    /// it. A nickname is only ever read by `DeterministicParser.door(_:in:)`,
+    /// which asks "did this sentence name a door" of every token of arbitrary
+    /// prose; a short nickname answers yes far more often than the user meant
+    /// one ("20 minutes ig", "im about to snap"), and the catalogue's own
+    /// comment already records three exclusions it had to make for exactly
+    /// that. With the bare shortcut form no longer granting, the nicknames
+    /// bought nothing but the hijacks: what a nickname now reaches is a
+    /// "Write it out:" hint on a door the sentence may never have meant.
     ///
-    /// Fixed here rather than at the two creation sites on purpose: a door is
-    /// persisted, so a fix that only ran when a door is MADE would leave every
-    /// existing install exactly as broken as it is today and would need a
-    /// migration to reach them. Reading the catalogue at match time needs
-    /// neither. `aliases` keeps its meaning — learned shorthand, per-user,
-    /// still unwritten by anything — and the catalogue's names are the floor
-    /// under it.
-    public var spokenForms: [String] {
-        let key = name.lowercased()
-        var forms = [key]
-        for alias in aliases {
-            let a = alias.lowercased()
-            if !forms.contains(a) { forms.append(a) }
-        }
-        for known in LaunchCatalog.namesByDisplay[key] ?? [] where !forms.contains(known) {
-            forms.append(known)
-        }
-        return forms
-    }
+    /// `aliases` is gone as a STORED property too, and nothing migrates: a
+    /// blob written by an older build still carries an `aliases` key, and the
+    /// synthesized decoder ignores keys it has no property for. A door that
+    /// answered to "ig" yesterday answers to "Instagram" today.
+    ///
+    /// An array rather than a String because `door(named:)` and
+    /// `DoorRoster.canAdd` both ask "does this door answer to this word", and
+    /// the shape of that question is a membership test.
+    public var spokenForms: [String] { [name.lowercased()] }
 }
 
 /// The night window. May cross midnight (22:00 → 7:00).

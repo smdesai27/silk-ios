@@ -79,9 +79,25 @@ public enum SharedStore {
         return value
     }
 
-    static var defaults: UserDefaults {
+    /// The suite, opened once per process.
+    ///
+    /// This was computed, and every one of the hundred-odd reads and writes
+    /// below paid `UserDefaults(suiteName:)` for it — a container lookup and a
+    /// fresh object each time. `recordAttempt` alone touches it four times on
+    /// one shield render, inside a 6 MB extension. A suite is a handle onto a
+    /// shared store rather than a copy of it, so a held instance sees every
+    /// write any process makes: nothing here wants a *fresh* one, only a
+    /// working one.
+    ///
+    /// `nonisolated(unsafe)` because `UserDefaults` is not `Sendable` — which
+    /// is the same reason `Wall.store` and `Wall.storeName` stay computed, and
+    /// the reason those two may not follow this one: a `ManagedSettingsStore`
+    /// with the same name really is the same wall, so a fresh instance there
+    /// costs a string copy and nothing else, while `UserDefaults` is documented
+    /// thread-safe and is the one Foundation type it is safe to hold. The
+    /// unsafety is the annotation's, not the class's.
+    nonisolated(unsafe) static let defaults: UserDefaults =
         UserDefaults(suiteName: appGroup) ?? .standard
-    }
 
     private enum Key {
         static let policy = "silk.policy"

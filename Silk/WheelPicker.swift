@@ -403,6 +403,7 @@ private struct Wheel: View {
 
 // ============================================================
 
+#if DEBUG
 #Preview("Picker — budget · day") {
     ZStack {
         Ground(night: false).ignoresSafeArea()
@@ -479,3 +480,4 @@ private struct PickerRehearsal: View {
         .animation(Silk.motion(Silk.Motion.crossing), value: night)
     }
 }
+#endif

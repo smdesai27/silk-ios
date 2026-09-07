@@ -41,9 +41,9 @@ private var cal: Calendar {
 
 private let afternoon = cal.date(from: DateComponents(year: 2026, month: 8, day: 4, hour: 15))!
 
-private let instagram = Door(name: "Instagram", aliases: ["ig", "insta", "the gram"])
+private let instagram = Door(name: "Instagram")
 private let tiktok = Door(name: "TikTok")
-private let youtube = Door(name: "YouTube", aliases: ["yt"])
+private let youtube = Door(name: "YouTube")
 private let reddit = Door(name: "Reddit")
 
 private func makeState(budget: Int = 40, caps: [UUID: Int] = [:]) -> PolicyState {
@@ -112,7 +112,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         ("thats my limit, tiktok 20 a day", "TikTok", 20),
         ("new rule, tiktok 20 a day", "TikTok", 20),
         // habitIrregular "stole" and the clock word "evening" stay clause-local.
-        ("insta stole my whole evening, cap insta at 30", "Instagram", 30),
+        ("instagram stole my whole evening, cap instagram at 30", "Instagram", 30),
         // An ellipsis is a hesitation, not a clause break.
         ("cap tiktok... 20", "TikTok", 20),
         // "because" is deliberately not a clause opener; "cant" is a modal,
@@ -360,7 +360,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// trailing — the one shape where a bare negator clears on its own; a
     /// standing demand for absence, parked as a loosening.
     @Test func aStandingDemandForAbsenceReadsAsAClearing() {
-        #expect(clearsCap("never cap insta") == "Instagram")
+        #expect(clearsCap("never cap instagram") == "Instagram")
     }
 
     /// Doorless slang, subjects, and predicates: "no cap" the emphatic must
@@ -545,7 +545,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// The canonical setters are the floor the hijack gates must never eat.
     @Test(arguments: [
         ("cap tiktok at 20 minutes", "TikTok", 20),
-        ("limit insta to 15 a day", "Instagram", 15),
+        ("limit instagram to 15 a day", "Instagram", 15),
         ("keep tiktok under 20 a day", "TikTok", 20),
         // Terse Settings-row echo: the whole clause is one noun phrase.
         ("tiktok limit 20", "TikTok", 20),
@@ -578,10 +578,16 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// boundary reading, so the ask-verb commentary class ("ive hit my limit
     /// give me 20 of tiktok" / "im at my limit on tiktok, give me 20 minutes",
     /// pinned in ProseHijackTests) still grants.
+    ///
+    /// The two-token-alias half of this ("the gram") is dead coverage now:
+    /// `Door.spokenForms` is the name alone, so a two-token catalogue alias
+    /// is two unknown words rather than a match at all — there is no alias
+    /// left for a determiner to stand inside. The row keeps the shape it
+    /// pinned, over the door's real one-token name.
     @Test(arguments: [
-        ("cap the gram at 20", "Instagram", 20),
-        ("limit the gram to 20", "Instagram", 20),
-        ("cap the gram at 20, insta is fine now", "Instagram", 20),
+        ("cap instagram at 20", "Instagram", 20),
+        ("limit instagram to 20", "Instagram", 20),
+        ("cap instagram at 20, instagram is fine now", "Instagram", 20),
         ("cap my tiktok at 20", "TikTok", 20),
     ])
     func theDoorsOwnPhraseIsNotABoundary(_ row: (utterance: String, door: String, minutes: Int)) {
@@ -719,10 +725,12 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(parse(utterance) == .silence, "\"\(utterance)\" wrote a ceiling from a clock")
     }
 
-    /// LaunchCatalog shorthand on the cap path: "yt" survives, and the three
-    /// ordinary-English names ("ig", "gram") deliberately do not resolve
-    /// absent a user-authored alias.
-    @Test func theCatalogAliasGateHoldsOnTheCapPath() {
+    /// LaunchCatalog shorthand no longer reaches the cap path at all. "yt"
+    /// used to survive where "ig" and "the gram" deliberately did not; now
+    /// `Door.spokenForms` is the door's own name and nothing else, so every
+    /// catalogue nickname reaches silence alike. Inverted from the test this
+    /// used to be, which asserted "yt" still resolved.
+    @Test func theCatalogShorthandNoLongerResolvesOnTheCapPath() {
         let bare = PolicyState(budgetMinutes: 40,
                                downHours: DownHours(start: TimeOfDay(hour: 22),
                                                     end: TimeOfDay(hour: 7)),
@@ -731,7 +739,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
                                doorCaps: [:])
         #expect(parse("cap ig at 20", bare) == .silence)
         #expect(parse("put a 20 minute limit on the gram", bare) == .silence)
-        #expect(setsCap("cap yt at 15", bare)?.0 == "YouTube")
+        #expect(parse("cap yt at 15", bare) == .silence)
     }
 
     /// The GrantLedger interplay: a spend against a capped door grants at
@@ -783,18 +791,21 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 @Suite struct CapsAdversarialRound2Setters {
 
     /// The widened `intervenes` skip, exercised one cell past each pinned row:
-    /// the possessive under a different verb, the possessive on a one-token
-    /// alias (doorEnd's other branch), the bare determiner on a plain door
-    /// name, the two-token alias with a polite dative tail, and the alias
-    /// setter opened mid-sentence by a habit report.
+    /// the possessive under a different verb, the possessive on a second
+    /// one-token door name (doorEnd's other branch), the bare determiner on
+    /// a plain door name, a polite dative tail, and a setter opened
+    /// mid-sentence by a habit report. Two rows used to widen this over a
+    /// catalogue alias ("the gram"); `Door.spokenForms` is the name alone
+    /// now, so both are restated over the door's real name — the shape under
+    /// test (the dative tail, the habit-report opener) is unchanged.
     @Test(arguments: [
         ("limit my tiktok to 25", "TikTok", 25),
-        ("cap my insta at 30", "Instagram", 30),
+        ("cap my instagram at 30", "Instagram", 30),
         ("cap the tiktok at 20", "TikTok", 20),
         // "for me" trails as a beneficiary, not a recipient the dative arm
         // silences — the arm keys on the DOOR standing after the ask verb.
-        ("cap the gram at 20 for me", "Instagram", 20),
-        ("ive been doomscrolling so cap the gram at 25", "Instagram", 25),
+        ("cap instagram at 20 for me", "Instagram", 20),
+        ("ive been doomscrolling so cap instagram at 25", "Instagram", 25),
     ])
     func theWidenedDoorPhraseFloorHolds(_ row: (utterance: String, door: String, minutes: Int)) {
         let got = setsCap(row.utterance)
@@ -812,8 +823,11 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         // The carve-out inside the at-phrase: "than", not the negator, stands
         // on the number.
         ("cap tiktok at no more than 20", "TikTok", 20),
-        // The carve-out through a two-token alias doorEnd.
-        ("no more than 20 of the gram a day", "Instagram", 20),
+        // The carve-out through doorEnd on the door's own name — this row
+        // used to widen the same carve-out through a two-token catalogue
+        // alias ("the gram"); `Door.spokenForms` is the name alone now, so
+        // it is restated over "instagram".
+        ("no more than 20 of instagram a day", "Instagram", 20),
         // "never" leads a sealed idiom clause: not an opener, not a remover,
         // no number — all three earlier-claim arms stand down.
         ("never mind youtube, cap tiktok at 20", "TikTok", 20),
@@ -906,13 +920,13 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     @Test func theWhGuardAndTheNumberlessAskKeepWalking() {
         let a = spend("why would you cap tiktok? give me 20")
         #expect(a?.0 == "TikTok" && a?.1 == 20)
-        #expect(parse("can i get a limit on insta")
-                == .command(.placeBoundAsk(door: instagram)))
+        #expect(parse("can i get a limit on instagram")
+                == .writeItOut(door: instagram, minutes: nil))
         // The ask-verb exemption on the stranded-quantifier arm is not
         // verb-spelling-keyed: "let me have" walks to "How long?" exactly as
         // "give me tiktok max" does.
-        #expect(parse("let me have insta max")
-                == .command(.placeBoundAsk(door: instagram)))
+        #expect(parse("let me have instagram max")
+                == .writeItOut(door: instagram, minutes: nil))
     }
 
     /// FINDING 3's dative silence under attribution, modals, and both alias
@@ -943,9 +957,13 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 
     /// And the doorless dative frame with no cap noun anywhere IS the hot
     /// path — if the dative arm ever loosens from capNouns to the frame
-    /// shape, every third-person grant goes silent.
+    /// shape, every third-person grant goes silent. "give youtube 25
+    /// minutes" carried no opening verb even before the spend grammar
+    /// required one ("give" alone is not "give me"), so the frame is restated
+    /// with "unlock", keeping the verb-door-number order the finding is
+    /// about.
     @Test func theHotPathKeepsTheDoorlessDativeFrame() {
-        let a = spend("give youtube 25 minutes")
+        let a = spend("unlock youtube for 25 minutes")
         #expect(a?.0 == "YouTube" && a?.1 == 25)
     }
 
@@ -1130,12 +1148,15 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
         #expect(until == nil)
     }
 
-    /// FINDING 8 across punctuation and alias: a breath that is nothing but
-    /// a door's name strands the topic, and the pool does not move on it —
-    /// dash, comma, and period alike.
+    /// FINDING 8 across punctuation: a breath that is nothing but a door's
+    /// name strands the topic, and the pool does not move on it — dash,
+    /// comma, and period alike. Aliases used to widen this coverage
+    /// ("the gram", "insta"); both are unknown words now that
+    /// `Door.spokenForms` is the name alone, so the door's real name carries
+    /// the same two rows.
     @Test(arguments: [
-        "the gram - 20 a day",
-        "insta, 25 a day",
+        "instagram - 20 a day",
+        "instagram, 25 a day",
         // ADJUDICATED AGAINST THE ATTACKER, who wanted setBudget(45) on the
         // strength of "for everything": the promoted doctrine is
         // unconditional on the number clause's tail — a bare door name in
@@ -1365,7 +1386,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// not eat: the adjective stands BEFORE the number, shape one's
     /// `intervenes` scan never sees it, and the cap noun leads its door.
     @Test(arguments: [
-        ("set a strict 15 minute cap on insta", "Instagram", 15),
+        ("set a strict 15 minute cap on instagram", "Instagram", 15),
         ("put a hard 30 minute cap on youtube", "YouTube", 30),
     ])
     func anAdjectivedImperativeStillSets(_ row: (utterance: String, door: String, minutes: Int)) {
@@ -1757,9 +1778,9 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// a future widening of the frame must bring its own adversarial
     /// round. Pinned as the disclosed seam it is; above all, never a grant.
     @Test(arguments: [
-        "give insta a strict 15 minute cap",
+        "give instagram a strict 15 minute cap",
         "keep tiktok to a 20 minute limit",
-        "hold insta to a 30 minute cap",
+        "hold instagram to a 30 minute cap",
     ])
     func theFrameTerminationIsTheDisclosedSeam(_ utterance: String) {
         #expect(parse(utterance) == .silence, "\"\(utterance)\" kept walking")
@@ -1782,15 +1803,15 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// own "need" and "wanna".
     @Test(arguments: [
         ("can you please cap reddit at 25", "Reddit", 25),
-        ("could you set a 25 minute cap on insta for me", "Instagram", 25),
+        ("could you set a 25 minute cap on instagram for me", "Instagram", 25),
         ("like i said, cap tiktok at 20", "TikTok", 20),
-        ("im telling you, cap insta at 15", "Instagram", 15),
+        ("im telling you, cap instagram at 15", "Instagram", 15),
         ("actually, cap tiktok at 25", "TikTok", 25),
-        ("yeah actually cap insta at 15", "Instagram", 15),
+        ("yeah actually cap instagram at 15", "Instagram", 15),
         ("lets cap tiktok at 20", "TikTok", 20),
-        ("go ahead and cap insta at 15", "Instagram", 15),
+        ("go ahead and cap instagram at 15", "Instagram", 15),
         ("i need a 30 minute cap on youtube", "YouTube", 30),
-        ("i wanna cap insta at 15", "Instagram", 15),
+        ("i wanna cap instagram at 15", "Instagram", 15),
     ])
     func theSincereSettersStillLand(_ row: (utterance: String, door: String, minutes: Int)) {
         let got = setsCap(row.utterance)
@@ -2062,8 +2083,8 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// day" sets); the adjunct starves to a re-ask, the family's own
     /// failure direction.
     @Test func theTemporalAdjunctStarvesByTheClosedTailWhitelist() {
-        #expect(parse("capping insta at 15 starting now") == .silence)
-        #expect(setsCap("capping insta at 15 today").map { $0 == ("Instagram", 15) } == true)
+        #expect(parse("capping instagram at 15 starting now") == .silence)
+        #expect(setsCap("capping instagram at 15 today").map { $0 == ("Instagram", 15) } == true)
     }
 
     /// ADJUDICATED AGAINST THE STARVATION ATTACKER, who expected the
@@ -2299,8 +2320,8 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// fresh doors and numbers — if anything in the fix keyed on "set",
     /// "that", or the fixed sentence's shape, one of these starves.
     @Test(arguments: [
-        ("set this 15 minute cap on insta", "Instagram", 15),
-        ("put that 20 minute cap on insta", "Instagram", 20),
+        ("set this 15 minute cap on instagram", "Instagram", 15),
+        ("put that 20 minute cap on instagram", "Instagram", 20),
     ])
     func thePardonIsThePositionNotTheFoundToken(_ row: (utterance: String, door: String, minutes: Int)) {
         let got = setsCap(row.utterance)
@@ -2422,7 +2443,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// or the subtract-only promise breaks on the deliberate sets the n17
     /// fix swore to leave alone.
     @Test(arguments: [
-        ("but capping insta at 15 a day", "Instagram", 15),
+        ("but capping instagram at 15 a day", "Instagram", 15),
         ("so honestly capping tiktok at 30 a day", "TikTok", 30),
         ("tbh capping tiktok at 20 a day", "TikTok", 20),
     ])
@@ -2516,7 +2537,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     @Test(arguments: [
         ("should i cap tiktok at 20? tbh yeah", "TikTok", 20),
         ("should i cap tiktok at 20? probably yes", "TikTok", 20),
-        ("should i cap insta at 15? definitely", "Instagram", 15),
+        ("should i cap instagram at 15? definitely", "Instagram", 15),
     ])
     func anAffirmedOrAdverbOnlyAnswerKeepsItsCeiling(_ row: (utterance: String, door: String, minutes: Int)) {
         let got = setsCap(row.utterance)
@@ -2903,12 +2924,12 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// hour" the idiom's leading "half" stands behind "at" — not admitted
     /// — so the anchor falls through to "hour" behind "an" and the sealed
     /// go-ahead keeps its set; and the bare-hour habitual "an hour a day"
-    /// anchors the same way with the whitelisted tail releasing, on an
-    /// alias door.
+    /// anchors the same way with the whitelisted tail releasing, on a
+    /// second door.
     @Test func theAnchorFallsThroughTheUnadmittedHalf() {
         #expect(setsCap("capping tiktok at half an hour, do it")
                 .map { $0 == ("TikTok", 30) } == true)
-        #expect(setsCap("capping insta at an hour a day")
+        #expect(setsCap("capping instagram at an hour a day")
                 .map { $0 == ("Instagram", 60) } == true)
     }
 
@@ -2919,7 +2940,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// off-by-one onto "that" would turn the pardoned setter into the
     /// report it was pardoned from.
     @Test(arguments: [
-        ("honestly set that 20 minute cap on insta", "Instagram", 20),
+        ("honestly set that 20 minute cap on instagram", "Instagram", 20),
         ("so put that 20 minute cap on tiktok", "TikTok", 20),
     ])
     func theConsumedPreambleNeverShiftsTheDeterminerTest(_ row: (utterance: String, door: String, minutes: Int)) {
@@ -2973,7 +2994,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// exactly as the pre-union floors are pinned.
     @Test(arguments: [
         ("should i cap tiktok at 20? ngl yeah", "TikTok", 20),
-        ("should i cap insta at 15? fr", "Instagram", 15),
+        ("should i cap instagram at 15? fr", "Instagram", 15),
     ])
     func theNewestMembersHoldNoDecline(_ row: (utterance: String, door: String, minutes: Int)) {
         let got = setsCap(row.utterance)

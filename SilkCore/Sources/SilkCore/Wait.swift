@@ -26,7 +26,7 @@ import Foundation
 ///     eight seconds ago.
 ///
 /// Deliberately **not** `Codable`. A wait is a moment, and it dies with the
-/// process that held it — see `Wait.diesWithTheProcess` for why that is the
+/// process that held it — see the note above `staleAfter` for why that is the
 /// fail-closed direction and not a gap.
 public struct Wait: Equatable, Sendable {
 
@@ -172,17 +172,16 @@ public struct Wait: Equatable, Sendable {
         watched(at: reading) >= length
     }
 
-    /// A wait can only END while it is being watched — which is the property
-    /// that makes the whole design honest, and it is worth naming because two
-    /// surfaces depend on it.
-    ///
-    /// `watched(at:)` moves only inside a watching span, so `isOver` cannot
-    /// turn true while nobody is looking. There is therefore no state in which
-    /// she returns to Silk and finds a finished wait sitting there waiting to
-    /// be dismissed — she is always present at the instant it lands. The door
-    /// opening is a thing she watched happen, and the launch is always made
-    /// from a foreground app.
-    public var canOnlyEndWhileWatched: Bool { true }
+    // A wait can only END while it is being watched — which is the property
+    // that makes the whole design honest, and it is worth naming because two
+    // surfaces depend on it.
+    //
+    // `watched(at:)` moves only inside a watching span, so `isOver` cannot
+    // turn true while nobody is looking. There is therefore no state in which
+    // she returns to Silk and finds a finished wait sitting there waiting to
+    // be dismissed — she is always present at the instant it lands. The door
+    // opening is a thing she watched happen, and the launch is always made
+    // from a foreground app.
 
     // MARK: - Staleness
 
@@ -224,5 +223,4 @@ public struct Wait: Equatable, Sendable {
     /// surviving a kill, keyed to a verdict computed against a ledger and a
     /// clock that have both moved since, is a great deal of machinery to
     /// preserve a few seconds of watching that the user can simply watch again.
-    public static let diesWithTheProcess = true
 }

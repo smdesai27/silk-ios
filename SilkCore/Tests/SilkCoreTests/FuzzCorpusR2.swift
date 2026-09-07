@@ -16,7 +16,7 @@ import Testing
 
 // MARK: - Fixtures (the canonical shapes from SilkCoreTests/StressTests)
 
-private let instagram = Door(name: "Instagram", aliases: ["ig", "insta", "the gram"])
+private let instagram = Door(name: "Instagram")
 private let tiktok = Door(name: "TikTok")
 private let reddit = Door(name: "Reddit")
 private let youtube = Door(name: "YouTube")
@@ -35,9 +35,9 @@ private func makeCappedState(budget: Int = 40) -> PolicyState {
 /// Doors whose spoken forms collide with each other and with the plain
 /// fixtures' aliases — the third state NO_CRASH_ONLY rows run against.
 private let confusingDoors = [
-    Door(name: "Instagram", aliases: ["ig", "insta", "the gram", "gram"]),
+    Door(name: "Instagram"),
     Door(name: "Insta"),
-    Door(name: "TikTok", aliases: ["tik", "tok"]),
+    Door(name: "TikTok"),
     Door(name: "X"),
 ]
 
@@ -216,10 +216,11 @@ private func fmt(_ d: Date) -> String {
 private func render(_ o: ParseOutcome) -> String {
     switch o {
     case .silence: return "UNPARSED-to-widener"
+    case .writeItOut(let d, let m):
+        return "WRITE_IT_OUT door=\(d.name) minutes=\(m.map(String.init) ?? "none")"
     case .command(let c):
         switch c {
         case .spend(let d, let m): return "SPEND(\(d.name), \(m))"
-        case .placeBoundAsk(let d): return "PLACE_BOUND_ASK(\(d.name))"
         case .closeDoorToday(let d, let u): return "CLOSE(\(d.name), until: \(u.map(fmt) ?? "nil"))"
         case .closeAllToday(let u): return "CLOSE_ALL(until: \(u.map(fmt) ?? "nil"))"
         case .setBudget(let m): return "SET_BUDGET(\(m))"
@@ -251,7 +252,8 @@ private func render(_ v: Verdict) -> String {
     case .downHours(let w): return "DOWN_HOURS(\(fmt(w.start))-\(fmt(w.end)))"
     case .refuseNothingLeft: return "REFUSE_NOTHING_LEFT"
     case .refuseDownHours(let u): return "REFUSE_DOWN_HOURS(until \(fmt(u)))"
-    case .refuseSayHowManyMinutes: return "REFUSE_HOW_LONG"
+    case .refuseWriteItOut(let d, let m):
+        return "WRITE_IT_OUT door=\(d.name) minutes=\(m.map(String.init) ?? "none")"
     case .refuseSayAmOrPm(let t): return "REFUSE_AM_OR_PM(at \(fmt(t)))"
     case .refuseDoorNeedsApp: return "REFUSE_DOOR_NEEDS_APP"
     case .refuseDoorClosed(let d, let u): return "REFUSE_DOOR_CLOSED(\(d.name), until \(fmt(u)))"
@@ -297,8 +299,12 @@ private func expectedOutcome(_ head: String) throws -> ParseOutcome {
     case "SPEND":
         return .command(.spend(door: try fixtureDoor(req(kv, "door")),
                                minutes: try specInt(req(kv, "minutes"))))
-    case "PLACE_BOUND_ASK":
-        return .command(.placeBoundAsk(door: try fixtureDoor(req(kv, "door"))))
+    case "WRITE_IT_OUT":
+        // `minutes=none` is the shape `render` prints for a sentence that
+        // named a door and no duration, so a re-pinned row round-trips.
+        let spelled = kv["minutes"] ?? "none"
+        return .writeItOut(door: try fixtureDoor(req(kv, "door")),
+                           minutes: spelled == "none" ? nil : try specInt(spelled))
     case "CLOSE":
         return .command(.closeDoorToday(door: try fixtureDoor(req(kv, "door")),
                                         until: try kv["until"].map(specTime)))
@@ -461,8 +467,12 @@ private func verdictMismatch(_ row: FuzzCorpusRow, head: String, built: BuiltCas
         let expected = Verdict.refuseDownHours(until: try specTime(req(kv, "until")))
         return actual == expected ? nil : fail(render(expected))
 
-    case "REFUSE_HOW_LONG":
-        return actual == .refuseSayHowManyMinutes ? nil : fail("REFUSE_HOW_LONG")
+    case "WRITE_IT_OUT":
+        let spelled = kv["minutes"] ?? "none"
+        let expected = Verdict.refuseWriteItOut(
+            door: try fixtureDoor(req(kv, "door")),
+            minutes: spelled == "none" ? nil : try specInt(spelled))
+        return actual == expected ? nil : fail(render(expected))
 
     case "REFUSE_AM_OR_PM":
         let expected = Verdict.refuseSayAmOrPm(at: try specTime(req(kv, "at")))

@@ -501,6 +501,7 @@ struct Hedgerow: View, @MainActor Animatable {
 
 // MARK: - Preview
 
+#if DEBUG
 #Preview("Hedgerow — the ladder") {
     ScrollView(.horizontal) {
         HStack(spacing: 16) {
@@ -518,3 +519,4 @@ struct Hedgerow: View, @MainActor Animatable {
     }
     .background(Silk.linen)
 }
+#endif

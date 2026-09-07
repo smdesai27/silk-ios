@@ -49,9 +49,9 @@ private func makeState(budget: Int = 240) -> PolicyState {
     PolicyState(
         budgetMinutes: budget,
         downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
-        doors: [Door(name: "Instagram", aliases: ["ig", "insta"]),
+        doors: [Door(name: "Instagram"),
                 Door(name: "TikTok"),
-                Door(name: "YouTube", aliases: ["yt"]),
+                Door(name: "YouTube"),
                 Door(name: "Reddit")]
     )
 }
@@ -72,7 +72,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         ("give me 2 hours of tiktok", 120),
         ("give me 2 hrs of tiktok", 120),
         ("give me two hours of tiktok", 120),
-        ("tiktok for 3 hours", 180),
+        ("unlock tiktok for 3 hours", 180),
         ("give me 2 h of tiktok", 120),
     ])
     func aStatedHourIsSixtyMinutes(_ row: (utterance: String, minutes: Int)) {
@@ -85,9 +85,9 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// unit reading cannot see them to double them.
     @Test(arguments: [
         ("give me an hour of tiktok", 60),
-        ("half an hour of tiktok", 30),
-        ("an hour and a half of tiktok", 90),
-        ("a quarter of an hour of tiktok", 15),
+        ("give me half an hour of tiktok", 30),
+        ("give me an hour and a half of tiktok", 90),
+        ("give me a quarter of an hour of tiktok", 15),
     ])
     func theIdiomsAreUnchanged(_ row: (utterance: String, minutes: Int)) {
         #expect(spend(row.utterance)?.1 == row.minutes, "\"\(row.utterance)\"")
@@ -164,7 +164,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     @Test(arguments: ["give me 20min of youtube", "give me 45m of youtube",
                       "give me 2h of youtube", "give me 90m of youtube"])
     func aGluedDurationReachesTheAskRatherThanTheGrant(_ utterance: String) {
-        guard case .command(.placeBoundAsk) =
+        guard case .writeItOut =
                 DeterministicParser.parse(utterance, state: makeState()) else {
             if case .command(.spend(_, let m)) =
                 DeterministicParser.parse(utterance, state: makeState()) {
@@ -186,7 +186,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     }
 
     /// The spaced spellings carry the same meaning and are read.
-    @Test(arguments: [("20 min of youtube", 20), ("give me 20 minutes of youtube", 20),
+    @Test(arguments: [("give me 20 min of youtube", 20), ("give me 20 minutes of youtube", 20),
                       ("give me 2 hours of youtube", 120)])
     func theSpacedSpellingsStillRead(_ row: (utterance: String, minutes: Int)) {
         #expect(spend(row.utterance)?.1 == row.minutes, "\"\(row.utterance)\"")
@@ -393,7 +393,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         let state = makeState()
         #expect(spend("dont give me more than 10 of tiktok", state)?.1 == 10)
         #expect(spend("dont close instagram, just give me 10", state)?.1 == 10)
-        #expect(spend("no more than 20 of tiktok", state)?.1 == 20)
+        #expect(spend("give me no more than 20 of tiktok", state)?.1 == 20)
     }
 
     /// And a close is still a close. "no more tiktok" is the canonical closing
@@ -620,8 +620,8 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         ("give me a 2-hour break from tiktok", 120),
         ("give me 2-hours of tiktok", 120),
         ("give me a 2-hr break from tiktok", 120),
-        ("tiktok for a 2-hour break", 120),
-        ("two-hour tiktok session", 120),
+        ("unlock tiktok for a 2-hour break", 120),
+        ("give me a two-hour tiktok session", 120),
         ("give me a 3-hour tiktok pass", 180),
     ])
     func aHyphenatedDurationReadsLikeASpacedOne(_ row: (utterance: String, minutes: Int)) {
@@ -646,7 +646,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// number.
     @Test func commasStillBoundAndCompoundsStillJoin() {
         #expect(NumberParser.allNumbers(in: "give me tiktok for 20, hours of homework left") == [20])
-        #expect(spend("twenty-five minutes of tiktok")?.1 == 25)
+        #expect(spend("give me twenty-five minutes of tiktok")?.1 == 25)
         #expect(NumberParser.allNumbers(in: "give me a 2-hour break from tiktok") == [120])
         // "one-hundred" now poisons exactly as "one hundred" does — the two
         // spellings the tokenizer equates answer alike.
@@ -779,7 +779,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         ("give me 2 whole hours of tiktok", 120),
         ("give me 2 full hours of tiktok", 120),
         ("give me 2 entire hours of tiktok", 120),
-        ("tiktok for 3 whole hours", 180),
+        ("unlock tiktok for 3 whole hours", 180),
     ])
     func anIntensifiedHourIsStillSixtyMinutes(_ row: (utterance: String, minutes: Int)) {
         #expect(spend(row.utterance)?.1 == row.minutes, "\"\(row.utterance)\"")

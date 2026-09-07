@@ -210,9 +210,9 @@ let shots = [
          capture: "shot-02.png", slack: 0),
     Shot(number: "03",
          caption: """
-         Type \u{201C}Instagram, ten.\u{201D}
-         It opens for ten minutes
-         and locks again.
+         Write \u{201C}unlock Instagram
+         for 10 min.\u{201D} It opens
+         for ten and locks again.
          """,
          capture: "shot-03.png", slack: 0),
     // Broken short and even rather than at the sentence's own comma. One

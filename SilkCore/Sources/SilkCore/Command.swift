@@ -5,11 +5,6 @@ import Foundation
 public enum Command: Equatable, Sendable {
     /// Grant minutes on a door, now. The only hot-path intent.
     case spend(door: Door, minutes: Int)
-    /// A grant tied to a place, with no number. Understandable but not
-    /// executable — the compiler answers "Say how many minutes."
-    /// (docs/market/open-language.md: a condition can start a grant;
-    /// only a number can end one.)
-    case placeBoundAsk(door: Door)
     /// Close a door, until a stated hour or (nil) the rest of today.
     /// "block tiktok until 9" carries the 9; "no more tiktok" carries nothing
     /// and rests to the day boundary. Tightening; instant either way.
@@ -40,5 +35,17 @@ public enum Command: Equatable, Sendable {
 /// parses or two parses both end here, and Silk says nothing new.
 public enum ParseOutcome: Equatable, Sendable {
     case command(Command)
+    /// The sentence was a PARTIAL SPEND: it named a door, or a number, or
+    /// both, but not the opening verb that turns a mention into an ask. Here
+    /// is the door it named (or the first door, when it named none) and the
+    /// minutes it said (nil when it said none) — everything the guidance
+    /// reply needs to show the user the exact sentence that would grant.
+    ///
+    /// A POSITIVE outcome, and that is the whole of its job. A bare "instagram
+    /// 10" used to compile straight to a grant; refusing it with silence would
+    /// hand the sentence to the widener, which would guess at it. This is the
+    /// third answer: nothing is debited, nothing opens, and the turn ends here
+    /// with the sentence written out.
+    case writeItOut(door: Door, minutes: Int?)
     case silence
 }

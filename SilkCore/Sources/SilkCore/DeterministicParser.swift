@@ -99,7 +99,7 @@ public enum DeterministicParser {
         // door or ask to be let in. Without those two guards, "give me 20
         // minutes of tiktok before bedtime" reads its 20 as 8 PM and a spend
         // request lands as a global tighten.
-        if windowMention, door == nil, !hasOpeningVerb(text) {
+        if windowMention, door == nil, !hasOpeningVerb(tokens) {
             // One reading of the edge, used twice: the evening assumption and
             // the setter must never disagree about which edge this is, or a
             // stated 7 becomes 19:00 and then lands on the end.
@@ -420,8 +420,16 @@ public enum DeterministicParser {
         // 6. PLACE-BOUND SPEND — a door plus a place-phrase and no number at
         //    all. "give me instagram until i leave the gym" / "while im at the
         //    gym…"
+        //    A condition can start a grant; only a number can end one. The
+        //    answer is no longer "How long?" — a question that took whatever
+        //    fragment came back as the whole ask — but the sentence itself.
+        //    NOT WHEN THE ASK IS NEGATED. "dont give me instagram while im at
+        //    work" is a rule she is stating, not a sentence to be written out
+        //    for her; the refusal below is rule 7's own, read here so the two
+        //    halves of the spend grammar cannot disagree about "dont".
         if let d = door, hasPlaceBinding(text), numbers.isEmpty {
-            return .command(.placeBoundAsk(door: d))
+            guard !aNegatorRefusesTheAsk(clauses()) else { return .silence }
+            return .writeItOut(door: d, minutes: nil)
         }
 
         // 7. SPEND — the hot path. A door and exactly one number, with the door
@@ -490,28 +498,125 @@ public enum DeterministicParser {
             // and a debited pool, and the parse being non-silent meant the
             // widener never saw it.
             guard !reportsRatherThanSpends(clauses(), state: state) else { return .silence }
+            // AND AN ASK NEEDS A VERB. This is the one point in the file that
+            // mints minutes, and until now a door standing next to a number
+            // was enough: "instagram 10" opened Instagram for ten minutes,
+            // and so did every sentence that happened to mention an app and a
+            // quantity in one breath. A door and a number are the OBJECT and
+            // the AMOUNT of a request; the request itself is the verb, and
+            // nothing here required one.
+            //
+            // NOT SILENCE. Silence would hand the shortcut to the widener,
+            // which is a model, and a model asked to read "instagram 10" will
+            // read it as the grant this line just refused — the tightening
+            // would last exactly as long as it took to reach the fallback.
+            // `.writeItOut` terminates the turn on a POSITIVE answer that
+            // debits nothing and shows the sentence that would grant, so the
+            // next thing typed is a sentence this rule can mint from.
+            //
+            // The commitment frame counts as the verb. "im using instagram for
+            // 5 minutes" carries "using" on the list; "i'm going on instagram
+            // for 10" and "i'm spending 10 on instagram" carry the gerund of
+            // one, which no token match can see — see `statesACommitment`,
+            // which the mood gate above just consulted for the same sentence.
+            guard hasOpeningVerb(tokens) || statesACommitment(clauses(), state: state) else {
+                return .writeItOut(door: d, minutes: n)
+            }
             return .command(.spend(door: d, minutes: n))
         }
 
         // 8. ELLIPTICAL ASK — a door named with an opening verb and no duration.
         //    "give me instagram" is a real request missing one word, and the
-        //    answer is that word: "How long?" Silence here read as not listening.
+        //    answer is the whole sentence with the word in it: "Write it out:
+        //    unlock Instagram for 10 min." Silence here read as not listening.
         //    (docs/design/handoff/Silk Mockup.dc.html:322)
         //    NO duration means NONE: "give me ten or twenty of tiktok" has no
-        //    single number, but asking "How long?" of a sentence that stated
+        //    single number, but writing a sentence out for somebody who stated
         //    two durations is not listening either — that ambiguity is the
         //    widener's, exactly as rule 7 refuses it.
-        if let d = door, numbers.isEmpty, hasOpeningVerb(text) {
-            return .command(.placeBoundAsk(door: d))
+        //    AND NOT WHEN THE VERB IS NEGATED. "dont give me tiktok",
+        //    "whatever you do do not open instagram tonight" carry an opening
+        //    verb and mean its opposite; handing back "Write it out: unlock
+        //    TikTok for 10 min." to somebody refusing TikTok is not listening
+        //    either. Rule 7's negator guard, for the same reason it is read in
+        //    rule 6: one refusal for every shape of the ask.
+        if let d = door, numbers.isEmpty, hasOpeningVerb(tokens) {
+            guard !aNegatorRefusesTheAsk(clauses()) else { return .silence }
+            return .writeItOut(door: d, minutes: nil)
+        }
+
+        // 9. THE NUMBER ALONE — "10", "10 minutes", "ten min please". Somebody
+        //    who was just handed "Write it out: unlock Instagram for 10 min."
+        //    and typed back the part she thought was missing.
+        //
+        //    LAST, after every rule that can claim a sentence, so nothing loses
+        //    one: "budget 30" is still a setter and reaches this line never.
+        //    The tokens must be the number and NOTHING but units and filler —
+        //    an unrecognised word means the sentence is prose and prose is the
+        //    widener's, exactly as it was before this rule existed.
+        //
+        //    The door is the FIRST door, because a number names none and the
+        //    hint has to name one to be a sentence. It is a guess, and it is
+        //    free: nothing is debited, nothing opens, and the user reads the
+        //    door's name in the reply before she types it.
+        if let n = number, isBareQuantity(tokens) {
+            guard let first = state.doors.first else { return .silence }
+            return .writeItOut(door: first, minutes: n)
+        }
+
+        // 10. THE DOOR ALONE — "instagram", "tiktok please". The other half of
+        //     the same fragment, and the same answer with the minutes left for
+        //     the hint to supply.
+        if numbers.isEmpty, let d = bareDoor(tokens, state: state) {
+            return .writeItOut(door: d, minutes: nil)
         }
 
         return .silence
     }
 
+    /// Whether the sentence is a QUANTITY and nothing else — the number, its
+    /// unit, and the words that carry neither meaning nor a proposition.
+    ///
+    /// A whitelist, for the reason every whitelist in this file is one: written
+    /// as "no verb and no door" it would claim arbitrary prose, and this rule
+    /// stands after every other, where a wrong claim silently takes a sentence
+    /// off some earlier rule's successor. Every token must be either part of
+    /// the number ("twenty five" is two tokens and one quantity) or a word on
+    /// the list.
+    private static func isBareQuantity(_ tokens: [String]) -> Bool {
+        !tokens.isEmpty && tokens.allSatisfy { tok in
+            bareQuantityWords.contains(tok) || !NumberParser.allNumbers(in: tok).isEmpty
+        }
+    }
+
+    /// The units and filler a bare quantity may wear. Minutes only: "2 hours"
+    /// is a quantity this product cannot spend in a day it has already capped
+    /// at one, and a bare "2 hours" is more likely a report than an ask.
+    private static let bareQuantityWords: Set<String> = [
+        "min", "mins", "minute", "minutes", "m", "for", "of", "please", "pls",
+    ]
+
+    /// The door named with nothing but politeness around it: "instagram",
+    /// "tiktok please". Matched through `door(_:in:)` like every other door in
+    /// this file, so the deinflection ("hinges") is the same one, and matched
+    /// on the WHOLE remainder so a second noun refuses.
+    private static func bareDoor(_ tokens: [String], state: PolicyState) -> Door? {
+        // A door name is one token or two, and the politeness is one more, so
+        // four is already more than this shape can be. The bound is here and
+        // not inside the filter because it is what keeps a ten-thousand-word
+        // paste from allocating a ten-thousand-word string on the way to `nil`
+        // (`hugeInputStaysCheapAndSilent`).
+        guard (1...4).contains(tokens.count) else { return nil }
+        let rest = tokens.filter { $0 != "please" && $0 != "pls" }
+        guard !rest.isEmpty else { return nil }
+        return door(rest.joined(separator: " "), in: state)
+    }
+
     // MARK: - Doors
 
     private static func firstDoor(in tokens: [String], state: PolicyState) -> Door? {
-        // Single-token names and aliases.
+        // Single-token names. A door answers to its NAME and to nothing
+        // else now (Door.spokenForms), so there is no nickname table to walk.
         for tok in tokens {
             if let d = door(tok, in: state) { return d }
         }
@@ -524,7 +629,9 @@ public enum DeterministicParser {
 
     /// One door name, matched through its inflections. Every door recognizer in
     /// this file goes through here so they cannot disagree about what counts as
-    /// a name.
+    /// a name — and what counts is the door's own name, case-folded, plus the
+    /// trailing "s" this function strips. No aliases, no catalogue nicknames:
+    /// "10 minutes of insta" names no door at all now.
     ///
     /// "tiktok's daily limit is 20" and "tiktoks daily limit is 20" are one
     /// sentence with one meaning, and they parsed differently because the
@@ -770,9 +877,9 @@ public enum DeterministicParser {
     /// a request to remove a restriction by installing one.
     private static let ceilingPrepositions: Set<String> = ["to", "at", "of", "under", "below"]
 
-    /// The verbs that ask to be let in, as TOKENS — `hasOpeningVerb` matches
-    /// phrases in the raw text, which cannot say WHERE the verb stands, and the
-    /// cap rules need the position. "lemme" is the same word as "let me": the
+    /// The verbs that ask to be let in, as SINGLE TOKENS — `hasOpeningVerb`
+    /// answers only whether the sentence carries one anywhere, and the cap
+    /// rules need the position. "lemme" is the same word as "let me": the
     /// tokenizer keeps it whole, so the two spellings reach here as one token
     /// and as two, and "lemme have under 20 of tiktok" compiled to a permanent
     /// ceiling while "let me have under 20 of tiktok" spent.
@@ -785,6 +892,14 @@ public enum DeterministicParser {
     /// its own, and a lexeme with no sentence is a lexeme that cannot be tested.
     private static let askVerbs: Set<String> = ["give", "gimme", "let", "open",
                                                 "unlock", "want", "need", "have"]
+
+    /// The opening verbs `askVerbs` does not carry — the stems the spend
+    /// grammar added when it made the verb list the thing that mints minutes.
+    /// Read ONLY by `aNegatorRefusesTheAsk`, the spend path's own refusal, so
+    /// a stem here can turn a grant into silence and can do nothing else. The
+    /// cap family keeps reading `askVerbs` alone, which is the lexicon its own
+    /// rows were pinned against.
+    private static let unaskedOpeningVerbs: Set<String> = ["spend", "use", "go", "get"]
 
     /// The words that can stand INSIDE a ceiling's own noun phrase: a
     /// determiner, a number, a measure or period word, the door being talked
@@ -2293,8 +2408,8 @@ public enum DeterministicParser {
             // max on tiktok" states a daily maximum.
             //
             // The frame is read as TOKENS IN THIS CLAUSE, which is the whole
-            // repair. `hasOpeningVerb` is six phrases matched against the whole
-            // utterance, and the comment eight lines above says a frame list
+            // repair. `hasOpeningVerb` answers for the whole utterance and
+            // cannot say where its verb stands, and the comment eight lines above says a frame list
             // "could tell them apart in neither direction: 'i need' was never on
             // it" — and then the code used one, so "i need under 20 of tiktok"
             // and "gimme under 20 of tiktok" compiled to ceilings while "give me
@@ -2974,9 +3089,33 @@ public enum DeterministicParser {
             // can only widen a refusal, never a grant.
             var verbAt = i + 1
             if verbAt < t.count, t[verbAt] == "ever" { verbAt += 1 }
-            guard verbAt < t.count, askVerbs.contains(t[verbAt]),
+            // THE LEXICON IS THE ONE THE MINT USES. `askVerbs` predates the
+            // spend grammar's opening-verb authority and never learned its
+            // last four stems, so "dont USE instagram for 10 minutes", "dont
+            // SPEND 10 minutes on instagram", "dont GET on instagram for 10
+            // minutes" and "no USE, instagram for 10" each bought ten minutes
+            // of the app the sentence was refusing — while "dont OPEN
+            // instagram for 10 minutes", the same sentence with a stem this
+            // set already held, fell silent. The refusal has to read whatever
+            // the grant reads or it is a guard with holes in the shape of the
+            // newest verbs.
+            //
+            // STEMS ONLY, and only here: `askVerbs` is read by the cap family
+            // too, and this is the spend path's own refusal, whose every
+            // answer is a silence.
+            guard verbAt < t.count,
+                  askVerbs.contains(t[verbAt]) || unaskedOpeningVerbs.contains(t[verbAt]),
                   let clause = index.clauseRange(containing: i), clause.contains(verbAt)
             else { continue }
+            // AND THOSE TWO NEED THEIR PARTICLE. "go" and "get" mean the app
+            // only as "go on"/"get on" — the same fact `particledGerunds`
+            // reads on the commitment side. Without this the refusal claims
+            // "dont get mad, give me 10 minutes of instagram", which is an ask
+            // with a preamble, and a guard that eats asks is how a widening
+            // pays for itself twice.
+            if t[verbAt] == "go" || t[verbAt] == "get" {
+                guard verbAt + 1 < t.count, t[verbAt + 1] == "on" else { continue }
+            }
             // The bounded-ask carve is scoped to the immediate "dont": "dont
             // give me more than 10 of tiktok" negates the exceeding. "NEVER
             // open insta for more than 20 minutes" is a standing rule, and
@@ -3071,6 +3210,11 @@ public enum DeterministicParser {
         if !ahead.contains(where: { whWords.contains(t[$0]) }),
            clause.contains(where: { requestModals.contains(t[$0]) }) { return false }
         if statesAVolition(t, clause: clause) { return false }
+        // AN INVERSION IS A REQUEST, not the question a fronted auxiliary
+        // usually marks — see `anInversionOpensTheClause`. Beside the two
+        // exemptions above because it is the same kind of fact: the mood is
+        // marked by the clause's own opening, ahead of every scan.
+        if anInversionOpensTheClause(t, clause: clause) { return false }
         let asks = clause.contains { askVerbs.contains(t[$0]) }
         // QUOTED SPEECH: a speech verb ahead of the quantity is somebody
         // else's sentence being reported — but only the RESUMING frame proves
@@ -3082,6 +3226,18 @@ public enum DeterministicParser {
            clause.contains(where: { auxiliaries.contains(t[$0]) && !modals.contains(t[$0]) }) {
             return true
         }
+        // A COMMITMENT IS AN ASK. "im using instagram for 5 minutes" speaks
+        // its subject and conjugates a gerund, so the two arms below — the
+        // spoken-subject arm and the habit-participle arm — each silenced it
+        // twice over, and the sentence a person types when she is being
+        // honest with the machine about what she is about to do got the same
+        // answer as a report of yesterday's screen time.
+        //
+        // AFTER the quoted-speech arm, so an attributed commitment stays
+        // somebody else's sentence, and behind four guards of its own
+        // (`statesACommitment`) so a habit, a perfect, a past and a two-number
+        // ambiguity are all still reports.
+        if statesACommitment(index, state: state) { return false }
         // A spoken subject ahead of the quantity is a report — unless an ask
         // verb shares the clause: "ive hit my limit give me 20 of tiktok" is
         // commentary and then an ask, and the ask wins.
@@ -3503,11 +3659,258 @@ public enum DeterministicParser {
         return bindings.contains { text.contains($0) }
     }
 
-    /// Words that mean "let me in". Without one of these a bare door name is a
-    /// mention, not a request, and silence is still the right answer.
-    private static func hasOpeningVerb(_ text: String) -> Bool {
-        ["give me", "open", "let me", "unlock", "i want", "can i"].contains { text.contains($0) }
+    /// THE OPENING VERBS. One authority, read by rule 2's window guard, by
+    /// rule 8's elliptical ask, and — since the spend grammar was tightened —
+    /// by the one point in this file that mints a grant.
+    ///
+    /// Words that mean "let me in". Without one of these a door and a number
+    /// are a MENTION of an app and a quantity, not a request for either, and
+    /// "instagram 10" no longer buys ten minutes of Instagram: it is answered
+    /// with the sentence that would ("Write it out: unlock Instagram for 10
+    /// min."). The grammar's whole hot path now hangs off this list, so it is
+    /// written once here and nowhere else.
+    ///
+    /// TOKEN-BOUNDED, and that is not a detail. The old test was
+    /// `text.contains("open")`, a substring over the raw utterance, which said
+    /// yes to "opening", "reopen", "openly" and to the "i want" inside "hi
+    /// wanted". A verb has to occupy whole tokens or the list quietly means
+    /// something wider than it says, and this list now decides whether minutes
+    /// leave the pool.
+    ///
+    /// The multi-word entries match CONSECUTIVE tokens, which is the same
+    /// rule: "can i" is two tokens side by side, never "can" somewhere and "i"
+    /// somewhere else.
+    private static let openingVerbs: [String] = [
+        "give me", "gimme", "open", "let me", "lemme", "unlock",
+        "i want", "i need", "can i", "could i", "may i",
+        "spend", "use", "using", "go on", "get on",
+    ]
+
+    /// `openingVerbs`, cut into tokens once. The lookup below walks the
+    /// sentence a single time, so a ten-thousand-word paste pays one set
+    /// membership test per token and not sixteen substring searches.
+    private static let openingVerbPhrases: [[String]] =
+        openingVerbs.map { $0.split(separator: " ").map(String.init) }
+    private static let openingVerbHeads: Set<String> =
+        Set(openingVerbPhrases.compactMap(\.first))
+
+    /// Whether the sentence carries an opening verb.
+    ///
+    /// Takes TOKENS and not text: `parse` has already tokenized, and a second
+    /// tokenization here is both wasted work on the hot path and a second
+    /// answer to "what are the words of this sentence" — the mistake this
+    /// file's clause index exists to refuse.
+    private static func hasOpeningVerb(_ tokens: [String]) -> Bool {
+        for i in tokens.indices where openingVerbHeads.contains(tokens[i]) {
+            // A COPULA OR A DETERMINER STANDING ON THE WORD MAKES IT SOMETHING
+            // ELSE. Half these lexemes are also nouns and adjectives — "open",
+            // "use", "spend" — and a list that mints minutes cannot read them
+            // wherever they fall.
+            //
+            // The sentence that forces it is SILK'S OWN RECEIPT. A grant is
+            // confirmed as "Instagram is open for 15 min." (SilkStrings
+            // .isOpenFor), and that sentence typed or pasted back carried a
+            // door, a number and the token "open", so it minted a SECOND
+            // fifteen minutes: another debit of the pool, another re-lock
+            // window, out of the app's own words. The hint's own comment
+            // (Strings.swift) pins the forward direction — "the hint typed
+            // back verbatim grants" — and this is the same seam facing the
+            // other way, which nothing was checking.
+            //
+            // "the open tab of instagram for 10 minutes" is the determiner
+            // half of it: a noun phrase, an app and a quantity, no request.
+            //
+            // ONLY THE AMBIGUOUS WORDS, and the round found out why the hard
+            // way: written over the whole list it read "im done after THIS,
+            // GIVE me ten minutes of instagram" as a noun phrase and stopped
+            // minting the corpus's own ask. "give me", "let me", "unlock",
+            // "can i" are verbs in every sentence English has; "open", "use"
+            // and "spend" are the three that are also things.
+            if i > tokens.startIndex, ambiguousOpeningVerbs.contains(tokens[i]),
+               copulas.contains(tokens[i - 1]) || determiners.contains(tokens[i - 1]) { continue }
+            for phrase in openingVerbPhrases where phrase[0] == tokens[i] {
+                guard i + phrase.count <= tokens.count else { continue }
+                if (1..<phrase.count).allSatisfy({ tokens[i + $0] == phrase[$0] }) { return true }
+            }
+        }
+        return false
     }
+
+    /// The copula, in the spellings the tokenizer produces — "instagram's open
+    /// for 10" reaches here as ["instagram", "s", "open"], because an
+    /// apostrophe splits. Read ONLY by the guard above, where every entry can
+    /// do one thing: take a word back off the opening-verb list, which is the
+    /// direction that costs a sentence rather than a debit.
+    private static let copulas: Set<String> = [
+        "is", "isnt", "are", "arent", "was", "wasnt", "were", "werent",
+        "am", "be", "been", "being", "s",
+    ]
+
+    /// The opening verbs that are also ordinary nouns and adjectives — "the
+    /// open tab", "my instagram spend", "no use". The only entries the guard
+    /// above may take back off the list, because they are the only ones whose
+    /// second reading exists.
+    private static let ambiguousOpeningVerbs: Set<String> = ["open", "use", "using", "spend"]
+
+    /// The `-ing` of the opening verbs, for the one frame that spells them
+    /// that way: the user's own commitment. "im USING instagram for 5
+    /// minutes", "i'm GOING ON instagram for 10", "i'm SPENDING 10 on
+    /// instagram" are asks — she is telling Silk what she is about to do — and
+    /// the mood gate silenced every one of them as a habit report.
+    ///
+    /// Spelled out rather than derived, because English drops and doubles
+    /// letters on the way to a gerund (use → using, get → getting) and a
+    /// derivation that gets one of those wrong is a grant that does not land.
+    /// Read ONLY inside `statesACommitment`, whose frame is narrow enough that
+    /// an entry here cannot widen anything else.
+    private static let commitmentGerunds: Set<String> = [
+        "using", "spending", "going", "getting", "opening", "unlocking",
+    ]
+
+    /// The two commitment gerunds whose verb is a phrasal one: "go on" and
+    /// "get on" mean the app only with their particle. "im going to bed" and
+    /// "im getting instagram off my phone" are not asks.
+    private static let particledGerunds: Set<String> = ["going", "getting"]
+
+    /// THE USER'S OWN COMMITMENT — a first-person present-progressive sentence
+    /// whose verb is an opening verb, carrying exactly one number and no
+    /// period. "im using instagram for 5 minutes", "i'm going on instagram for
+    /// 10", "i'm spending 10 on instagram".
+    ///
+    /// It is an ASK, and it reads as one nowhere else in this file: the
+    /// sentence speaks its subject, which `reportsRatherThanSpends` reads as a
+    /// report, and its verb is a gerund, which the same gate reads as a habit
+    /// participle. Both are right about the shapes they were written for ("i
+    /// was on instagram for 20 minutes", "spent 45 minutes on tiktok ugh") and
+    /// both are wrong about this one, because a person announcing what she is
+    /// about to do is asking for it.
+    ///
+    /// Read TWICE, and the same answer both times: once to stand the mood gate
+    /// down, and once at the mint, where "im using instagram for 5 minutes"
+    /// has to count as carrying an opening verb even though its verb is spelled
+    /// "using" and its particle-taking siblings are spelled "going on".
+    ///
+    /// Four guards, and each one is a sentence that must stay silent:
+    ///
+    ///  - FIRST PERSON PRESENT. "i'm"/"im"/"i am", and nothing else. "i've
+    ///    been using tiktok for 3 hours" reports three hours already spent;
+    ///    "she was using instagram for 20 minutes" is somebody else's day.
+    ///  - THE PARTICLE, AND ITS OBJECT. "going"/"getting" need their "on", and
+    ///    the "on" needs the DOOR standing on it. "go on" is only the phrasal
+    ///    verb that means the app when the app is what follows it: "im going
+    ///    ON ABOUT instagram for 10 minutes" is complaining about the app and
+    ///    granted ten minutes of it, and "i'm going on the tiktok train for 10
+    ///    minutes" granted ten of TikTok off an idiom. The particle test read
+    ///    the particle and never the object.
+    ///  - NOT A PERIOD. "i'm using instagram 2 hours a day" is a habit, and a
+    ///    habit is rule 3's sentence, never a grant.
+    ///  - NOT ANOTHER TIME. A commitment is a commitment to NOW — that is the
+    ///    whole of why it counts as an ask. "i'm going on instagram for 10
+    ///    minutes tomorrow" states a plan, and minting it opens the door and
+    ///    debits the pool today for minutes the sentence placed elsewhere.
+    ///  - NOBODY ELSE'S SENTENCE. A speech verb ahead of the frame reports it:
+    ///    "she said i'm using instagram for 10 minutes". The quoted-speech arm
+    ///    above was supposed to have caught this before the exemption was ever
+    ///    consulted, and it catches "she said i AM using…" — its proof is a
+    ///    non-modal auxiliary in the clause, and the contraction's "m" is not
+    ///    one, so the ordinary spelling walked straight through it.
+    ///  - EXACTLY ONE NUMBER. Two numbers is the ambiguity `singleNumber` has
+    ///    refused since the parser shipped, asked here so the exemption cannot
+    ///    launder it.
+    private static func statesACommitment(_ index: NumberParser.ClauseIndex,
+                                          state: PolicyState) -> Bool {
+        let t = index.tokens
+        guard let j = t.indices.first(where: { commitmentGerunds.contains(t[$0]) }),
+              firstPersonPresent(t, before: j),
+              let clause = index.clauseRange(containing: j),
+              !aboutAPeriod(t, clause: clause),
+              !clause.contains(where: { laterMarkers.contains(t[$0]) }),
+              !(clause.lowerBound..<j).contains(where: { speechVerbs.contains(t[$0]) })
+        else { return false }
+        if particledGerunds.contains(t[j]) {
+            guard j + 1 < t.count, t[j + 1] == "on",
+                  namesTheDoor(t, at: j + 2, state: state) else { return false }
+        }
+        return NumberParser.allNumbers(in: t.joined(separator: " ")).count == 1
+    }
+
+    /// Whether a door's name begins at `i` — one token or two, matched through
+    /// `door(_:in:)` like every other door in this file. Read only by the
+    /// particle guard above, where the question is not "does the sentence name
+    /// a door" (rule 7 already holds one) but "is the door what this particle
+    /// governs".
+    private static func namesTheDoor(_ t: [String], at i: Int, state: PolicyState) -> Bool {
+        guard i < t.count else { return false }
+        if door(t[i], in: state) != nil { return true }
+        guard i + 1 < t.count else { return false }
+        return door(t[i] + " " + t[i + 1], in: state) != nil
+    }
+
+    /// The words that place a clause somewhere other than now. Read ONLY to
+    /// REFUSE the commitment exemption, beside `aboutAPeriod` and for the same
+    /// reason: a word nobody thought of costs a sentence, never a debit.
+    private static let laterMarkers: Set<String> = [
+        "tomorrow", "tmrw", "tmw", "tonight", "later", "afterwards",
+    ]
+
+    /// The first-person present frame standing directly on `j`. Three
+    /// spellings and one shape: "im" is one token, "i'm" tokenizes as
+    /// ["i", "m"] (an apostrophe splits — NumberParser.foldingApostrophes),
+    /// and "i am" is the uncontracted form.
+    private static func firstPersonPresent(_ t: [String], before j: Int) -> Bool {
+        guard j > 0 else { return false }
+        if t[j - 1] == "im" { return true }
+        guard j > 1, t[j - 2] == "i" else { return false }
+        return t[j - 1] == "m" || t[j - 1] == "am"
+    }
+
+    /// Whether the clause is about a PERIOD rather than about now — rule 3's
+    /// own question, asked over tokens because that is the shape this gate
+    /// has. `periodPhrase` is the shared reader ("a day", "per day", "daily");
+    /// the adverbs and the "every/each/these + day/week" frames beside it are
+    /// the habitual spellings it does not carry.
+    ///
+    /// Read ONLY to REFUSE the commitment exemption above, so every entry can
+    /// do one thing: turn a grant back into the silence it was before. A word
+    /// nobody thought of costs a sentence, never a debit.
+    private static func aboutAPeriod(_ t: [String], clause: Range<Int>) -> Bool {
+        if periodPhrase(t, in: clause) { return true }
+        return clause.contains { i in
+            if habitAdverbs.contains(t[i]) { return true }
+            guard i > clause.lowerBound, periodNouns.contains(t[i]) else { return false }
+            return periodDeterminers.contains(t[i - 1])
+        }
+    }
+
+    /// Whether the clause OPENS with one of the authority's inversions — "can
+    /// i", "could i", "may i", the shape English fronts a modal to ask with.
+    ///
+    /// Read only by the spend gate, and only to let an ask through. That gate
+    /// reads a fronted auxiliary as a question ("a question is never a grant")
+    /// and it is right about every fronted auxiliary but these: two of the
+    /// three escaped it only because their modals sit on `requestModals` and
+    /// that exemption fires first, while "may" was deliberately left off
+    /// `requestModals` as an epistemic ("i MUST have capped tiktok at 60").
+    /// So "may i have 10 minutes of instagram" — a request this file's own
+    /// opening-verb list NAMES — was the one spelling of the ask the gate
+    /// could not see.
+    ///
+    /// Read off `openingVerbs` rather than off a modal test, which is what
+    /// keeps it narrow: the only two-token opening verbs with a pronoun in
+    /// second position are those three inversions.
+    private static func anInversionOpensTheClause(_ t: [String], clause: Range<Int>) -> Bool {
+        let i = clause.lowerBound
+        guard i + 1 < clause.upperBound else { return false }
+        return openingVerbPhrases.contains {
+            $0.count == 2 && $0[0] == t[i] && $0[1] == t[i + 1] && subjects.contains($0[1])
+        }
+    }
+
+    private static let habitAdverbs: Set<String> = [
+        "usually", "always", "normally", "typically", "everyday", "weekly",
+    ]
+    private static let periodNouns: Set<String> = ["day", "days", "week", "weeks"]
+    private static let periodDeterminers: Set<String> = ["a", "per", "every", "each", "these"]
 
     private static func isStatusAsk(_ text: String, hasDoor: Bool) -> Bool {
         // The bare word is the design's first listed example, and "left today"

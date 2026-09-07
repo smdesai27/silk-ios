@@ -85,7 +85,8 @@ entitlement, and Apple must grant it by hand (see `docs/market/what-is-buildable
 1. **Spend by asking.** Within budget a grant is granted, the balance read back, the app opened —
    after a wait priced in seconds of watching, which passes only while Silk is on screen and stops
    the moment it is not. Nothing is debited, unshielded or armed until the wait is paid, so leaving
-   costs nothing and the wall never comes down early. See
+   costs nothing and the wall never comes down early. A spend is a whole sentence — an opening verb,
+   the app name, and the minutes — and a fragment gets back the one sentence to write instead. See
    [`docs/design/wait.md`](docs/design/wait.md), which states the canon objection before it answers
    it.
 2. **Edges never yield.** Budget gone, a door's own ceiling spent, or down hours means no. Refusals
@@ -96,5 +97,5 @@ entitlement, and Apple must grant it by hand (see `docs/market/what-is-buildable
 4. **The wall fails closed.** The ledger is the truth; a dead extension closes doors late, never
    leaves them open. The model proposes; the validator disposes.
 5. **No notification permission, ever.** Every word the app says comes from
-   `SilkCore/Sources/SilkCore/Strings.swift` — 75 of them today, 68 constants and 7 that compose. The
+   `SilkCore/Sources/SilkCore/Strings.swift` — 76 of them today, 68 constants and 8 that compose. The
    file is the vocabulary, and nothing outside it may speak.

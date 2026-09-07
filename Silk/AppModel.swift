@@ -120,7 +120,7 @@ final class AppModel {
         // QA: -silkNoModel YES runs the app as a phone with no Apple
         // Intelligence does — the widener answers `.silence` for every
         // sentence, exactly as `SilkModelParser.parse`'s availability guard
-        // makes it (SilkModelParser.swift:180), and the deterministic grammar
+        // makes it (SilkModelParser.swift:179), and the deterministic grammar
         // is the whole parser.
         //
         // It exists because the simulator HAS the model, so a walk that types
@@ -169,11 +169,6 @@ final class AppModel {
         }
         refreshDoorIcons()
         startClock()
-        #if DEBUG
-        // QA: -silkPage 1 opens on Mirror. There is no other way in — the pager
-        // is driven by touch, and a screenshot harness has no fingers.
-        self.page = UserDefaults.standard.integer(forKey: "silkPage")
-        #endif
     }
 
     deinit {
@@ -803,9 +798,9 @@ final class AppModel {
         #if DEBUG
         // QA: -silkWait 0.6 pins the wait so a UI walk is not priced off the
         // product curve, and -silkWait 0 turns the feature off entirely. Same
-        // shape as -silkNight and -silkPage, and debug-only for the same
-        // reason: a launch argument that shortens a self-control price has no
-        // business existing in a shipped build.
+        // shape as -silkNight, and debug-only for the same reason: a launch
+        // argument that shortens a self-control price has no business
+        // existing in a shipped build.
         if let pinned = UserDefaults.standard.string(forKey: "silkWait").flatMap(Double.init) {
             return max(0, pinned)
         }
@@ -947,12 +942,25 @@ final class AppModel {
         armWaitLanding()
     }
 
-    /// Lower the veil and put the clock back up. Nothing else: every path that
+    /// Lower the veil and put the clock back up — and pay off a foreground the
+    /// veil made the app postpone, if one is owed. Nothing else: every path that
     /// ends a wait decides for itself what to say, because they do not agree.
     private func clearWait() {
         waitTask?.cancel()
         waitTask = nil
         withAnimation(Silk.motion(Silk.Motion.overlay)) { waiting = nil }
+        // The return that arrived while the veil stood, paid now. This is the
+        // one door every ending wait leaves by — landed, dropped stale, or
+        // dropped for a door that went — so it is the one place the parking can
+        // be spent without a path that forgets. It ends in `startClock()`
+        // itself, which is why it returns rather than falling through to the
+        // line below: putting the clock up twice is harmless and reads as if
+        // one of the two were a mistake.
+        guard !foregroundWorkDeferred else {
+            foregroundWorkDeferred = false
+            reconcileOnReturn()
+            return
+        }
         startClock()
     }
 
@@ -1062,8 +1070,13 @@ final class AppModel {
         case .refuseDownHours(let until):
             return (refuse("\(SilkStrings.downHoursOpens) \(until.displayWithMeridiem)."), nil)
 
-        case .refuseSayHowManyMinutes:
-            return (refuse(SilkStrings.howLong), nil)
+        case .refuseWriteItOut(let door, let minutes):
+            // Half a spend, answered with the whole sentence rather than with
+            // the missing word. "How long?" asked a question and then had to
+            // read the next fragment as an answer to it; this states the
+            // sentence that grants, in the user's own door and her own number,
+            // and the next turn is an ordinary spend.
+            return (refuse(SilkStrings.writeItOut(door.name, minutes: minutes)), nil)
 
         case .refuseSayAmOrPm(let at):
             // Nothing moved, so there is nothing to take back — the whole
@@ -2101,13 +2114,66 @@ final class AppModel {
     /// Coming back to the app is a clock tick with a longer gap behind it.
     /// It is also the only moment revocation can be seen: Settings sends no
     /// callback when Silk is toggled off there.
-    func foregrounded() {
+    ///
+    /// **Two things it used to do on every `.active`, and now does not.**
+    ///
+    /// *A bounce is not a return.* `.active` arrives again after a notification
+    /// banner, a Control Centre pull, a screenshot, a permission alert — none of
+    /// which suspended anything, so none of which can have left the copy stale.
+    /// The paragraph below is four App Group decodes, a cross-process
+    /// ManagedSettings write and two day-turn sweeps, all on the MainActor; it
+    /// ran on each of those for nothing. `returningFromBackground` is the
+    /// scene's own answer to "was she actually away", tracked where the phases
+    /// are (`SilkApp`) rather than guessed at here. It defaults to true so the
+    /// launch pass, and every test that calls this directly, keeps the old
+    /// behaviour exactly.
+    ///
+    /// *It must not run under a standing wait.* Two reasons, and the second is
+    /// the sharp one. The paragraph is a multi-frame hitch dropped into the one
+    /// screen in Silk that is nothing but motion — and `startClock()` at the end
+    /// of it puts back the very clock `raiseWait` deliberately cancelled, so the
+    /// minute tick resumed hitching the ink for the rest of the wait. So the
+    /// work is parked on `foregroundWorkDeferred` and spent by `clearWait`, the
+    /// single door every ending wait leaves by.
+    ///
+    /// **The fail-closed ordering survives the parking.** Nothing reads the wall
+    /// while a wait stands: the veil covers the whole stratum, the bar is
+    /// unreachable, and the clock is down. The one path that reads state is the
+    /// landing — and `landWait` goes through `clearWait` *before* it syncs,
+    /// validates or grants, so the reconcile still happens before anything looks.
+    func foregrounded(returningFromBackground: Bool = true) {
+        // Read and cleared before `resumeWait`, not after: a wait she left too
+        // long is dropped in there, and a drop ends in `clearWait` — the other
+        // place this flag is spent. Left standing it would run the paragraph
+        // once on the way through and once again below, on one return.
+        let owed = returningFromBackground || foregroundWorkDeferred
+        foregroundWorkDeferred = false
+
         // First, before anything below runs. A wait resumed after the sync and
         // the reconcile would have those milliseconds fall outside its watching
         // span — she was looking at Silk for them, and they are hers. Taking
         // the reading first also puts the frame the eye reads as "it started
         // again" after the hitch rather than inside it.
         resumeWait()
+
+        // A banner's bounce. Nothing was suspended, so nothing is stale.
+        guard owed else { return }
+        // A veil is up. Park the work on the ending it will certainly have.
+        guard waiting == nil else {
+            foregroundWorkDeferred = true
+            return
+        }
+        reconcileOnReturn()
+    }
+
+    /// Whether a return's work is still owed. Set when a wait swallowed it,
+    /// spent by `clearWait`. `@ObservationIgnored`: nothing draws it.
+    @ObservationIgnored private var foregroundWorkDeferred = false
+
+    /// Everything a genuine return from the background owes, in the order it
+    /// owes it. Split out of `foregrounded` so the wait's ending can run the
+    /// same paragraph, unchanged, at the moment it becomes safe to.
+    private func reconcileOnReturn() {
         weekAttemptsCache = nil
         invalidateDayRecordsIfStale()
         // The suspension is where external writes accumulate — a Shortcuts

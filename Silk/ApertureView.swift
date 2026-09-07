@@ -176,6 +176,7 @@ struct ApertureView: View {
     private static let nightShade = Color(red: 0.055, green: 0.071, blue: 0.094)                // rgb(14,18,24)
 }
 
+#if DEBUG
 #Preview("Aperture — day, night, setup") {
     @Previewable @State var night = false
 
@@ -217,3 +218,4 @@ struct ApertureView: View {
     }
     .ignoresSafeArea()
 }
+#endif

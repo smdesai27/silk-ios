@@ -274,7 +274,7 @@ struct SpendIntent: AppIntent {
             // here must still be the deadline and not an empty dialog.
             let time = Validator.timeOfDay(until, calendar: .current)
             return answer(SpendDialog.restated(door: door.name, until: time))
-        case .silence, .refuseSayHowManyMinutes, .refuseSayAmOrPm, .refuseDoorNeedsApp,
+        case .silence, .refuseWriteItOut, .refuseSayAmOrPm, .refuseDoorNeedsApp,
              .ruleChange, .close, .closeAll, .status, .downHours:
             // Nothing this intent can produce: it validates one `.spend` and
             // nothing else. Silence rather than a guessed sentence, exactly as

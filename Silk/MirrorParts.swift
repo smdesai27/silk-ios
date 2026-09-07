@@ -144,6 +144,7 @@ struct ShieldOverlay: View {
 
 // MARK: - Preview
 
+#if DEBUG
 #Preview("Mirror parts") {
     ScrollView {
         ForEach([false, true], id: \.self) { night in
@@ -157,3 +158,4 @@ struct ShieldOverlay: View {
         }
     }
 }
+#endif

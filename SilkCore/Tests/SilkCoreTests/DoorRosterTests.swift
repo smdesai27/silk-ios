@@ -36,13 +36,17 @@ import Testing
                                      taken: ["instagram", "tiktok", "youtube", "x"]).isEmpty)
     }
 
-    /// A door's aliases hold its seats too: a door answering to "x" keeps the
-    /// catalogue's "X" off the list, however the door itself is spelled.
-    @Test func aliasesCountAsTaken() {
-        let door = Door(name: "Twitter", aliases: ["x"])
+    /// A door's spoken forms are its own name alone now — the union with a
+    /// catalogue alias is gone. A door named "Twitter" no longer keeps the
+    /// catalogue's "X" off the add list, and "X" itself is still addable
+    /// beside it. Inverted from the test this used to be, which asserted the
+    /// alias still held the seat.
+    @Test func onlyTheDoorsOwnNameCountsAsTaken() {
+        let door = Door(name: "Twitter")
+        #expect(door.spokenForms == ["twitter"])
         #expect(DoorRoster.available(catalog: ["X", "Reddit"],
-                                     taken: door.spokenForms) == ["Reddit"])
-        #expect(!DoorRoster.canAdd("X", taken: door.spokenForms, count: 1))
+                                     taken: door.spokenForms) == ["X", "Reddit"])
+        #expect(DoorRoster.canAdd("X", taken: door.spokenForms, count: 1))
     }
 
     /// The editor's action reads in plain words; "rebind" stays internal

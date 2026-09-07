@@ -298,6 +298,7 @@ struct EnsoMark: View {
 
 // MARK: - Preview
 
+#if DEBUG
 #Preview("Ensō — the living circle") {
     let steps: [Double] = [1.0, 0.75, 0.4, 0.12, 0.0]
 
@@ -339,3 +340,4 @@ struct EnsoMark: View {
     }
     .background(Silk.paper)
 }
+#endif

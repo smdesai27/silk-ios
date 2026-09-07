@@ -13,7 +13,7 @@ public enum Verdict: Equatable, Sendable {
     /// open time at all — the door is already open past them — while debiting
     /// both currencies and pushing the cap to exhausted. `SpendIntent` has had
     /// this guard since it shipped ("a double debit would be catastrophic for
-    /// the single-currency promise", SpendIntent.swift:22-25); the bar never
+    /// the single-currency promise", SpendIntent.swift:21-25); the bar never
     /// needed it because the shared pool is large, and a cap makes the door's
     /// own remaining systematically smaller than the time left on its own grant.
     case restated(door: Door, until: Date)
@@ -34,7 +34,15 @@ public enum Verdict: Equatable, Sendable {
     /// the app layer — see `AppModel.apply`.
     case refuseNothingLeft                      // "0 left today."
     case refuseDownHours(until: TimeOfDay)      // "Down hours. Opens 7:00 AM."
-    case refuseSayHowManyMinutes                // "How long?"
+    /// A PARTIAL SPEND, answered with the whole sentence: "Write it out:
+    /// unlock Instagram for 10 min." Carries the door the utterance named (or
+    /// the first door, when it named none) and the minutes it said, so the app
+    /// layer can compose the hint out of the user's own words.
+    ///
+    /// No provenance is checked and none is needed: nothing is debited,
+    /// nothing opens, and the number — like the door — only ever appears
+    /// inside a sentence being shown back to the person who typed it.
+    case refuseWriteItOut(door: Door, minutes: Int?)
     /// The time as the sentence gave it, so the question can quote it back
     /// whole: "7:30am or 7:30pm?" Carrying only the hour would offer two times
     /// and neither of them the one asked for.
@@ -98,6 +106,11 @@ public enum Validator {
     /// `utterance` is required for the provenance check: any minutes granted
     /// must be traceable to words the user actually said. A model that invents
     /// "40" out of the budget dies here, not in the prompt.
+    ///
+    /// `.writeItOut` is answered ahead of that check and is not subject to it:
+    /// it grants nothing, so there are no minutes whose provenance could
+    /// matter — and the deterministic grammar is its only producer, because
+    /// the widener never sees a sentence the grammar has already answered.
     public static func validate(
         _ outcome: ParseOutcome,
         utterance: String,
@@ -106,6 +119,13 @@ public enum Validator {
         now: Date,
         calendar: Calendar = .current
     ) -> Verdict {
+        // Understandable, not executable: a condition, or a door, or a number
+        // can start a grant; only all three together can end one. Answered
+        // ahead of the command switch because it is not a command — nothing is
+        // proposed, so there is nothing to check against the policy.
+        if case .writeItOut(let door, let minutes) = outcome {
+            return .refuseWriteItOut(door: door, minutes: minutes)
+        }
         guard case .command(let command) = outcome else { return .silence }
 
         // The ESTABLISHED day's start, not the live boundary's: a tighten that
@@ -126,11 +146,6 @@ public enum Validator {
         case .downHoursQuery:
             // A read, not a write: hand back the window for the caller to speak.
             return .downHours(state.downHours)
-
-        case .placeBoundAsk:
-            // Understandable, not executable: a condition can start a grant;
-            // only a number can end one.
-            return .refuseSayHowManyMinutes
 
         case .closeDoorToday(let door, let until):
             // Tightening. Always allowed, always instant.

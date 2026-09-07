@@ -55,8 +55,6 @@ import XCTest
 //                       ago so the hedgerow has that much growth (shot 04).
 //                       Reachable ONLY from inside the -silkReset wipe, so it
 //                       can never write over a store anyone is keeping.
-//    -silkPage 1        open on Mirror — unused here; the walk taps the dot,
-//                       which is the arrival the grow-in is keyed to
 //
 //  The attachments out, named. `export attachments` writes UUID filenames and a
 //  manifest mapping each to the name this file gave it ("shot-01_0_<uuid>.png"):
@@ -156,7 +154,7 @@ final class ScreenshotWalk: XCTestCase {
 
         // Twenty spent leaves forty, and the ensō is four-sixths drawn — the
         // ring has something to say, which it does not at a full budget.
-        say(bar, "TikTok, twenty\n")
+        say(bar, "unlock TikTok for 20 min\n")
         let readBack = app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS %@", "TikTok is open for 20")).firstMatch
         XCTAssertTrue(readBack.waitForExistence(timeout: Self.answer), "the grant did not land")
@@ -177,7 +175,7 @@ final class ScreenshotWalk: XCTestCase {
         let app = launchFresh()
         let bar = completeSetup(app, budget: 60)
 
-        say(bar, "Instagram, ten\n")
+        say(bar, "unlock Instagram for 10 min\n")
         let readBack = app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS %@", "Instagram is open for 10")).firstMatch
         XCTAssertTrue(readBack.waitForExistence(timeout: Self.answer), "the grant did not land")
@@ -336,9 +334,25 @@ final class ScreenshotWalk: XCTestCase {
     @MainActor
     private func launchFresh(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += Self.launchArguments + extra
+        app.launchArguments += Self.launchArguments + Self.clockGuard() + extra
         app.launch()
         return app
+    }
+
+    /// The window's edge moved off the wall clock, and only when the clock is
+    /// inside it. The day shots are meant to run mid-afternoon; run at four in
+    /// the morning they land inside the 10 PM–7 AM default and every grant
+    /// answers "Down hours. Opens 7:00 AM." instead of opening. Now states only
+    /// the window's START ("Down hours at 10:00 PM."), so pulling the END back
+    /// to the hour before now changes nothing a day shot shows; a run after
+    /// 10 PM has to move the start instead, and that one does change the line.
+    /// Mid-afternoon, this is empty and the default window stands as the
+    /// doc above says.
+    private static func clockGuard() -> [String] {
+        let hour = Calendar.current.component(.hour, from: .now)
+        if hour < 7 { return ["-silkDownEnd", "\(max(hour - 1, 0))"] }
+        if hour >= 22 { return ["-silkDownStart", "\(min(hour + 1, 23))"] }
+        return []
     }
 
     /// Setup, with both named doors bound — the two the store page names — and

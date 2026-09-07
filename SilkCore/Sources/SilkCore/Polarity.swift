@@ -115,7 +115,7 @@ public enum PolarityEngine {
             // the day like the pool is — a ceiling of 10^18 is not a lid, and
             // it is `Int.max` in every comparison `classify` makes anyway.
             s.doorCaps[door.id] = minutes.map(PolicyState.clampedDaily)
-        case .spend, .placeBoundAsk, .closeDoorToday, .closeAllToday, .status, .downHoursQuery:
+        case .spend, .closeDoorToday, .closeAllToday, .status, .downHoursQuery:
             return nil  // not rule changes
         }
         return s

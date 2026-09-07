@@ -9,10 +9,10 @@ import SilkCore
 /// LaunchCatalogTests asserts them). What is left here is the one line that
 /// cannot: `UIApplication`, which exists only inside the app.
 ///
-/// Callers are unchanged. `LaunchCatalog.entries`, `LaunchCatalog.knows(_:)`
-/// and `LaunchCatalog.open(doorName:)` all still resolve to the same names,
-/// because this is an extension of the spine's own enum rather than a second
-/// type wearing its name.
+/// Callers are unchanged. `LaunchCatalog.entries` and
+/// `LaunchCatalog.open(doorName:)` still resolve to the same names, because
+/// this is an extension of the spine's own enum rather than a second type
+/// wearing its name.
 extension LaunchCatalog {
 
     /// Open the app behind a door name. Best-effort by design: if it misses,

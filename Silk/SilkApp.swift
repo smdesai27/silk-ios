@@ -1,11 +1,19 @@
 import SwiftUI
-import FamilyControls
 import SilkCore
 
 @main
 struct SilkApp: App {
     @State private var model = AppModel()
     @Environment(\.scenePhase) private var scenePhase
+    /// Whether Silk has actually been away since the last `.active`.
+    ///
+    /// The `old` value `onChange` hands over cannot answer this: a real
+    /// departure and a return read `.background → .inactive → .active`, so the
+    /// phase immediately before `.active` is `.inactive` either way, and a
+    /// banner's bounce is `.active → .inactive → .active`. Only "has
+    /// `.background` been seen since" tells the two apart, and that is a memory,
+    /// not a comparison. Seeded true so the launch pass is a return, which it is.
+    @State private var wasBackgrounded = true
 
     var body: some Scene {
         WindowGroup {
@@ -15,8 +23,12 @@ struct SilkApp: App {
                     // Every foreground reconciles: re-lock layer 4, plus the
                     // revocation check (no callback exists for either) — and
                     // catches a day boundary that turned while we were away.
+                    // Every *real* foreground, that is: `foregrounded` states
+                    // what a bounce off a banner costs and why it may not be
+                    // paid on one.
                     if phase == .active {
-                        model.foregrounded()
+                        model.foregrounded(returningFromBackground: wasBackgrounded)
+                        wasBackgrounded = false
                     }
                     // The attention gate, and the whole of it: a wait advances
                     // while Silk is on screen and stops when it is not.
@@ -35,6 +47,7 @@ struct SilkApp: App {
                     // Locking the phone reaches `.background` too, so a wait
                     // does not run on in a pocket.
                     if phase == .background {
+                        wasBackgrounded = true
                         model.pauseWait()
                     }
                 }
@@ -47,9 +60,14 @@ struct SilkApp: App {
 /// The ground, the atmosphere, the wordmark, the bar, the dots, the thread and
 /// the overlays live here rather than on a page: they belong to the app, and
 /// the bar in particular has to answer from any of the three.
+///
+/// The typed text lives on `BarSlot`, one view down, and this is the whole
+/// reason that view exists — see its own note. Nothing else on this screen reads
+/// what is in the bar, and a `@State` here made every character a full pass over
+/// a body that mounts three pages, composes Settings' rows and asks the scene
+/// for the glass, all of it under a blur.
 struct RootView: View {
     @Environment(AppModel.self) private var model
-    @State private var input = ""
     /// Hoisted focus: the root dims the stage on it and clears the thread on
     /// blur, through the model's shadow of it (`onChange` below).
     @FocusState private var barFocused: Bool
@@ -98,18 +116,7 @@ struct RootView: View {
                             TabView(selection: $model.page) {
                                 NowView().tag(0)
                                 MirrorView().tag(1)
-                                SettingsView(downHours: model.settingsDownHours,
-                                             budget: model.settingsBudget,
-                                             undo: model.settingsUndo,
-                                             doors: model.settingsDoors,
-                                             showsAddRow: model.canAddDoor,
-                                             night: night,
-                                             onTapDownHours: { model.raisePicker(.down) },
-                                             onTapBudget: { model.raisePicker(.budget) },
-                                             onTapUndo: { model.raisePicker(.undo) },
-                                             onTapDoor: { model.editDoor(named: $0) },
-                                             onAddDoor: { model.beginAddDoor() })
-                                    .tag(2)
+                                SettingsPage().tag(2)
                             }
                             .tabViewStyle(.page(indexDisplayMode: .never))
                             .ignoresSafeArea(edges: .top)
@@ -122,8 +129,8 @@ struct RootView: View {
                             .silkStage(dimmed: model.conversation.stageDimmed)
 
                             // The wordmark, on its own layer: the one thing that never
-                            // yields to the conversation (README.md:203-205). It signs
-                            // Now and Settings and is hidden on Mirror (README.md:58-60),
+                            // yields to the conversation (docs/design/handoff/README.md:203-205). It signs
+                            // Now and Settings and is hidden on Mirror (docs/design/handoff/README.md:58-60),
                             // crossing on the same curve the pager settles with. The
                             // pages keep an empty seat where it sits, so their columns
                             // hold their spacing under it.
@@ -204,17 +211,15 @@ struct RootView: View {
                                     PageDots(count: 3, index: $model.page, night: night)
                                         .silkStage(dimmed: model.conversation.stageDimmed)
                                         .padding(.bottom, 24 - (44 - 5) / 2)
-                                    CommandBar(text: $input,
-                                               night: night,
-                                               onSubmit: submit,
-                                               hasTurns: model.conversation.hasTurns,
-                                               // Floored at the glass: the reader is what
-                                               // reaches it, but a reader can answer mid-
-                                               // layout on a cold start and clamp the rise
-                                               // to nothing (see `Glass`). The screen cannot.
-                                               containerHeight: max(geo.size.height, Glass.height ?? 0),
-                                               keyboard: keyboard,
-                                               focus: $barFocused)
+                                    BarSlot(night: night,
+                                            // Floored at the glass: the reader is what
+                                            // reaches it, but a reader can answer mid-
+                                            // layout on a cold start and clamp the rise
+                                            // to nothing (see `Glass`). The screen cannot.
+                                            containerHeight: max(geo.size.height, Glass.height ?? 0),
+                                            keyboard: keyboard,
+                                            focus: $barFocused,
+                                            submittedAt: $submittedAt)
                                         .padding(.horizontal, 28)
                                         .padding(.bottom, 44)
                                 }
@@ -458,6 +463,44 @@ struct RootView: View {
         // always paper.
         .preferredColorScheme(model.onboarded && night ? .dark : .light)
     }
+}
+
+/// The bar, and the one piece of state that moves while she types.
+///
+/// `input` used to be a `@State` on `RootView`, which made every character an
+/// invalidation of the whole onboarded tree: three pages mounted, Settings' four
+/// strings composed and five closures rebuilt, `canAddDoor` walking the door
+/// catalogue, the scene enumerated for the glass — and all of it inside
+/// `.silkStage(dimmed:)`, so the frame that work paid for was a blurred one. A
+/// keystroke now invalidates this view and nothing else; the bar is the only
+/// thing on the screen that has any business knowing what is in it.
+///
+/// **Focus and `submittedAt` stay on the root, deliberately.** Neither moves on
+/// a keystroke — one per focus, one per send — so moving them buys no frames,
+/// and both are read by root-level siblings of this view: the tap-out catcher
+/// clears the send grace as it blurs, and the wait's teardown clears both when
+/// it takes the keyboard down. They are handed in rather than lifted out, which
+/// keeps the grace and the catcher on one side of a view boundary instead of
+/// two.
+private struct BarSlot: View {
+    @Environment(AppModel.self) private var model
+    var night: Bool
+    var containerHeight: CGFloat
+    var keyboard: CGFloat
+    var focus: FocusState<Bool>.Binding
+    @Binding var submittedAt: Date
+
+    @State private var input = ""
+
+    var body: some View {
+        CommandBar(text: $input,
+                   night: night,
+                   onSubmit: submit,
+                   hasTurns: model.conversation.hasTurns,
+                   containerHeight: containerHeight,
+                   keyboard: keyboard,
+                   focus: focus)
+    }
 
     private func submit() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -467,5 +510,37 @@ struct RootView: View {
         guard !text.isEmpty else { return }
         submittedAt = .now
         Task { await model.handle(text) }
+    }
+}
+
+/// Settings' seat in the pager: the model read here, one view down, instead of
+/// on the root.
+///
+/// `SettingsView` is a pure value view by design — it takes finished strings and
+/// reports taps, and its own note says so — which is right for it and was wrong
+/// for the mount site. Built on the root, its five closures were rebuilt on every
+/// root pass and never compared equal, so SwiftUI could not skip the page: four
+/// model strings and a walk of the door catalogue were composed for every
+/// keystroke, page swipe and thread change. This view stores nothing, so it
+/// always compares equal, and Observation re-runs it only when one of the
+/// properties it actually read has moved.
+///
+/// The composition stays in the model and the previews keep their hand-written
+/// values; the only thing that moved is where the reading happens.
+private struct SettingsPage: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        SettingsView(downHours: model.settingsDownHours,
+                     budget: model.settingsBudget,
+                     undo: model.settingsUndo,
+                     doors: model.settingsDoors,
+                     showsAddRow: model.canAddDoor,
+                     night: model.isDownHours,
+                     onTapDownHours: { model.raisePicker(.down) },
+                     onTapBudget: { model.raisePicker(.budget) },
+                     onTapUndo: { model.raisePicker(.undo) },
+                     onTapDoor: { model.editDoor(named: $0) },
+                     onAddDoor: { model.beginAddDoor() })
     }
 }

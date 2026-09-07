@@ -27,7 +27,7 @@ import Testing
 // one to be checked against — and two of the three arms below had nothing
 // checking at all.
 
-private let instagram = Door(name: "Instagram", aliases: ["ig", "insta"])
+private let instagram = Door(name: "Instagram")
 private let tiktok = Door(name: "TikTok")
 private let reddit = Door(name: "Reddit")
 

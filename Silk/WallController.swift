@@ -27,13 +27,6 @@ final class WallController {
         }
     }
 
-    /// Re-check on every foreground: revoking Silk in Settings sends NO
-    /// callback, and an ensō drawn over a downed wall is the one lie Silk
-    /// could accidentally tell. (docs/market/gaps.md #5)
-    var isAuthorized: Bool {
-        AuthorizationCenter.shared.authorizationStatus == .approved
-    }
-
     /// Whether the wall can actually stand, and if not, what raising it takes.
     /// `.notDetermined` on an onboarded install is the new-phone signature —
     /// authorization does not restore from backup — so raising re-runs the

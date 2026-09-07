@@ -65,7 +65,7 @@ private func freshModel(budget: Int = 40,
         UserDefaults.standard.set("0.2", forKey: "silkWait")   // < Wait.tooShortToDraw
         let (model, _) = freshModel()
 
-        await model.handle("instagram for ten")
+        await model.handle("unlock instagram for ten")
 
         #expect(model.waiting == nil, "a wait shorter than its own fade was drawn anyway")
         #expect(model.remainingMinutes == 30, "the grant did not land in the same pass")
@@ -93,12 +93,12 @@ private func freshModel(budget: Int = 40,
         // The opening grant, with no ceremony, so the door is genuinely open
         // behind the second sentence.
         UserDefaults.standard.set("0", forKey: "silkWait")
-        await model.handle("instagram for ten")
+        await model.handle("unlock instagram for ten")
         #expect(model.remainingMinutes == 30, "the opening grant did not land")
 
         // Five minutes asked against nine still running: covered, so restated.
         UserDefaults.standard.set("30", forKey: "silkWait")
-        await model.handle("instagram for five")
+        await model.handle("unlock instagram for five")
 
         #expect(model.waiting == nil, "an ask already covered was made to watch a wait")
         #expect(model.remainingMinutes == 30, "a restated ask debited the pool a second time")
@@ -145,7 +145,7 @@ private func freshModel(budget: Int = 40,
         UserDefaults.standard.set("30", forKey: "silkWait")
         let (model, _) = freshModel()
 
-        await model.handle("instagram for ten")
+        await model.handle("unlock instagram for ten")
         #expect(model.waiting != nil, "the wait did not rise over a granted ask")
         #expect(model.waiting?.wait.isWatching == true,
                 "the wait was born parked — the host app was not foreground when it rose")
@@ -198,7 +198,7 @@ private func freshModel(budget: Int = 40,
         let (model, _) = freshModel()
         model.conversation.focused = true
 
-        await model.handle("instagram for ten")
+        await model.handle("unlock instagram for ten")
         let turn = try #require(model.waiting?.turn)
         #expect(model.conversation.turns.contains(where: { $0.id == turn }),
                 "the ask the wait is holding is not in the thread")
@@ -227,7 +227,7 @@ private func freshModel(budget: Int = 40,
         let (model, _) = freshModel()
         model.conversation.focused = true
 
-        await model.handle("instagram for ten")
+        await model.handle("unlock instagram for ten")
         let turn = try #require(model.waiting?.turn)
 
         model.pauseWait()
@@ -260,11 +260,11 @@ private func freshModel(budget: Int = 40,
         UserDefaults.standard.set("30", forKey: "silkWait")
         let (model, door) = freshModel()
 
-        await model.handle("instagram for ten")
+        await model.handle("unlock instagram for ten")
         let first = try #require(model.waiting, "the wait did not rise over a granted ask")
         #expect(first.wait.minutes == 10)
 
-        await model.handle("instagram for five")
+        await model.handle("unlock instagram for five")
 
         // The standing wait is the first one still: same turn, same door, same
         // minutes, same price.

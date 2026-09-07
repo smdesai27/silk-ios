@@ -375,6 +375,16 @@ struct CommandBar: View {
                 .focused(focusBinding)
                 .submitLabel(.send)
                 .autocorrectionDisabled()
+                // The other half of the same promise. Autocorrect was already
+                // off because "what you typed is yours — it is never edited"
+                // (`TurnCell` echoes the sentence back verbatim), and iOS was
+                // still capitalizing the first letter of every ask — so a bar
+                // typed "20 min instagram" came back as "20 min instagram" but
+                // one typed after a send read "Open instagram", and the echo
+                // showed a word she had not written. Silk's own copy is
+                // lowercase throughout; a sentence said to it should stay the
+                // way it was said.
+                .textInputAutocapitalization(.never)
                 .onSubmit(onSubmit)
                 // 15 → 18 on focus (Silk Mockup.dc.html:23, 32) — and font
                 // size is not animatable on a text field, so the field is set
@@ -504,7 +514,25 @@ private struct KeyboardHeightReader: ViewModifier {
                 // there. `end.maxY` is the same edge for a docked keyboard and
                 // is the honest fallback when no scene will answer.
                 let glass = Glass.height ?? end.maxY
-                height = max(0, glass - end.minY)
+                // **Docked, or nothing.** `glass − end.minY` is a lift only
+                // while the keyboard's bottom edge IS the glass. Every other
+                // frame this notification carries is one of two things, and
+                // both used to become a lift: a keyboard on its way off the
+                // bottom (`maxY` past the glass, which the doc note above
+                // already says is willHide's job to report, not this one), and
+                // an undocked or floating keyboard (`maxY` short of it), which
+                // covers no part of the bar and must not move it. One point of
+                // slack, because the frame arrives in scene coordinates that
+                // need not land on the same fraction the screen bounds do.
+                guard abs(end.maxY - glass) <= 1 else { return }
+                let lift = max(0, glass - end.minY)
+                // A keyboard-type switch — emoji, a different language, a
+                // predictive row appearing and going — delivers a change-frame
+                // whose height is often the one already standing. Writing it
+                // back re-targets the bar's 0.45s ease at the mark it is
+                // already resting on, which is a visible twitch for no move.
+                guard lift != height else { return }
+                height = lift
             }
             .onReceive(NotificationCenter.default.publisher(
                 for: UIResponder.keyboardWillHideNotification)) { _ in
@@ -529,12 +557,30 @@ private struct KeyboardHeightReader: ViewModifier {
 /// 2026-09-02, and the shape of the first-focus walk flake before it. The
 /// screen's height is not a layout; it cannot be in transit. So the rise is
 /// floored at it: the reader may only ever make the container taller.
+///
+/// **Read once.** The bar's container asks for this on every body pass, and the
+/// answer used to cost a bridged copy of `connectedScenes`, a `compactMap`, a
+/// predicate over it and a screen read — while the root's `@State` for the typed
+/// text meant every keystroke was a body pass. Silk is iPhone-only and
+/// portrait-locked (project.yml: `TARGETED_DEVICE_FAMILY: "1"`,
+/// `UISupportedInterfaceOrientations: [Portrait]`), so the glass is a constant
+/// for the life of the process: there is no rotation, no Split View and no
+/// Stage Manager that could give it a second value to invalidate against. If
+/// either of those two lines ever changes, this cache needs a way to be told.
+///
+/// The absent case is deliberately *not* cached. A read before the scene exists
+/// answers nil, and nil is the one answer that must be allowed to become a
+/// number on the next pass — the whole point of the floor is the cold start.
 enum Glass {
+    @MainActor private static var cached: CGFloat?
+
     @MainActor
     static var height: CGFloat? {
+        if let cached { return cached }
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
-        return scene.map { $0.screen.bounds.height }
+        cached = scene.map { $0.screen.bounds.height }
+        return cached
     }
 }
 
@@ -550,6 +596,9 @@ extension View {
 
 // ============================================================
 
+// Previews and their galleries are design tooling, not product surface — the
+// App Store binary should not carry them.
+#if DEBUG
 #Preview {
     @Previewable @State var page = 0
     @Previewable @State var dayText = ""
@@ -601,3 +650,4 @@ private struct ChromeGallery: View {
         .background(night ? Silk.lacquer : Silk.paper)
     }
 }
+#endif

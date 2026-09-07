@@ -142,9 +142,9 @@ public enum LaunchCatalog {
         .init(display: "Amazon", names: ["amazon"], scheme: "com.amazon.mobile.shopping://", universalLink: "https://www.amazon.com/"),
     ]
 
-    /// Setup uses this to keep door-naming inside the catalogue, converting
-    /// "and it opens" from a courtesy into a guarantee.
-    public static func knows(_ name: String) -> Bool {
+    /// Whether a spoken name resolves to a catalogue entry, converting "and it
+    /// opens" from a courtesy into a guarantee.
+    static func knows(_ name: String) -> Bool {
         entry(named: name) != nil
     }
 
@@ -156,6 +156,15 @@ public enum LaunchCatalog {
     }
 
     /// Names that are ORDINARY ENGLISH before they are apps.
+    ///
+    /// THE GRAMMAR NO LONGER READS THIS LIST, and the whole of what follows is
+    /// kept as the record of why. `namesByDisplay` — the map that handed the
+    /// catalogue's nicknames to `Door.spokenForms` — is gone: door matching is
+    /// the door's NAME and nothing else now, so every catalogue nickname is
+    /// excluded, not just these three. What the list still answers is "which
+    /// app do I open", where the loose synonyms were always free, and the
+    /// argument below is the one that has to be re-made from scratch by anyone
+    /// who wants to hand a nickname back to the parser.
     ///
     /// `names` answers "which app do I open", and a loose synonym is free there
     /// because the door has already been chosen — a chip was tapped. The
@@ -205,23 +214,4 @@ public enum LaunchCatalog {
     /// part of it that is true.
     static let notDoorTriggers: Set<String> = ["snap", "ig", "insta"]
 
-    /// Every spoken name that is safe to hear inside a sentence, keyed by the
-    /// lowercased display name it belongs to.
-    ///
-    /// The same data as `names` minus `notDoorTriggers`, asked the other way
-    /// round and built once. It exists because `Door.spokenForms` asks this
-    /// question for every door on every token of every sentence, and a linear
-    /// scan of forty entries there is the hot path paying for a shape the
-    /// catalogue can hand it for free.
-    ///
-    /// `LaunchCatalogTests` already pins that every display name appears in its
-    /// own `names`, so a lookup by display is total over the catalogue.
-    public static let namesByDisplay: [String: [String]] = {
-        var map: [String: [String]] = [:]
-        map.reserveCapacity(entries.count)
-        for entry in entries {
-            map[entry.display.lowercased()] = entry.names.filter { !notDoorTriggers.contains($0) }
-        }
-        return map
-    }()
 }

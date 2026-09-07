@@ -102,12 +102,6 @@ private let noon = Date(timeIntervalSinceReferenceDate: 800_000_000)
         }
         #expect(w.fraction(at: 1_000_000) == 0.99)
     }
-
-    /// Said as an invariant so a future change to `watched(at:)` that reads a
-    /// clock of its own breaks a test rather than a promise.
-    @Test func theInvariantIsDeclaredOnTheType() {
-        #expect(ask().canOnlyEndWhileWatched)
-    }
 }
 
 @Suite struct WaitIsIdempotent {

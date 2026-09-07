@@ -99,7 +99,7 @@ private let absurd = 999_999_999_999_999_999
             Issue.record("the budget sentence stopped being a rule change")
             return
         }
-        let verdict = say("instagram \(absurd)", matured)
+        let verdict = say("unlock instagram for \(absurd) minutes", matured)
         guard case .grant(let door, let minutes, let relockAt) = verdict else {
             Issue.record("the absurd spend answered \(verdict)")
             return
@@ -120,7 +120,7 @@ private let absurd = 999_999_999_999_999_999
     /// `NumberParser.saturating` itself hands back.
     @Test func aStoredIntMaxBudgetValidatesASpendWithoutTrapping() {
         let corrupt = policy(budget: .max)
-        guard case .grant(_, let minutes, let relockAt) = say("instagram 90", corrupt) else {
+        guard case .grant(_, let minutes, let relockAt) = say("unlock instagram for 90 minutes", corrupt) else {
             Issue.record("a spend against a corrupt pool was refused")
             return
         }
@@ -131,7 +131,7 @@ private let absurd = 999_999_999_999_999_999
     /// The same blob, asked the absurd number. Both terms of the multiply are
     /// out of range now, and the answer is still a grant that fits in the day.
     @Test func anAbsurdAskAgainstAStoredIntMaxBudgetIsBounded() {
-        guard case .grant(_, let minutes, _) = say("instagram \(absurd)", policy(budget: .max)) else {
+        guard case .grant(_, let minutes, _) = say("unlock instagram for \(absurd) minutes", policy(budget: .max)) else {
             Issue.record("the absurd ask against a corrupt pool was refused")
             return
         }
@@ -143,7 +143,7 @@ private let absurd = 999_999_999_999_999_999
     /// same arithmetic with the pool standing in for the ceiling.
     @Test func aStoredIntMaxCapValidatesASpendWithoutTrapping() {
         let corrupt = policy(budget: .max, caps: [instagram.id: .max])
-        guard case .grant(_, let minutes, _) = say("instagram \(absurd)", corrupt) else {
+        guard case .grant(_, let minutes, _) = say("unlock instagram for \(absurd) minutes", corrupt) else {
             Issue.record("the absurd ask against a corrupt ceiling was refused")
             return
         }
@@ -160,7 +160,7 @@ private let absurd = 999_999_999_999_999_999
                                                ledger: GrantLedger(), now: at(12),
                                                dayStart: dayStart(at(12)), calendar: cal)
         #expect(askable == 600)
-        guard case .grant(_, let minutes, _) = say("instagram \(askable)", corrupt) else {
+        guard case .grant(_, let minutes, _) = say("unlock instagram for \(askable) minutes", corrupt) else {
             Issue.record("the wall promised \(askable) and the bar refused")
             return
         }

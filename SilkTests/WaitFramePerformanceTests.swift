@@ -424,7 +424,7 @@ private let ratioBound = 4.0
         // The parse `Waiting` holds, re-validated — not a command rebuilt from
         // the first verdict. Same call `landWait` makes, provenance and all.
         let outcome = ParseOutcome.command(.spend(door: door, minutes: 20))
-        let utterance = "instagram for twenty minutes"
+        let utterance = "unlock instagram for twenty minutes"
         var landed = 0
 
         let elapsed = fastestOf(50) {
@@ -473,7 +473,7 @@ private let ratioBound = 4.0
         var granted = 0
 
         let elapsed = fastestOf(200) {
-            let verdict = Validator.validate(outcome, utterance: "instagram for twenty minutes",
+            let verdict = Validator.validate(outcome, utterance: "unlock instagram for twenty minutes",
                                              state: state, ledger: ledger, now: .now)
             if case .grant = verdict { granted += 1 }
         }

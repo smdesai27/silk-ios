@@ -129,6 +129,7 @@ struct WaitOverlay: View {
 // Preview
 // ============================================================
 
+#if DEBUG
 /// A wait frozen at `f` of its length: never watched, so `fraction` answers
 /// from the banked seconds alone and the ink holds still. A live one would show
 /// a different frame every time the preview is opened, which is no way to look
@@ -153,3 +154,4 @@ private func parked(at f: Double) -> Wait {
         }
     }
 }
+#endif

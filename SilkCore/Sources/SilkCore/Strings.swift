@@ -41,8 +41,31 @@ public enum SilkStrings {
         return "\(subject) \(phrase) \(until.display)."
     }
     public static let minutes = "min"
-    public static let howLong = "How long?"
     public static let didntGetThat = "Didn’t get that."
+
+    /// The answer to half a sentence. "How long?" asked for the missing word
+    /// and then took the next fragment as the whole ask; this shows the
+    /// sentence instead, so the next thing typed is a sentence Silk grants.
+    public static let writeItOut = "Write it out:"
+    /// "Write it out: unlock Instagram for 10 min." — the door and the minutes
+    /// are the user's own (the first door and ten minutes when she named
+    /// neither), so this is a rendering and not a new sentence. The verb is
+    /// `unlock` because that is the one opening verb with no second reading:
+    /// the hint typed back verbatim grants.
+    ///
+    /// The minutes are shown only when they are minutes Silk could grant:
+    /// 1 through 300, the same range the Shortcuts `Spend` intent accepts
+    /// (SpendIntent.swift `inclusiveRange`). "instagram 0" and a pasted
+    /// nineteen-digit number both get the sentence with ten in it — a hint
+    /// reading "for 0 min." teaches a sentence that cannot grant, and the
+    /// parser hands the number over exactly as typed so that this is the one
+    /// place the bound lives.
+    public static func writeItOut(_ door: String, minutes: Int?) -> String {
+        let shown = minutes.flatMap { hintRange.contains($0) ? $0 : nil } ?? 10
+        return "\(writeItOut) unlock \(door) for \(shown) \(SilkStrings.minutes)."
+    }
+    /// The minutes a hint may carry. Not a string; the composer's own bound.
+    static let hintRange = 1...300
 
     /// "11am or 11pm?", "7:30am or 7:30pm?" — the whole question, and the whole
     /// reply. A bare hour whose two readings move the night in opposite

@@ -197,67 +197,69 @@ private func freshModel(budget: Int = 40,
 
 @Suite(.serialized) @MainActor struct TheBarAnswersTheSentence {
 
-    /// **THE SHORTHAND THE APP COULD NOT READ.** Doors are built
-    /// `Door(name: display)` with no aliases, so the catalogue's own names for
-    /// an app — "ig", "insta" — reached the grammar as unknown words and every
-    /// one of these sentences answered "Didn't get that." on a real phone,
-    /// while the spine suite passed on all of them because its fixtures attach
-    /// the aliases the app never writes.
+    /// **A NICKNAME IS NOT A DOOR.** Doors are built `Door(name: display)` and
+    /// `Door.spokenForms` is the name and nothing else now, so the catalogue's
+    /// own shorthand for an app — "yt", and "ig" and "insta" before it — reaches
+    /// the grammar as an unknown word.
     ///
-    /// Driven through `handle` on a door made exactly the way the app makes
-    /// one, which is the whole point: this is the assertion whose absence let a
-    /// green CI and a broken product coexist.
-    /// "ig", "insta" and "snap" are deliberately NOT among them: each is
-    /// ordinary English before it is an app, and `firstDoor` matches a token
-    /// anywhere in a sentence — "20 minutes ig" granted twenty minutes of
-    /// Instagram out of "I guess", and "insta-block tiktok" shut Instagram. See
-    /// `LaunchCatalog.notDoorTriggers` for what survives and why.
+    /// This test held the opposite fact once: the shorthand spent on its door,
+    /// and its absence was what let a green CI and a broken product coexist.
+    /// The nicknames went out with the bare shortcut form, for the reason
+    /// PolicyState.swift:44 states — a short nickname answers yes far more often
+    /// than the user meant one, and what one now reaches is a "Write it out:"
+    /// hint on a door the sentence may never have named. The fact reversed; the
+    /// assertion stayed, on the same door made exactly the way the app makes
+    /// one, because a nickname table quietly coming back is the regression this
+    /// file is placed to catch.
+    ///
+    /// The widener is silenced so the reply is assertable: a nickname is prose
+    /// now, and prose on a phone with a model is the model's business.
     @Test(arguments: ["give me 10 minutes of yt", "10 minutes of yt", "yt for 10 minutes"])
-    func theCataloguesShorthandSpendsOnItsDoor(_ sentence: String) async {
-        defer { unpinTheSeams() }
+    func theCataloguesShorthandIsNotADoor(_ sentence: String) async {
+        SilkModelParser.testForceSilent = true
+        defer { SilkModelParser.testForceSilent = false; unpinTheSeams() }
         UserDefaults.standard.set("0", forKey: "silkWait")
         SharedStore.wipeAll()
         let model = AppModel()
         model.completeSetup(doors: [Door(name: "YouTube")], doorSelections: [:],
                             wallSelection: .init(), budget: 40, downHours: noWindowTonight())
         // The premise, and the whole subject of this test: the DETERMINISTIC
-        // grammar reads the catalogue's shorthand. Without this line a
-        // regression that took "yt" back out of the grammar would still pass on
-        // the simulator, because the sentence would fall through to the
-        // on-device widener and be granted there — a green test over the exact
-        // product defect it was written for, on a machine the user does not have.
-        #expect(DeterministicParser.parse(sentence, state: model.policy) != .silence,
-                "the grammar no longer claims \"\(sentence)\" — the widener is what answered")
+        // grammar does NOT read the catalogue's shorthand.
+        #expect(DeterministicParser.parse(sentence, state: model.policy) == .silence,
+                "the grammar claims \"\(sentence)\" again — the nickname table is back")
 
         await model.handle(sentence)
 
-        #expect(model.remainingMinutes == 30, "\"\(sentence)\" did not spend ten minutes")
+        #expect(model.remainingMinutes == 40,
+                "\"\(sentence)\" spent minutes on a word no door answers to")
+        #expect(model.ledger.grants.isEmpty, "\"\(sentence)\" recorded a grant")
         let reply = model.conversation.turns.last?.reply
-        #expect(reply?.contains("YouTube") == true, "\"\(sentence)\" answered: \(reply ?? "nil")")
-        #expect(reply?.contains(SilkStrings.didntGetThat) != true)
+        #expect(reply == SilkStrings.didntGetThat, "\"\(sentence)\" answered: \(reply ?? "nil")")
+        #expect(model.conversation.turns.last?.undo == nil,
+                "a sentence that moved nothing offered a way back")
     }
 
-    /// And the close, in the words people use for it.
-    @Test func theShorthandClosesItsDoorToo() async {
+    /// And the close, on the door's own name — which is the only name it has.
+    @Test func theDoorsOwnNameClosesItsDoor() async {
         defer { unpinTheSeams() }
         SharedStore.wipeAll()
         let model = AppModel()
         let door = Door(name: "YouTube")
         model.completeSetup(doors: [door], doorSelections: [:], wallSelection: .init(),
                             budget: 40, downHours: noWindowTonight())
-        // As above: the grammar has to be the one that reads "yt", or this
-        // passes on the simulator's widener and says nothing about the app.
-        #expect(DeterministicParser.parse("no more yt today", state: model.policy) != .silence,
-                "the grammar no longer claims \"no more yt today\" — the widener is what answered")
+        // The grammar has to be the one that reads it, or this passes on the
+        // simulator's widener and says nothing about the app.
+        #expect(DeterministicParser.parse("no more youtube today", state: model.policy) != .silence,
+                "the grammar no longer claims \"no more youtube today\" — the widener is what answered")
 
-        await model.handle("no more yt today")
+        await model.handle("no more youtube today")
 
         #expect(model.ledger.isClosed(door.id,
                                       at: .now,
                                       dayStart: DayBoundary.dayStart(now: .now,
                                                                      downHours: model.policy.downHours,
                                                                      calendar: .current)),
-                "\"no more yt today\" did not shut the door")
+                "\"no more youtube today\" did not shut the door")
     }
 
     /// **HOURS ARE NOT MINUTES**, through the whole pipeline. This granted TWO

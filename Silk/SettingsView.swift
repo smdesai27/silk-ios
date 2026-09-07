@@ -605,6 +605,7 @@ struct DoorAddOverlay: View {
 
 // ============================================================
 
+#if DEBUG
 #Preview("Settings — day") {
     ZStack {
         Ground(night: false).ignoresSafeArea()
@@ -786,3 +787,4 @@ private struct SettingsRehearsal: View {
         .animation(Silk.motion(Silk.Motion.crossing), value: night)
     }
 }
+#endif

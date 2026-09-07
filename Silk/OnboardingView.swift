@@ -15,16 +15,7 @@ struct OnboardingView: View {
         case permission, apps, limits
     }
 
-    @State private var step: Step = {
-        #if DEBUG
-        // Debug hook for headless QA: launch with `-silkStep N` (0–2).
-        if let i = UserDefaults.standard.string(forKey: "silkStep").flatMap(Int.init),
-           let s = Step(rawValue: i) {
-            return s
-        }
-        #endif
-        return .permission
-    }()
+    @State private var step: Step = .permission
 
     // Collected state
     /// One picker presentation at a time; two .familyActivityPicker modifiers

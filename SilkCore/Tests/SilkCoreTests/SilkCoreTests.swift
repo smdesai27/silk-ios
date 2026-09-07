@@ -4,7 +4,7 @@ import Testing
 
 // MARK: - Fixtures
 
-private let instagram = Door(name: "Instagram", aliases: ["ig", "insta", "the gram"])
+private let instagram = Door(name: "Instagram")
 private let tiktok = Door(name: "TikTok")
 private let reddit = Door(name: "Reddit")
 private let youtube = Door(name: "YouTube")
@@ -110,11 +110,12 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
 
 @Suite struct ParserTests {
     @Test func spendParaphrases() {
-        let variants = [
-            "Instagram, ten", "give me ten minutes of instagram", "ten on ig",
-            "can i have instagram for ten minutes please", "10 minutes of insta",
+        // Verbed paraphrases still mint a grant.
+        let spends = [
+            "give me ten minutes of instagram",
+            "can i have instagram for ten minutes please",
         ]
-        for v in variants {
+        for v in spends {
             guard case .command(.spend(let door, let minutes)) = DeterministicParser.parse(v, state: makeState()) else {
                 Issue.record("did not parse as spend: \(v)")
                 continue
@@ -122,6 +123,14 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
             #expect(door.name == "Instagram", "wrong door for: \(v)")
             #expect(minutes == 10, "wrong minutes for: \(v)")
         }
+        // A door+number sentence with no opening verb writes it out instead
+        // of minting a grant on its own.
+        #expect(DeterministicParser.parse("Instagram, ten", state: makeState())
+                == .writeItOut(door: instagram, minutes: 10))
+        // "ig" and "insta" are nicknames, not the door's name, and
+        // `spokenForms` is name-only now — the sentence names no door.
+        #expect(DeterministicParser.parse("ten on ig", state: makeState()) == .silence)
+        #expect(DeterministicParser.parse("10 minutes of insta", state: makeState()) == .silence)
     }
 
     @Test func gymSentencesAreTheSameInstruction() {
@@ -133,7 +142,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         ]
         for v in variants {
             #expect(DeterministicParser.parse(v, state: makeState())
-                    == .command(.placeBoundAsk(door: instagram)), "failed: \(v)")
+                    == .writeItOut(door: instagram, minutes: nil), "failed: \(v)")
         }
     }
 
@@ -205,7 +214,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
 
 @Suite struct ValidatorTests {
     @Test func plainGrant() {
-        guard case .grant(let door, let minutes, _) = parseAndValidate("instagram, ten") else {
+        guard case .grant(let door, let minutes, _) = parseAndValidate("give me ten minutes of instagram") else {
             Issue.record("expected grant")
             return
         }
@@ -246,19 +255,19 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         let now = afternoon()
         ledger.record(Grant(door: tiktok, minutes: 40, issuedAt: now.addingTimeInterval(-3600),
                             expiresAt: now.addingTimeInterval(-1800)))
-        #expect(parseAndValidate("instagram, ten", ledger: ledger) == .refuseNothingLeft)
+        #expect(parseAndValidate("give me ten minutes of instagram", ledger: ledger) == .refuseNothingLeft)
     }
 
     @Test func downHoursRefuse() {
         let night = cal.date(from: DateComponents(year: 2026, month: 7, day: 29, hour: 23))!
-        #expect(parseAndValidate("instagram, ten", at: night)
+        #expect(parseAndValidate("give me ten minutes of instagram", at: night)
                 == .refuseDownHours(until: TimeOfDay(hour: 7)))
     }
 
     @Test func grantTruncatesAtNightEdge() {
         // 21:50, ask for 30 → re-lock at 22:00, ten minutes debited. "Till 10:00."
         let evening = cal.date(from: DateComponents(year: 2026, month: 7, day: 29, hour: 21, minute: 50))!
-        guard case .grant(_, let minutes, let relock) = parseAndValidate("instagram, thirty", at: evening) else {
+        guard case .grant(_, let minutes, let relock) = parseAndValidate("unlock instagram for thirty minutes", at: evening) else {
             Issue.record("expected truncated grant")
             return
         }
@@ -268,7 +277,8 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
     }
 
     @Test func placeBoundGetsFourWords() {
-        #expect(parseAndValidate("give me instagram until i leave the gym") == .refuseSayHowManyMinutes)
+        #expect(parseAndValidate("give me instagram until i leave the gym")
+                == .refuseWriteItOut(door: instagram, minutes: nil))
     }
 
     /// The refusal names the door and the hour it lifts. It used to say "0 left
@@ -279,7 +289,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         var ledger = GrantLedger()
         ledger.closeDoor(instagram, at: afternoon().addingTimeInterval(-600))
         let boundary = cal.date(from: DateComponents(year: 2026, month: 7, day: 30, hour: 7))!
-        #expect(parseAndValidate("instagram, ten", ledger: ledger)
+        #expect(parseAndValidate("give me ten minutes of instagram", ledger: ledger)
                 == .refuseDoorClosed(door: instagram, until: boundary))
     }
 
@@ -332,7 +342,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         let state = makeState(budget: 50, caps: [tiktok.id: 20])
         let dayStart = DayBoundary.dayStart(now: afternoon(), downHours: state.downHours, calendar: cal)
         #expect(ledger.remainingMinutes(budget: 50, dayStart: dayStart) == 30, "the pool is not empty")
-        #expect(parseAndValidate("tiktok, ten", state: state, ledger: ledger)
+        #expect(parseAndValidate("give me ten minutes of tiktok", state: state, ledger: ledger)
                 == .refuseDoorClosed(door: tiktok, until: dayBoundary()))
     }
 
@@ -342,7 +352,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         let ninePM = cal.date(from: DateComponents(year: 2026, month: 7, day: 29, hour: 21))!
         var ledger = GrantLedger()
         ledger.closeDoor(instagram, at: afternoon().addingTimeInterval(-600), until: ninePM)
-        #expect(parseAndValidate("instagram, ten", ledger: ledger)
+        #expect(parseAndValidate("give me ten minutes of instagram", ledger: ledger)
                 == .refuseDoorClosed(door: instagram, until: ninePM))
     }
 
@@ -351,7 +361,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
     @Test func theSharedPoolStillSaysZeroLeftWhenItIsTrue() {
         var ledger = GrantLedger()
         ledger.record(spentEarlier(tiktok, 40))
-        #expect(parseAndValidate("instagram, ten", ledger: ledger) == .refuseNothingLeft)
+        #expect(parseAndValidate("give me ten minutes of instagram", ledger: ledger) == .refuseNothingLeft)
     }
 
     @Test func theClampTakesTheSmallestOfThree() {
@@ -405,7 +415,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         let evening = cal.date(from: DateComponents(year: 2026, month: 7, day: 29, hour: 21, minute: 50))!
         let state = makeState(budget: 60, caps: [instagram.id: 20])
         guard case .grant(let door, let minutes, let relock) =
-                parseAndValidate("instagram, twenty", state: state, at: evening) else {
+                parseAndValidate("unlock instagram for twenty minutes", state: state, at: evening) else {
             Issue.record("expected a grant truncated at the night edge")
             return
         }
@@ -432,7 +442,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         var ledger = GrantLedger()
         ledger.record(Grant(door: instagram, minutes: 25, issuedAt: tenAM, expiresAt: expiry))
         let state = makeState(caps: [instagram.id: 30])
-        #expect(parseAndValidate("instagram, ten", state: state, ledger: ledger, at: twoPast)
+        #expect(parseAndValidate("give me ten minutes of instagram", state: state, ledger: ledger, at: twoPast)
                 == .restated(door: instagram, until: expiry))
         // Nothing moved: the ledger the verdict was read against is untouched.
         let dayStart = DayBoundary.dayStart(now: twoPast, downHours: state.downHours, calendar: cal)
@@ -452,7 +462,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         ledger.record(Grant(door: instagram, minutes: 25, issuedAt: tenAM, expiresAt: expiry))
         let state = makeState(budget: 100, caps: [instagram.id: 60])
         guard case .grant(_, let minutes, let relock) =
-                parseAndValidate("instagram, forty", state: state, ledger: ledger, at: twoPast) else {
+                parseAndValidate("unlock instagram for forty minutes", state: state, ledger: ledger, at: twoPast) else {
             Issue.record("expected a grant, not a restatement")
             return
         }
@@ -473,7 +483,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         var ledger = GrantLedger()
         ledger.record(Grant(door: instagram, minutes: 25, issuedAt: tenAM, expiresAt: expiry))
         let state = makeState(budget: 120, caps: [instagram.id: 30])
-        #expect(parseAndValidate("instagram, forty", state: state, ledger: ledger, at: twoPast)
+        #expect(parseAndValidate("unlock instagram for forty minutes", state: state, ledger: ledger, at: twoPast)
                 == .restated(door: instagram, until: expiry))
         let dayStart = DayBoundary.dayStart(now: twoPast, downHours: state.downHours, calendar: cal)
         #expect(ledger.remainingMinutes(cap: 30, doorID: instagram.id, dayStart: dayStart) == 5,
@@ -500,7 +510,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
                 == .open(until: expiry), "the row says open")
         #expect(ledger.openDoors(at: fivePast, dayStart: dayStart).contains(instagram.id),
                 "the wall is down")
-        #expect(parseAndValidate("instagram, forty", state: state, ledger: ledger, at: fivePast)
+        #expect(parseAndValidate("unlock instagram for forty minutes", state: state, ledger: ledger, at: fivePast)
                 == .restated(door: instagram, until: expiry))
     }
 
@@ -518,7 +528,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         let dayStart = DayBoundary.dayStart(now: afternoon(), downHours: state.downHours, calendar: cal)
         #expect(ledger.state(of: instagram, at: afternoon(), dayStart: dayStart, cap: 20, calendar: cal)
                 == .rest(until: nil), "the row promises no hour")
-        #expect(parseAndValidate("instagram, ten", state: state, ledger: ledger)
+        #expect(parseAndValidate("give me ten minutes of instagram", state: state, ledger: ledger)
                 == .refuseDoorClosed(door: instagram, until: dayBoundary()))
     }
 
@@ -583,7 +593,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         var ledger = GrantLedger()
         ledger.record(spentEarlier(tiktok, 20))
         let state = makeState(budget: 50, caps: [tiktok.id: 20])
-        #expect(parseAndValidate("tiktok, ten", state: state, ledger: ledger, at: night)
+        #expect(parseAndValidate("give me ten minutes of tiktok", state: state, ledger: ledger, at: night)
                 == .refuseDownHours(until: TimeOfDay(hour: 7)))
         #expect(Verdict.refuseDoorClosed(door: tiktok, until: afternoon()).deferredByDownHours)
         #expect(Verdict.restated(door: tiktok, until: afternoon()).deferredByDownHours)
@@ -618,7 +628,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         var ledger = GrantLedger()
         let now = afternoon()
         ledger.closeDoor(instagram, at: now.addingTimeInterval(-7200), until: now.addingTimeInterval(-3600))
-        guard case .grant(let door, _, _) = parseAndValidate("instagram, ten", ledger: ledger) else {
+        guard case .grant(let door, _, _) = parseAndValidate("give me ten minutes of instagram", ledger: ledger) else {
             Issue.record("expected grant after the close lifted")
             return
         }

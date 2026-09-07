@@ -9,6 +9,7 @@ enum Silk {
     static let linen = Color(red: 0.937, green: 0.914, blue: 0.859)      // #EFE9DB
     static let ink = Color(red: 0.129, green: 0.118, blue: 0.090)        // #211E17
 
+    #if DEBUG
     /// Night lacquer. The token sheet calls it "the night ground" and the app
     /// no longer draws it as one — `Ground(night:)` draws the canvas radial in
     /// `Night` below. It survives because it is that radial's own middle: the
@@ -16,7 +17,13 @@ enum Silk {
     /// value. A surface that cannot carry a gradient and must still read as the
     /// night page therefore hands over lacquer, which is exactly what
     /// `SilkShield` does with `ShieldConfiguration.backgroundColor`.
+    ///
+    /// Every reference left is inside a `#Preview` — `SilkShield` keeps its
+    /// own private copy of this value rather than reading it — so this is
+    /// design tooling, not product surface, and is DEBUG-only for the same
+    /// reason the previews it serves are.
     static let lacquer = Color(red: 0.086, green: 0.075, blue: 0.055)    // #16130E
+    #endif
 
     /// **Night's cloth.** Day is cut from one material — `paper` is the ground,
     /// `linen` the one raised surface, `ink` what is written on both, and every
@@ -192,13 +199,42 @@ enum Silk {
     /// on the main thread, which the guard states rather than assumes — off it,
     /// there is no animation being applied to anything a person can see, so the
     /// authored curve is the right answer and no hop is worth taking to confirm
-    /// it. Read live rather than cached: the setting can be changed from Control
-    /// Centre while Silk is on screen, and the next animation should already
-    /// have it.
+    /// it.
+    ///
+    /// **Still read live; no longer read every time.** `UIAccessibility`'s
+    /// accessor is a cross-process query, and `motion(_:)` is called from forty
+    /// sites, several of them more than once in a single body pass — Now's
+    /// column alone asks three times before a door is drawn. So the answer is
+    /// held and the *change* is subscribed to instead: the setting can still be
+    /// moved from Control Centre while Silk is on screen and the next animation
+    /// still has it, because the notification lands before the frame that would
+    /// use it. Live semantics, one query per change rather than per curve.
     private static var reduceMotion: Bool {
         guard Thread.isMainThread else { return false }
-        return MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled }
+        return MainActor.assumeIsolated {
+            // Touching the token is what installs the observer, on the first
+            // curve of the session and never again.
+            _ = reduceMotionWatch
+            return cachedReduceMotion
+        }
     }
+
+    /// Seeded from the live value the first time a curve is asked for, and
+    /// moved only by the notification below.
+    @MainActor private static var cachedReduceMotion = UIAccessibility.isReduceMotionEnabled
+
+    /// The subscription, as a one-shot static so it cannot be installed twice
+    /// and needs nobody to remember to install it once. Delivered on the main
+    /// queue, which is what makes the write below main-actor-safe.
+    @MainActor private static let reduceMotionWatch: Void = {
+        NotificationCenter.default.addObserver(
+            forName: UIAccessibility.reduceMotionStatusDidChangeNotification,
+            object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated {
+                    cachedReduceMotion = UIAccessibility.isReduceMotionEnabled
+                }
+            }
+    }()
 
     /// The page transition (.55s in the prototype) is deliberately absent: the
     /// pager is a `TabView(.page)`, so the swipe runs UIKit's scroll physics and

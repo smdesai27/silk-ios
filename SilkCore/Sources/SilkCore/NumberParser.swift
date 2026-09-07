@@ -180,7 +180,6 @@ public enum NumberParser {
     /// long?", which is a question the user can answer rather than a grant she
     /// cannot take back.
     private static let hourUnits: Set<String> = ["h", "hr", "hrs", "hour", "hours"]
-    private static let minuteUnits: Set<String> = ["m", "min", "mins", "minute", "minutes"]
 
     /// The seconds units, read by the GUARDS and deliberately not by the
     /// reader. `allNumbers` scales hours because an hour is sixty of the
@@ -326,7 +325,7 @@ public enum NumberParser {
 
     /// The single number an utterance carries, or nil when there are zero or
     /// several. Two numbers is ambiguity, and compilers don't guess.
-    public static func singleNumber(in utterance: String) -> Int? {
+    static func singleNumber(in utterance: String) -> Int? {
         let all = allNumbers(in: utterance)
         return all.count == 1 ? all.first : nil
     }

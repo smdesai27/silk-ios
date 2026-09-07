@@ -21,9 +21,9 @@ private var cal: Calendar {
 
 private let afternoon = cal.date(from: DateComponents(year: 2026, month: 8, day: 4, hour: 15))!
 
-private let instagram = Door(name: "Instagram", aliases: ["ig", "insta", "the gram"])
+private let instagram = Door(name: "Instagram")
 private let tiktok = Door(name: "TikTok")
-private let youtube = Door(name: "YouTube", aliases: ["yt"])
+private let youtube = Door(name: "YouTube")
 private let reddit = Door(name: "Reddit")
 
 private func makeState(budget: Int = 40, caps: [UUID: Int] = [:]) -> PolicyState {
@@ -162,9 +162,10 @@ private func budget(_ utterance: String) -> Int? {
                 == .command(.setDownHoursStart(TimeOfDay(hour: 6))))
         #expect(parse("quiet hours start at 9 in the morning")
                 == .command(.setDownHoursStart(TimeOfDay(hour: 9))))
+        // Aliases are gone, so the door is spelled out rather than "insta".
         guard case .command(.closeDoorToday(let d, let until))
-            = parse("no more insta until 6 in the morning") else {
-            Issue.record("\"no more insta until 6 in the morning\" dropped the close")
+            = parse("no more instagram until 6 in the morning") else {
+            Issue.record("\"no more instagram until 6 in the morning\" dropped the close")
             return
         }
         #expect(d.name == "Instagram")
@@ -178,8 +179,9 @@ private func budget(_ utterance: String) -> Int? {
                 == .command(.setDownHoursStart(TimeOfDay(hour: 21))))
         #expect(parse("down hours till 7 in the morning")
                 == .command(.setDownHoursEnd(TimeOfDay(hour: 7))))
+        // Aliases are gone, so the door is spelled out rather than "insta".
         guard case .command(.closeDoorToday(_, let evening))
-            = parse("block insta until 7 in the evening"),
+            = parse("block instagram until 7 in the evening"),
             case .command(.closeDoorToday(_, let night))
             = parse("no more tiktok until 9 at night") else {
             Issue.record("a close with a stated evening was dropped")
@@ -278,33 +280,75 @@ private func budget(_ utterance: String) -> Int? {
     /// word in an earlier breath — or a trailing one — does not poison the
     /// ask.
     @Test func theAsksBesideTheConsumingClassStillLand() {
-        #expect(spend("insta for an hour")?.1 == 60)
-        #expect(spend("insta for an hour")?.0 == "Instagram")
-        #expect(spend("insta, an hour please")?.1 == 60)
+        // SPEND now requires an opening verb, and aliases are dead: "insta"
+        // is neither a verb nor a door any more, so these two rows are kept
+        // and re-pinned to what they now are — silence, naming no door at
+        // all — rather than dropped.
+        #expect(parse("insta for an hour") == .silence)
+        #expect(parse("insta, an hour please") == .silence)
+        // The identical shapes, verbed and spelled with the door's real name,
+        // still grant — proving the property this test exists for: a
+        // consuming word in an earlier breath, or a trailing one, does not
+        // poison the ask.
+        #expect(spend("give me instagram for an hour")?.1 == 60)
+        #expect(spend("give me instagram for an hour")?.0 == "Instagram")
+        #expect(spend("give me instagram, an hour please")?.1 == 60)
         #expect(spend("can i get an hour of tiktok, it stole my heart")?.1 == 60)
         let got = spend("i drank so much coffee, give me 20 minutes of tiktok")
         #expect(got?.0 == "TikTok" && got?.1 == 20,
                 "the ask after the coffee report -> \(String(describing: got))")
     }
 
-    /// The hot path is the floor. Fragments, chatter tails, ask verbs, request
-    /// modals and the corpus's own permissive rows all still grant.
+    /// The hot path is the floor. Ask verbs, request modals and the corpus's
+    /// own permissive rows all still grant.
     @Test(arguments: [
         ("give me 20 of tiktok", "TikTok", 20),
         ("can i have twenty minutes of tiktok", "TikTok", 20),
+        ("my friend said give me an hour of tiktok", "TikTok", 60),
+        ("im at my limit on tiktok, give me 20 minutes", "TikTok", 20),
+        ("give me instagram until i leave the gym, 20 minutes tops", "Instagram", 20),
+    ])
+    func theHotPathStillGrants(_ row: (utterance: String, door: String, minutes: Int)) {
+        let got = spend(row.utterance)
+        #expect(got?.0 == row.door && got?.1 == row.minutes,
+                "\"\(row.utterance)\" -> \(String(describing: got))")
+    }
+
+    /// SPEND now requires an opening verb: the fragments and chatter tails
+    /// above that carried no verb are kept — dropping a row is never the fix
+    /// — and re-pinned to what they now are, `.writeItOut` with the same
+    /// door and the same minutes, rather than a grant.
+    @Test(arguments: [
         ("tiktok for 20 minutes", "TikTok", 20),
         ("twenty minutes of tiktok", "TikTok", 20),
         ("tiktok 15", "TikTok", 15),
         ("reddit ten ok bye love you", "Reddit", 10),
         ("hey so i was thinking maybe like 10 minutes of reddit would be nice", "Reddit", 10),
-        ("my friend said give me an hour of tiktok", "TikTok", 60),
-        ("im at my limit on tiktok, give me 20 minutes", "TikTok", 20),
         ("no more than 20 of tiktok", "TikTok", 20),
         ("wait, 10 more on tiktok", "TikTok", 10),
-        ("give me instagram until i leave the gym, 20 minutes tops", "Instagram", 20),
         ("tiktok, 10 pls", "TikTok", 10),
     ])
-    func theHotPathStillGrants(_ row: (utterance: String, door: String, minutes: Int)) {
+    func theHotPathFragmentsWriteThemselvesOutWithoutAVerb(_ row: (utterance: String, door: String, minutes: Int)) {
+        guard case .writeItOut(let d, let m) = parse(row.utterance) else {
+            Issue.record("\"\(row.utterance)\" stopped writing itself out")
+            return
+        }
+        #expect(d.name == row.door && m == row.minutes, "\"\(row.utterance)\"")
+    }
+
+    /// And the identical fragments, with the verb restored, still grant: the
+    /// hot path is a verb away from every one of them, never further.
+    @Test(arguments: [
+        ("give me tiktok for 20 minutes", "TikTok", 20),
+        ("give me twenty minutes of tiktok", "TikTok", 20),
+        ("give me 15 of tiktok", "TikTok", 15),
+        ("give me ten of reddit ok bye love you", "Reddit", 10),
+        ("hey so i was thinking maybe can i get 10 minutes of reddit", "Reddit", 10),
+        ("give me no more than 20 of tiktok", "TikTok", 20),
+        ("wait, give me 10 more on tiktok", "TikTok", 10),
+        ("gimme tiktok, 10 pls", "TikTok", 10),
+    ])
+    func theHotPathFragmentsGrantOnceVerbed(_ row: (utterance: String, door: String, minutes: Int)) {
         let got = spend(row.utterance)
         #expect(got?.0 == row.door && got?.1 == row.minutes,
                 "\"\(row.utterance)\" -> \(String(describing: got))")
@@ -336,8 +380,8 @@ private func budget(_ utterance: String) -> Int? {
 
     /// Minutes are untouched on both paths.
     @Test func minutesStillReadAsThemselves() {
-        #expect(spend("give me 30 of insta")?.1 == 30)
-        #expect(spend("give me 30 minutes of insta")?.1 == 30)
+        #expect(spend("give me 30 of instagram")?.1 == 30)
+        #expect(spend("give me 30 minutes of instagram")?.1 == 30)
     }
 }
 
@@ -569,14 +613,26 @@ private func budget(_ utterance: String) -> Int? {
     /// And the closures cost none of the neighbouring asks.
     @Test func theNeighbouringCommandsStillLand() {
         #expect(spend("just finished homework give me 20 of tiktok")?.1 == 20)
-        #expect(spend("ill have 20 of tiktok")?.1 == 20)
+        // "have" is not on the opening-verb list, so this row is kept and
+        // re-pinned to what it now is — the guidance shortcut, same door and
+        // minutes — rather than dropped.
+        guard case .writeItOut(let d, let m) = parse("ill have 20 of tiktok") else {
+            Issue.record("\"ill have 20 of tiktok\" stopped writing itself out")
+            return
+        }
+        #expect(d.name == "TikTok" && m == 20)
+        // And the identical ask, verbed, still grants.
+        #expect(spend("i want 20 of tiktok")?.1 == 20)
         #expect(spend("dont give me more than 10 of tiktok")?.1 == 10)
         // "got" ahead of a request modal stays the modal's ask.
         #expect(spend("ok so i just got home and i want to relax "
                       + "can i get twenty minutes of youtube before dinner")?.1 == 20)
-        // Dictation junk between the door and its number is the corpus's own
-        // pinned permissiveness, untouched.
-        #expect(spend("insta gram ten")?.1 == 10)
+        // Aliases are gone: "insta gram" is two unknown words rather than a
+        // dictation split of "instagram", so this row is kept and re-pinned to
+        // silence — no door survives — and the identical sentence spelled with
+        // the door's real name and a verb still grants.
+        #expect(parse("insta gram ten") == .silence)
+        #expect(spend("give me ten minutes of instagram")?.1 == 10)
         #expect(parse("down hours starting at 10")
                 == .command(.setDownHoursStart(TimeOfDay(hour: 22))))
         #expect(parse("bedtime is 10 tonight")

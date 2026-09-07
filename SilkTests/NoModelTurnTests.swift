@@ -23,6 +23,16 @@ import FoundationModels
 // real Validator, the real ledger and the real reply composition — with the
 // wait pinned off so a grant lands on the same pass it is granted on.
 //
+// WHAT A SPEND IS, AS THIS TABLE NOW READS IT. A grant takes three things —
+// an opening verb, an app name and minutes — and a sentence carrying only two
+// of them is not refused into silence: silence would hand "instagram 10" to the
+// widener, which is a model, and a model reads it as the grant the grammar just
+// declined. It is answered with the sentence that WOULD grant, in her own door
+// and her own number ("Write it out: unlock Instagram for 10 min."), nothing is
+// debited and no Undo is offered. So the table has three outcomes to hold apart
+// and not two, and every `.writeItOut` row below asserts the balance and the
+// ledger stood still.
+//
 // Two things it deliberately does NOT do. It does not assert that the widener
 // is unreachable: it is reachable, it simply says nothing. And it does not
 // pretend the simulator has no model — the simulator this suite runs on HAS
@@ -74,8 +84,12 @@ struct NoModelRow: Sendable, CustomStringConvertible {
         case contains([String])
         /// `SilkStrings.didntGetThat` — the four words, and nothing else.
         case refused
-        /// `SilkStrings.howLong` — a door with no duration on it.
-        case howLong
+        /// `SilkStrings.writeItOut(door:minutes:)` — the sentence written out
+        /// for HALF a spend: a door and a number with no verb between them, a
+        /// door asked for with no duration, or either half standing alone.
+        /// `minutes` is nil when the sentence named none, and the hint then
+        /// says ten.
+        case writeItOut(door: String, minutes: Int?)
         /// "Down hours. Opens 7:00 AM." for the fixture's own window.
         case downHoursRefusal
         /// The window read back whole.
@@ -107,40 +121,69 @@ struct NoModelRow: Sendable, CustomStringConvertible {
 
 private let table: [NoModelRow] = [
 
-    // ---- SPEND, in its documented forms (README rule 1, parser rule 7) ----
-    .init(say: "instagram 10",
-          reply: .exact("Instagram is open for 10 min."), grammar: true, remaining: 30),
-    .init(say: "instagram, ten",
+    // ---- SPEND, in its documented form: A VERB, A DOOR AND MINUTES ----
+    // (README rule 1, parser rule 7). Every row here is a real debit taken by
+    // the grammar alone, which is the claim this file exists to measure: with
+    // the widener silent the hot path still opens doors.
+    .init(say: "unlock instagram for 10 min",
           reply: .exact("Instagram is open for 10 min."), grammar: true, remaining: 30),
     .init(say: "give me 20 minutes of instagram",
           reply: .exact("Instagram is open for 20 min."), grammar: true, remaining: 20),
-    .init(say: "tiktok for 15",
-          reply: .exact("TikTok is open for 15 min."), grammar: true, remaining: 25),
-    .init(say: "10 minutes of instagram",
-          reply: .exact("Instagram is open for 10 min."), grammar: true, remaining: 30),
+    // The commitment frame is the verb spelled as a gerund — "using" is on the
+    // opening-verb list, and the sentence is a person saying what she is about
+    // to do, which is an ask.
+    .init(say: "i'm using instagram for 5 minutes",
+          reply: .exact("Instagram is open for 5 min."), grammar: true, remaining: 35),
     .init(say: "give me 2 hours of instagram",
           reply: .exact("Instagram is open for 40 min."), grammar: true, remaining: 0),
+    // THE HINT BELOW, TYPED BACK VERBATIM. The whole of the guidance design
+    // rests on this row: the sentence the bar shows has to be one the bar can
+    // then read, capital letter, full stop and all.
+    .init(say: "Unlock Instagram for 10 min.",
+          reply: .exact("Instagram is open for 10 min."), grammar: true, remaining: 30),
+
+    // ---- THE PARTIAL SPEND, WRITTEN OUT (parser rule 7's verb guard) ----
+    // A door beside a number is the OBJECT and the AMOUNT of a request with no
+    // request in it. Each of these opened a door and debited the pool until the
+    // grammar required a verb; each is now answered with the sentence that
+    // would grant, in her own door and her own number, and nothing moves.
+    .init(say: "instagram 10", reply: .writeItOut(door: "Instagram", minutes: 10),
+          grammar: true, remaining: 40),
+    .init(say: "instagram, ten", reply: .writeItOut(door: "Instagram", minutes: 10),
+          grammar: true, remaining: 40),
+    .init(say: "tiktok for 15", reply: .writeItOut(door: "TikTok", minutes: 15),
+          grammar: true, remaining: 40),
+    .init(say: "10 minutes of instagram", reply: .writeItOut(door: "Instagram", minutes: 10),
+          grammar: true, remaining: 40),
 
     // ---- THE ELLIPTICAL ASK (parser rule 8) ----
     // A door named with an OPENING VERB and no duration is answered with the
-    // word the sentence is missing. The verb is required: rule 8 tests
-    // `hasOpeningVerb`, so the bare app name is not this rule and is refused
-    // below.
-    .init(say: "give me instagram", reply: .howLong, grammar: true, remaining: 40),
-    .init(say: "open tiktok", reply: .howLong, grammar: true, remaining: 40),
-    // THE BARE DOOR NAME IS NOT AN ASK. Recorded as a row rather than a
-    // footnote: with the widener silent this is "Didn't get that.", and there
-    // is no follow-up state anywhere in the app that would let a bare "10"
-    // finish it (nothing in `AppModel` or the grammar carries a door between
-    // turns). See docs/qa/no-model-verification-2026-09-03.md.
-    .init(say: "instagram", reply: .refused, grammar: false, remaining: 40),
-    .init(given: ["give me instagram"], say: "10", reply: .refused, grammar: false, remaining: 40),
+    // whole sentence it is missing a word of: "Write it out: unlock Instagram
+    // for 10 min." Ten is what the sentence says when she named no number —
+    // the old "How long?" asked for the missing word and then read whatever
+    // fragment came back as the whole ask.
+    .init(say: "give me instagram", reply: .writeItOut(door: "Instagram", minutes: nil),
+          grammar: true, remaining: 40),
+    .init(say: "open tiktok", reply: .writeItOut(door: "TikTok", minutes: nil),
+          grammar: true, remaining: 40),
+    // ---- THE TWO HALVES OF A FRAGMENT (parser rules 9 and 10) ----
+    // A BARE DOOR NAME IS NOT AN ASK, and it is no longer a refusal either: it
+    // is half a sentence, and the reply is the other half. Ten minutes, because
+    // she named no number.
+    .init(say: "instagram", reply: .writeItOut(door: "Instagram", minutes: nil),
+          grammar: true, remaining: 40),
+    // And a bare number names no door, so the hint names the FIRST one. Said
+    // here after a partial ask, which is when a person actually types it — the
+    // grammar carries nothing between turns and does not need to: the door is
+    // in the reply she is reading. See docs/qa/no-model-verification-2026-09-03.md.
+    .init(given: ["give me instagram"], say: "10",
+          reply: .writeItOut(door: "Instagram", minutes: 10), grammar: true, remaining: 40),
 
     // ---- STATUS ----
     .init(say: "how much is left", reply: .exact("40 min left."), grammar: true, remaining: 40),
     .init(say: "how many minutes do i have",
           reply: .exact("40 min left."), grammar: true, remaining: 40),
-    .init(given: ["instagram 10"], say: "how much is left",
+    .init(given: ["unlock instagram for 10 min"], say: "how much is left",
           reply: .exact("30 min left."), grammar: true, remaining: 30),
 
     // ---- CLOSE ----
@@ -177,8 +220,10 @@ private let table: [NoModelRow] = [
           reply: .contains(["Tomorrow:", "TikTok", "no cap"]), grammar: true),
 
     // ---- REFUSALS ----
-    // Nothing left in the pool.
-    .init(given: ["give me 40 minutes of instagram"], say: "tiktok for 10",
+    // Nothing left in the pool. A WHOLE sentence, because the guidance reply is
+    // answered ahead of the balance (Validator.swift:127): a partial ask on an
+    // empty pool is written out, not refused with the balance.
+    .init(given: ["give me 40 minutes of instagram"], say: "unlock tiktok for 10",
           reply: .exact("0 left today."), grammar: true, remaining: 0),
     // Inside the night.
     .init(say: "give me 10 minutes of instagram",
@@ -191,9 +236,10 @@ private let table: [NoModelRow] = [
     // ---- PARAPHRASES ONLY THE MODEL COULD READ ----
     // These are the sentences the widener exists for. With it silent they must
     // reach the four words promptly and change nothing — never a guess.
+    // "ig" and "the gram" are among them now: a door answers to its own name
+    // and nothing else (Door.spokenForms), so a nickname is an unknown word and
+    // the sentence built on one names no door at all.
     .init(say: "unlock ig for a while", reply: .refused, grammar: false, remaining: 40),
-    .init(say: "i could really use some instagram right now",
-          reply: .refused, grammar: false, remaining: 40),
     .init(say: "how about a little tiktok", reply: .refused, grammar: false, remaining: 40),
     .init(say: "surely a short instagram break is fine",
           reply: .refused, grammar: false, remaining: 40),
@@ -201,14 +247,19 @@ private let table: [NoModelRow] = [
     .init(say: "gimme the gram", reply: .refused, grammar: false, remaining: 40),
     .init(say: "asdfgh qwerty zxcvb", reply: .refused, grammar: false, remaining: 40),
 
-    // TWO OF THE THREE PARAPHRASES THE BRIEF EXPECTED TO BE REFUSED ARE NOT.
-    // "let me" and "can i" are opening verbs (DeterministicParser.swift:3509),
-    // so rule 8 claims both and the bar asks the one question that is missing.
+    // THREE OF THE PARAPHRASES THE BRIEF EXPECTED TO BE REFUSED ARE NOT.
+    // "let me", "can i" and "use" are opening verbs (DeterministicParser.swift:3639),
+    // so rule 8 claims all three and the bar writes the sentence out.
     // Recorded here rather than filed as a defect: the answer is deterministic,
-    // it names no minutes it was not given, and it is strictly more useful than
-    // the refusal. It is the grammar being wider than the brief assumed.
-    .init(say: "let me have a bit of instagram", reply: .howLong, grammar: true, remaining: 40),
-    .init(say: "can i get on tiktok", reply: .howLong, grammar: true, remaining: 40),
+    // it names no minutes it was not given, it debits nothing, and it is
+    // strictly more useful than the refusal. It is the grammar being wider than
+    // the brief assumed.
+    .init(say: "let me have a bit of instagram", reply: .writeItOut(door: "Instagram", minutes: nil),
+          grammar: true, remaining: 40),
+    .init(say: "can i get on tiktok", reply: .writeItOut(door: "TikTok", minutes: nil),
+          grammar: true, remaining: 40),
+    .init(say: "i could really use some instagram right now",
+          reply: .writeItOut(door: "Instagram", minutes: nil), grammar: true, remaining: 40),
 ]
 
 // MARK: - The suite
@@ -275,6 +326,10 @@ private let table: [NoModelRow] = [
 
         let policyBefore = model.policy
         let pendingBefore = model.pendingLoosening
+        // The ledger as it stood BEFORE the sentence, not as it stood before
+        // the fixture: a row may have granted in `given`, and what the guidance
+        // rows have to prove is that THIS sentence took nothing.
+        let grantsBefore = model.ledger.grants.count
         await model.handle(row.say)
 
         #expect(model.conversation.hasPendingTurn == false,
@@ -302,10 +357,17 @@ private let table: [NoModelRow] = [
             #expect(model.policy == policyBefore, "a refused sentence moved the policy")
             #expect(model.conversation.turns.last?.undo == nil,
                     "a refusal that moved nothing offered a way back")
-        case .howLong:
-            #expect(answer == SilkStrings.howLong,
+        case .writeItOut(let door, let minutes):
+            #expect(answer == SilkStrings.writeItOut(door, minutes: minutes),
                     "\"\(row.say)\" answered \"\(answer ?? "nil")\"")
-            #expect(model.policy == policyBefore, "a question moved the policy")
+            #expect(model.policy == policyBefore, "a guidance reply moved the policy")
+            // The three facts that make the guidance affordable, held exactly
+            // as the refusal rows hold them: nothing was debited, nothing was
+            // recorded, and nothing was offered to take back.
+            #expect(model.ledger.grants.count == grantsBefore,
+                    "a guidance reply recorded a grant")
+            #expect(model.conversation.turns.last?.undo == nil,
+                    "a guidance reply that moved nothing offered a way back")
         case .downHoursRefusal:
             #expect(answer == "\(SilkStrings.downHoursOpens) \(night.end.displayWithMeridiem).",
                     "the night answered \"\(answer ?? "nil")\"")
@@ -345,9 +407,10 @@ private let table: [NoModelRow] = [
         UserDefaults.standard.set("0", forKey: "silkWait")
         defer { unpinTheSeams() }
 
-        // One sentence of every shape, including the ones only the widener
-        // could have read.
+        // One sentence of every shape — the grant, the guidance, and the ones
+        // only the widener could have read.
         let sentences = [
+            "unlock instagram for 10 min", "Unlock Instagram for 10 min.",
             "instagram 10", "instagram, ten", "give me 20 minutes of instagram",
             "tiktok for 15", "10 minutes of instagram", "give me instagram",
             "how much is left", "no more instagram today", "close tiktok",

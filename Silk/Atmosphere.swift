@@ -182,6 +182,7 @@ struct Atmosphere: View {
     }
 }
 
+#if DEBUG
 #Preview("Atmosphere") {
     /// A 390×800 screen, the canvas everything above is authored against.
     /// (ds-bundle/_ds_bundle.css:30-34)
@@ -211,3 +212,4 @@ struct Atmosphere: View {
     }
     .background(Silk.linen)
 }
+#endif

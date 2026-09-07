@@ -487,7 +487,7 @@ final class OnboardingUITests: XCTestCase {
 
         // The first grant, through the whole pipeline: parse → validate →
         // debit → read-back. 40 - 10 = 30 left.
-        say(bar, "Instagram, ten\n")
+        say(bar, "unlock Instagram for 10 min\n")
         // The reply is a sentence now, not a time-statement: the current design
         // gives the bar a conversation, so "Instagram · 10 · till 5:12" became
         // "Instagram is open for 10 min."
@@ -1460,7 +1460,7 @@ final class OnboardingUITests: XCTestCase {
         let app = launchFresh(["-silkWait", "3"])
         let bar = completeSetup(app)
 
-        say(bar, "reddit for ten\n")
+        say(bar, "unlock reddit for ten\n")
 
         let wait = element(app, "silk.wait")
         XCTAssertTrue(wait.waitForExistence(timeout: Self.answer),
@@ -1506,7 +1506,7 @@ final class OnboardingUITests: XCTestCase {
         let app = launchFresh(["-silkWait", "8"])
         let bar = completeSetup(app)
 
-        say(bar, "reddit for ten\n")
+        say(bar, "unlock reddit for ten\n")
         let wait = element(app, "silk.wait")
         XCTAssertTrue(wait.waitForExistence(timeout: Self.answer),
                       "the wait did not rise over a granted ask")
@@ -1542,7 +1542,7 @@ final class OnboardingUITests: XCTestCase {
         let app = launchFresh(["-silkWait", "0.2"])
         let bar = completeSetup(app)
 
-        say(bar, "reddit for ten\n")
+        say(bar, "unlock reddit for ten\n")
         let readBack = app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS %@", "Reddit is open for 10")
         ).firstMatch
@@ -1564,7 +1564,7 @@ final class OnboardingUITests: XCTestCase {
         let app = launchFresh(["-silkWait", "3"])
         let bar = completeSetup(app)
 
-        say(bar, "reddit for ten\n")
+        say(bar, "unlock reddit for ten\n")
         XCTAssertTrue(element(app, "silk.wait").waitForExistence(timeout: Self.answer),
                       "the wait did not rise over a granted ask")
         XCTAssertTrue(wait(for: app.keyboards.firstMatch, "exists == false", timeout: Self.overlay),
@@ -1593,7 +1593,7 @@ final class OnboardingUITests: XCTestCase {
         let app = launchFresh(["-silkWait", "30", "-silkStale", "3"])
         let bar = completeSetup(app)
 
-        say(bar, "reddit for ten\n")
+        say(bar, "unlock reddit for ten\n")
         let wait = element(app, "silk.wait")
         XCTAssertTrue(wait.waitForExistence(timeout: Self.answer),
                       "the wait did not rise over a granted ask")
@@ -1649,7 +1649,7 @@ final class OnboardingUITests: XCTestCase {
         let app = launchFresh(["-silkWait", "20"])
         let bar = completeSetup(app)
 
-        say(bar, "reddit for ten\n")
+        say(bar, "unlock reddit for ten\n")
         // Named `veil`, not `wait`: a local of that name shadows this class's
         // own `wait(for:_:timeout:)` helper, and the compiler reports it as
         // "cannot call value of non-function type 'XCUIElement'".
@@ -1712,7 +1712,7 @@ final class OnboardingUITests: XCTestCase {
         let app = launchFresh(["-silkWait", "3"])
         let bar = completeSetup(app)
 
-        say(bar, "reddit for ten\n")
+        say(bar, "unlock reddit for ten\n")
         let veil = element(app, "silk.wait")
         XCTAssertTrue(veil.waitForExistence(timeout: Self.answer),
                       "the wait did not rise over a granted ask")

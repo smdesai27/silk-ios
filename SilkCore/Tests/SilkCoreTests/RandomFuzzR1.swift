@@ -12,7 +12,7 @@ import Testing
 
 // MARK: - Fixtures
 
-private let instagram = Door(name: "Instagram", aliases: ["ig", "insta", "the gram"])
+private let instagram = Door(name: "Instagram")
 private let tiktok = Door(name: "TikTok")
 private let reddit = Door(name: "Reddit")
 private let youtube = Door(name: "YouTube")
@@ -25,9 +25,9 @@ private func makeState(budget: Int = 40, caps: [UUID: Int] = [:]) -> PolicyState
 }
 
 private let confusingDoors = [
-    Door(name: "Instagram", aliases: ["ig", "insta", "the gram", "gram"]),
+    Door(name: "Instagram"),
     Door(name: "Insta"),
-    Door(name: "TikTok", aliases: ["tik", "tok"]),
+    Door(name: "TikTok"),
     Door(name: "X"),
 ]
 
@@ -251,7 +251,7 @@ private func violation(utterance: String, state: PolicyState,
             return "rule change invented \(proposed.doors.count - state.doors.count) doors"
         }
         guard proposed.budgetMinutes >= 0 else { return "negative proposed budget" }
-    case .downHours, .refuseNothingLeft, .refuseDownHours, .refuseSayHowManyMinutes,
+    case .downHours, .refuseNothingLeft, .refuseDownHours, .refuseWriteItOut,
          .refuseSayAmOrPm, .refuseDoorNeedsApp, .refuseDoorClosed, .silence:
         break  // refusals and silence are always well-formed
     }

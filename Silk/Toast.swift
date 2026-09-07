@@ -45,8 +45,6 @@ struct SilkToast: Equatable, Identifiable {
     /// has to be able to tell them apart. `silk.toast.undo` is unchanged and
     /// stays the default, so every walk that matches on it still does.
     var actionID: String = "silk.toast.undo"
-
-    var carriesAction: Bool { actionLabel != nil }
 }
 
 // ============================================================
@@ -272,6 +270,7 @@ struct ToastHost<Content: View>: View {
 
 // ============================================================
 
+#if DEBUG
 #Preview {
     HStack(spacing: 0) {
         ToastGallery(night: false)
@@ -322,3 +321,4 @@ private struct ToastGallery: View {
         }
     }
 }
+#endif
