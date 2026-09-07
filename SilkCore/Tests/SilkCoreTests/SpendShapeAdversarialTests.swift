@@ -335,10 +335,19 @@ private func expectNeverLoosensInstantly(_ text: String,
     /// answer to somebody asking for restraint, and a harmless one: nothing is
     /// debited and the turn ends. Recorded so the cost of the widening is
     /// visible where it actually lands.
-    @Test(arguments: ["i need less instagram"])
+    @Test(arguments: ["i need more instagram"])
     func rule8AnswersProseWithAHintAndNeverWithMinutes(_ text: String) {
         expectNoMinutes(text, "rule 8 never mints")
         expectWriteItOut(text, door: "Instagram", minutes: nil)
+    }
+
+    /// And a sentence asking for LESS — "i need less instagram" — is not even
+    /// hinted: `asksForLess` hands it to the widener, because the sentence
+    /// that opens the app is the wrong answer to somebody asking to close it.
+    @Test(arguments: ["i need less instagram", "i want a limit on instagram"])
+    func rule8FallsSilentOnAnAskForLess(_ text: String) {
+        expectNoMinutes(text, "rule 8 never mints")
+        #expect(DeterministicParser.parse(text, state: makeState()) == .silence)
     }
 
     /// And where the verb is NEGATED, rule 8 does not even hint: "no use for

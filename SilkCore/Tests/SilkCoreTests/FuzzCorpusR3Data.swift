@@ -31,7 +31,7 @@ enum FuzzCorpusR3Data {
         FuzzCorpusRow(source: "conversation", index: 19, utterance: "cap tiktok at 15 no wait just close it", stateSpec: nil, expect: "VERDICT CLOSE door=tiktok until=day-boundary"),
         FuzzCorpusRow(source: "conversation", index: 20, utterance: "close tiktok no wait just cap it at 15", stateSpec: nil, expect: "VERDICT CLOSE door=tiktok until=day-boundary"),
         FuzzCorpusRow(source: "conversation", index: 21, utterance: "block tiktok wait no dont", stateSpec: nil, expect: "VERDICT CLOSE door=tiktok until=day-boundary"),
-        FuzzCorpusRow(source: "conversation", index: 22, utterance: "close tiktok actually no keep it open", stateSpec: nil, expect: "VERDICT WRITE_IT_OUT door=tiktok minutes=none"),
+        FuzzCorpusRow(source: "conversation", index: 22, utterance: "close tiktok actually no keep it open", stateSpec: nil, expect: "VERDICT SILENCE"),
         FuzzCorpusRow(source: "conversation", index: 23, utterance: "actually make it 45 a day", stateSpec: nil, expect: "VERDICT RULE_CHANGE polarity=loosen budget=45"),
         FuzzCorpusRow(source: "conversation", index: 24, utterance: "lets try 35 a day and see how it goes", stateSpec: nil, expect: "VERDICT RULE_CHANGE polarity=tighten budget=35"),
         FuzzCorpusRow(source: "conversation", index: 25, utterance: "hi could you please give me twenty minutes of instagram thank you so much", stateSpec: nil, expect: "VERDICT GRANT door=instagram minutes=20"),

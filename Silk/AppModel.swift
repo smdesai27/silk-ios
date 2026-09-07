@@ -669,7 +669,7 @@ final class AppModel {
         let id = conversation.ask(utterance)
         let asked = ContinuousClock.now
 
-        var outcome = DeterministicParser.parse(utterance, state: policy)
+        var outcome = DeterministicParser.parse(utterance, state: policy, recentDoor: recentHintDoor)
         if outcome == .silence {
             // The one unbounded leg of this function, and it is bounded now:
             // `SilkModelParser.deadline` is two seconds, after which the
@@ -701,6 +701,8 @@ final class AppModel {
         syncLedgerIfStale()
         let verdict = Validator.validate(outcome, utterance: utterance,
                                          state: policy, ledger: ledger, now: .now)
+        // The hint's door, remembered for exactly one turn (see `recentHintDoor`).
+        if case .refuseWriteItOut(let door, _) = verdict { recentHintDoor = door } else { recentHintDoor = nil }
 
         // Down hours answer everything with the hour they end
         // (Silk Mockup.dc.html:317, the first line of `reply`) — with two
@@ -2170,10 +2172,20 @@ final class AppModel {
     /// spent by `clearWait`. `@ObservationIgnored`: nothing draws it.
     @ObservationIgnored private var foregroundWorkDeferred = false
 
+    /// The door the bar last wrote out for her, and nothing else about the
+    /// turn before. One turn of memory, held here and not in the grammar:
+    /// "tiktok" is answered "Write it out: unlock TikTok for 10 min.", and
+    /// "10" typed next has to write out TikTok, not the first door on the
+    /// list. Set by the hint, cleared by every other reply, and read by the
+    /// one rule that guesses a door (`DeterministicParser.parse(recentDoor:)`).
+    /// `@ObservationIgnored`: nothing draws it.
+    @ObservationIgnored private var recentHintDoor: Door?
+
     /// Everything a genuine return from the background owes, in the order it
     /// owes it. Split out of `foregrounded` so the wait's ending can run the
     /// same paragraph, unchanged, at the moment it becomes safe to.
     private func reconcileOnReturn() {
+        Silk.rereadReduceMotion()
         weekAttemptsCache = nil
         invalidateDayRecordsIfStale()
         // The suspension is where external writes accumulate — a Shortcuts

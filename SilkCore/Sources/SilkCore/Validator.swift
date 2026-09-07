@@ -111,6 +111,12 @@ public enum Validator {
     /// it grants nothing, so there are no minutes whose provenance could
     /// matter — and the deterministic grammar is its only producer, because
     /// the widener never sees a sentence the grammar has already answered.
+    /// The minutes one sentence can ask for: the Shortcuts `Spend` intent's
+    /// own range (`SpendIntent.swift`, `inclusiveRange`), and the range the
+    /// bar's hint will teach (`SilkStrings.writeItOut`). One constant, so the
+    /// hint can never teach a sentence the intent would refuse.
+    public static let grantableMinutes = 1...300
+
     public static func validate(
         _ outcome: ParseOutcome,
         utterance: String,
@@ -119,15 +125,6 @@ public enum Validator {
         now: Date,
         calendar: Calendar = .current
     ) -> Verdict {
-        // Understandable, not executable: a condition, or a door, or a number
-        // can start a grant; only all three together can end one. Answered
-        // ahead of the command switch because it is not a command — nothing is
-        // proposed, so there is nothing to check against the policy.
-        if case .writeItOut(let door, let minutes) = outcome {
-            return .refuseWriteItOut(door: door, minutes: minutes)
-        }
-        guard case .command(let command) = outcome else { return .silence }
-
         // The ESTABLISHED day's start, not the live boundary's: a tighten that
         // moves when down hours end lands mid-day, and the day she is standing
         // in must keep the start it opened with, or the pool, the caps and
@@ -137,6 +134,34 @@ public enum Validator {
                                                 calendar: calendar)
         let remaining = ledger.remainingMinutes(budget: state.budgetMinutes, dayStart: dayStart,
                                                 calendar: calendar)
+
+        // Understandable, not executable: a condition, or a door, or a number
+        // can start a grant; only all three together can end one. Answered
+        // ahead of the command switch because it is not a command — nothing is
+        // proposed, so there is no provenance to check. The EDGES still answer
+        // first, exactly as they would for the whole sentence: handing her
+        // "Write it out: unlock Instagram for 10 min." when the pool is empty
+        // or the door is shut is handing her a sentence the next turn refuses.
+        // Down hours are the app's own gate (`deferredByDownHours`), and the
+        // refusal there names the hour the wall opens.
+        if case .writeItOut(let door, let minutes) = outcome {
+            if remaining <= 0 { return .refuseNothingLeft }
+            if let r = ceilingRemaining(door: door, state: state, ledger: ledger,
+                                        dayStart: dayStart, calendar: calendar), r <= 0 {
+                return .refuseDoorClosed(door: door,
+                                         until: DayBoundary.nextDayStart(after: dayStart,
+                                                                         calendar: calendar))
+            }
+            if ledger.isClosed(door.id, at: now, dayStart: dayStart) {
+                return .refuseDoorClosed(
+                    door: door,
+                    until: ledger.closedUntil[door.id]
+                        ?? DayBoundary.nextDayStart(after: dayStart, calendar: calendar))
+            }
+            return .refuseWriteItOut(door: door, minutes: minutes)
+        }
+        guard case .command(let command) = outcome else { return .silence }
+
         let nowTime = timeOfDay(now, calendar: calendar)
 
         switch command {

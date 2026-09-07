@@ -149,40 +149,38 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     }
 }
 
-@Suite struct AGluedUnitIsDeliberatelyNotRead {
+@Suite struct AGluedUnitIsRead {
 
-    /// "20min" and "2h" were split into a number and a unit for one round, and
-    /// taken back out. The reason is reach: a glued duration is legible inside
-    /// ordinary prose in a way a spaced one is not, so "give me tiktok, its 2h
-    /// until dinner" — a sentence that states no duration FOR THE DOOR — became
-    /// a two-hour ask that clamped to the whole remaining pool. The elliptical
-    /// ask answers these with "How long?", which is a question the user can
-    /// answer, rather than a grant she cannot take back.
-    ///
-    /// Pinned so the trade is a decision rather than a gap somebody closes
-    /// without meeting the sentence that closed it.
-    @Test(arguments: ["give me 20min of youtube", "give me 45m of youtube",
-                      "give me 2h of youtube", "give me 90m of youtube"])
-    func aGluedDurationReachesTheAskRatherThanTheGrant(_ utterance: String) {
-        guard case .writeItOut =
-                DeterministicParser.parse(utterance, state: makeState()) else {
-            if case .command(.spend(_, let m)) =
-                DeterministicParser.parse(utterance, state: makeState()) {
-                Issue.record("\"\(utterance)\" granted \(m) from a glued unit")
-            }
-            return
-        }
+    /// "20min" and "2h" were split into a number and a unit for one round,
+    /// taken back out, and are now read again — and the reason it is safe
+    /// now is the reason it was not then. The worry was reach: "give me
+    /// tiktok, its 2h until dinner" states no duration FOR THE DOOR, and a
+    /// glued unit legible inside prose made it a two-hour ask. That sentence
+    /// is a two-number ambiguity today only when a second number stands
+    /// beside it, and the spaced spelling ("its 2 hours until dinner") was
+    /// read that way all along; the glued one now behaves the same instead
+    /// of differently. On the other side of the trade stands the sentence a
+    /// thumb actually types — "unlock instagram for 10min" — which was
+    /// answered "Write it out: unlock Instagram for 10 min.", a hint telling
+    /// her to write what she believed she had just written. NumberParser
+    /// .gluedUnit peels only the units the parser reads, so "9GAG" keeps its
+    /// name.
+    @Test(arguments: [("give me 20min of youtube", 20), ("give me 45m of youtube", 45),
+                      ("give me 2h of youtube", 120), ("give me 90m of youtube", 90)])
+    func aGluedDurationIsTheDurationItSpells(_ row: (utterance: String, minutes: Int)) {
+        #expect(spend(row.utterance)?.1 == row.minutes, "\"\(row.utterance)\"")
     }
 
-    /// And a glued duration in an ASIDE mints nothing at all — the sentence it
-    /// belongs to is answered on its own terms.
+    /// And a glued duration in an ASIDE is a second number now, exactly as
+    /// the spaced spelling always was: two numbers is the ambiguity the
+    /// grammar refuses, and the sentence is the widener's.
     @Test(arguments: [
-        ("give me 20 of tiktok, ill be done in 5m", 20),
-        ("give me 30 of instagram, my meeting is in 15m", 30),
-        ("give me 20 of tiktok, its 2h until dinner", 20),
+        "give me 20 of tiktok, ill be done in 5m",
+        "give me 30 of instagram, my meeting is in 15m",
+        "give me 20 of tiktok, its 2h until dinner",
     ])
-    func anAsideWithAGluedDurationFundsNothing(_ row: (utterance: String, minutes: Int)) {
-        #expect(spend(row.utterance)?.1 == row.minutes, "\"\(row.utterance)\"")
+    func anAsideWithAGluedDurationIsTwoNumbers(_ utterance: String) {
+        #expect(DeterministicParser.parse(utterance, state: makeState()) == .silence, "\"\(utterance)\"")
     }
 
     /// The spaced spellings carry the same meaning and are read.

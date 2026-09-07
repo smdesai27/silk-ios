@@ -297,7 +297,7 @@ private func parse(_ text: String, _ state: PolicyState = makeState()) -> ParseO
     /// still hands the number over exactly as typed, so the bound has one
     /// home.
     @Test func theHintNeverTeachesAZero() {
-        #expect(SilkStrings.hintRange == 1...300)
+        #expect(Validator.grantableMinutes == 1...300)
         #expect(SilkStrings.writeItOut("Instagram", minutes: 0)
             == "Write it out: unlock Instagram for 10 min.")
         #expect(SilkStrings.writeItOut("Instagram", minutes: -10)
@@ -325,6 +325,171 @@ private func parse(_ text: String, _ state: PolicyState = makeState()) -> ParseO
     ])
     func aNegatedAskIsNotWrittenOut(_ sentence: String) {
         #expect(parse(sentence) == .silence)
+    }
+}
+
+// MARK: - The second round: what the probe found on the built app
+
+/// Units glued to the number, the way a thumb types them. "10min" used to be
+/// one token the number parser could not read, so "unlock instagram for
+/// 10min" answered with a hint telling her to write what she believed she had
+/// just written.
+@Suite struct AGluedUnitIsStillAUnit {
+    @Test(arguments: [
+        ("unlock instagram for 10min", 10), ("unlock instagram for 10mins", 10),
+        ("unlock instagram for 10m", 10), ("unlock instagram 10m", 10),
+        ("unlock instagram for 1h", 60), ("unlock instagram for 2hrs", 120),
+        ("unlock instagram for 1hr", 60), ("gimme 15min of instagram", 15),
+    ])
+    func aGluedUnitReadsAsTwoTokens(_ row: (String, Int)) {
+        #expect(parse(row.0) == .command(.spend(door: instagram, minutes: row.1)))
+    }
+
+    @Test(arguments: [("instagram 10min", 10), ("instagram 10m", 10), ("10min", 10)])
+    func aGluedUnitStillMakesAFragmentAFragment(_ row: (String, Int)) {
+        #expect(parse(row.0) == .writeItOut(door: instagram, minutes: row.1))
+    }
+
+    /// A colon is punctuation everywhere but inside a clock time.
+    @Test func aColonOnTheDoorIsNotPartOfItsName() {
+        #expect(parse("unlock instagram: 10 minutes") == .command(.spend(door: instagram, minutes: 10)))
+        #expect(parse("instagram: 10") == .writeItOut(door: instagram, minutes: 10))
+        #expect(parse("down hours start at 7:30") == .command(.setDownHoursStart(TimeOfDay(hour: 19, minute: 30))))
+    }
+
+    /// A door named with a digit and a letter glued keeps its name: only the
+    /// units the number parser reads are peeled off.
+    @Test func aDoorNamedWithDigitsIsNotSplit() {
+        let ninegag = Door(name: "9GAG")
+        let state = makeState([instagram, ninegag])
+        #expect(parse("unlock 9gag for 10 minutes", state) == .command(.spend(door: ninegag, minutes: 10)))
+    }
+}
+
+/// The promise, as well as the announcement: "i'll use", "i will spend", "i'm
+/// going to open", "i'm gonna go on" — and the polite ask, "i'd like".
+@Suite struct AnIntentionIsACommitment {
+    @Test(arguments: [
+        "i will use instagram for 10 minutes", "i'll use instagram for 10 minutes",
+        "ill use instagram for 10 minutes", "i'll spend 10 minutes on instagram",
+        "i'm going to use instagram for 10 minutes", "im going to open instagram for 10 minutes",
+        "i'm gonna go on instagram for 10 minutes", "i am going to unlock instagram for 10 minutes",
+        "i'd like 10 minutes of instagram", "id like 10 minutes of instagram",
+        "i would like 10 minutes of instagram", "i'd like instagram for 10 minutes",
+        "i'd like to use instagram for 10 minutes",
+        "im getting ready, im going on instagram for 10 minutes",
+        "give instagram 10 minutes", "give tiktok 20 minutes",
+    ])
+    func anIntentionGrants(_ sentence: String) {
+        let door = sentence.contains("tiktok") ? tiktok : instagram
+        let minutes = sentence.contains("20") ? 20 : 10
+        #expect(parse(sentence) == .command(.spend(door: door, minutes: minutes)))
+    }
+
+    @Test(arguments: [
+        "i'll never use instagram for 10 minutes", "i won't use instagram for 10 minutes",
+        "i will not open instagram for 10 minutes", "she will use instagram for 10 minutes",
+        "i will use instagram 30 minutes a day", "i'll use instagram for 10 minutes tomorrow",
+        "i'll be on instagram for 10 minutes", "i'm on instagram for 10 minutes",
+        "i'll get instagram for 10 minutes",
+    ])
+    func aNegatedPlannedOrHabitualIntentionStaysSilent(_ sentence: String) {
+        #expect(parse(sentence) == .silence)
+    }
+
+    /// Bare "using" is a participle, not a verb on the list: without its
+    /// first-person frame the sentence reads as a report and is the
+    /// widener's. What matters is that no list entry mints it.
+    @Test func aBareParticipleNeverMints() {
+        #expect(parse("using instagram for 10 minutes") == .silence)
+    }
+}
+
+/// Rule 2's window setter keeps the verb list it was measured against; the
+/// spend grammar's wider one must not silence it.
+@Suite struct TheWindowSetterKeepsItsOwnVerbs {
+    @Test func aNeedToMoveTheWindowMovesIt() {
+        #expect(parse("i need down hours to start at 11") == .command(.setDownHoursStart(TimeOfDay(hour: 23))))
+        #expect(parse("i need quiet hours at 10") == .command(.setDownHoursStart(TimeOfDay(hour: 22))))
+        #expect(parse("lemme have bedtime at 11") == .command(.setDownHoursStart(TimeOfDay(hour: 23))))
+        #expect(parse("gimme quiet from 11") == .command(.setDownHoursStart(TimeOfDay(hour: 23))))
+    }
+
+    /// A negated preamble does not refuse the ask that follows it — not even
+    /// when the ask is Silk's own hint sentence.
+    @Test(arguments: [
+        "i dont use instagram much, unlock instagram for 10 min",
+        "i dont use instagram much, give me 10 minutes of instagram",
+        "i shouldnt use instagram, but give me 10 minutes of instagram",
+    ])
+    func aNegatedPreambleLeavesTheAskStanding(_ sentence: String) {
+        #expect(parse(sentence) == .command(.spend(door: instagram, minutes: 10)))
+    }
+
+    @Test(arguments: ["dont use instagram for 10 minutes", "no use, instagram for 10",
+                      "dont spend 10 minutes on instagram"])
+    func aNegatedAskItselfStaysRefused(_ sentence: String) {
+        if case .command(.spend) = parse(sentence) { Issue.record("a negated ask granted: \(sentence)") }
+    }
+    @Test func aDoorlessAskBeforeBedtimeIsStillNotAWindow() {
+        let o = parse("give me 20 minutes before bedtime")
+        if case .command(.setDownHoursStart) = o { Issue.record("a doorless ask moved the night") }
+    }
+}
+
+/// A sentence asking for LESS of the app, with an opening verb and no number,
+/// is not answered with the sentence that opens it.
+@Suite struct AskingForLessIsNotAnAsk {
+    @Test(arguments: [
+        "i need to use instagram less", "i want to cut down on tiktok",
+        "i need to stop using instagram", "let me off instagram", "i want instagram blocked",
+    ])
+    func aReductionFallsSilent(_ sentence: String) {
+        #expect(parse(sentence) == .silence)
+    }
+}
+
+/// The bare number names the door the bar last wrote out, when the app says
+/// which that was.
+@Suite struct TheBareNumberRemembersTheDoor {
+    @Test func theRememberedDoorWins() {
+        #expect(DeterministicParser.parse("10", state: makeState(), recentDoor: tiktok)
+            == .writeItOut(door: tiktok, minutes: 10))
+    }
+    @Test func aDoorNoLongerHersIsNotGuessed() {
+        let gone = Door(name: "Reddit")
+        #expect(DeterministicParser.parse("10", state: makeState(), recentDoor: gone)
+            == .writeItOut(door: instagram, minutes: 10))
+    }
+    @Test func aNamedDoorIgnoresTheMemory() {
+        #expect(DeterministicParser.parse("instagram 10", state: makeState(), recentDoor: tiktok)
+            == .writeItOut(door: instagram, minutes: 10))
+    }
+}
+
+/// The edges answer a fragment as they would the whole sentence.
+@Suite struct AFragmentMeetsTheEdgesFirst {
+    @Test func anEmptyPoolSaysSo() {
+        let state = makeState()
+        let spent = GrantLedger(grants: [Grant(door: instagram, minutes: 40,
+                                               issuedAt: Date().addingTimeInterval(-3600),
+                                               expiresAt: Date().addingTimeInterval(-1200))])
+        let v = Validator.validate(.writeItOut(door: instagram, minutes: 10), utterance: "instagram 10",
+                                   state: state, ledger: spent, now: Date())
+        #expect(v == .refuseNothingLeft)
+    }
+    @Test func aClosedDoorSaysSo() {
+        let state = makeState()
+        let closed = GrantLedger(closedToday: [tiktok.id: Date()])
+        let v = Validator.validate(.writeItOut(door: tiktok, minutes: nil), utterance: "tiktok",
+                                   state: state, ledger: closed, now: Date())
+        if case .refuseDoorClosed(let door, _) = v { #expect(door == tiktok) }
+        else { Issue.record("expected the closed-door refusal, got \(v)") }
+    }
+    @Test func anOpenPoolAndAnOpenDoorGetTheHint() {
+        let v = Validator.validate(.writeItOut(door: instagram, minutes: 10), utterance: "instagram 10",
+                                   state: makeState(), ledger: GrantLedger(), now: Date())
+        #expect(v == .refuseWriteItOut(door: instagram, minutes: 10))
     }
 }
 

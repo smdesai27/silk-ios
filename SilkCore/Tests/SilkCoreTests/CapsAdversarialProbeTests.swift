@@ -920,7 +920,9 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     @Test func theWhGuardAndTheNumberlessAskKeepWalking() {
         let a = spend("why would you cap tiktok? give me 20")
         #expect(a?.0 == "TikTok" && a?.1 == 20)
-        #expect(parse("can i get a limit on instagram")
+        // "limit" without a number asks for less; the widener's, not a hint's.
+        #expect(parse("can i get a limit on instagram") == .silence)
+        #expect(parse("can i get more of instagram")
                 == .writeItOut(door: instagram, minutes: nil))
         // The ask-verb exemption on the stranded-quantifier arm is not
         // verb-spelling-keyed: "let me have" walks to "How long?" exactly as

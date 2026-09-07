@@ -1156,9 +1156,11 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         }
         // And rule 8 gets back the sentence it exists for: a cap ask missing one
         // word, answered with that word.
+        // A ceiling asked for without a number is an ask for LESS, and the
+        // elliptical-ask rules hand it to the widener rather than write out
+        // the sentence that OPENS the door (`asksForLess`).
         for text in ["i want a limit on tiktok", "can i get a cap on tiktok"] {
-            #expect(DeterministicParser.parse(text, state: makeState())
-                    == .writeItOut(door: tiktok, minutes: nil), "failed: \(text)")
+            #expect(DeterministicParser.parse(text, state: makeState()) == .silence, "failed: \(text)")
         }
         // The number is what a ceiling needs, and a clause carrying one is still
         // read as one — including the idiom, whose quantity occupies no token.
@@ -1991,8 +1993,10 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
             .command(.spend(door: tiktok, minutes: 20))),
         row("give me 20 minutes of tiktok, im at my limit on tiktok",
             .command(.spend(door: tiktok, minutes: 20))),
-        row("i want a limit on tiktok", .writeItOut(door: tiktok, minutes: nil)),
-        row("can i get a cap on tiktok", .writeItOut(door: tiktok, minutes: nil)),
+        // "limit" asks for LESS: the elliptical-ask rules hand it to the widener
+        // rather than write out the sentence that opens the app.
+        row("i want a limit on tiktok", .silence),
+        row("can i get a cap on tiktok", .silence),
         // A BARE QUANTIFIER INSIDE AN ASK, in both word orders. The veto read
         // six frames over the whole utterance; "i need" was not one of them, and
         // a "give me" in another clause vetoed a real ceiling.

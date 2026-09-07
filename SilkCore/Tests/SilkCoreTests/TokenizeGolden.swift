@@ -172,7 +172,7 @@ enum TokenizeGolden {
         ("closedUntil", ["closeduntil"]),
         ("doorCaps", ["doorcaps"]),
         ("not-a-uuid", ["not", "a", "uuid"]),
-        ("a flat array; a later tidy into [String: Int] is a migration", ["a", "flat", "array", "a", "later", "tidy", "into", "string:", "int", "is", "a", "migration"]),
+        ("a flat array; a later tidy into [String: Int] is a migration", ["a", "flat", "array", "a", "later", "tidy", "into", "string", "int", "is", "a", "migration"]),
         ("instagram ten", ["instagram", "ten"]),
         ("Instagram, ten.", ["instagram", "ten"]),
         ("ten minutes of instagram", ["ten", "minutes", "of", "instagram"]),

@@ -351,7 +351,7 @@ final class ScreenshotWalk: XCTestCase {
     private static func clockGuard() -> [String] {
         let hour = Calendar.current.component(.hour, from: .now)
         if hour < 7 { return ["-silkDownEnd", "\(max(hour - 1, 0))"] }
-        if hour >= 22 { return ["-silkDownStart", "\(min(hour + 1, 23))"] }
+        if hour >= 22 { return ["-silkDownStart", "\((hour + 1) % 24)"] }
         return []
     }
 

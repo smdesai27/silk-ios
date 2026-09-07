@@ -518,13 +518,18 @@ private struct KeyboardHeightReader: ViewModifier {
                 // while the keyboard's bottom edge IS the glass. Every other
                 // frame this notification carries is one of two things, and
                 // both used to become a lift: a keyboard on its way off the
-                // bottom (`maxY` past the glass, which the doc note above
-                // already says is willHide's job to report, not this one), and
-                // an undocked or floating keyboard (`maxY` short of it), which
-                // covers no part of the bar and must not move it. One point of
-                // slack, because the frame arrives in scene coordinates that
-                // need not land on the same fraction the screen bounds do.
-                guard abs(end.maxY - glass) <= 1 else { return }
+                // bottom (`maxY` past the glass — harmless, `glass − minY`
+                // is then the honest partial cover, and willHide reports the
+                // end of it), and an undocked or floating keyboard (`maxY`
+                // well SHORT of the glass), which covers no part of the bar
+                // and must not move it. Only the second is refused, and only
+                // by a whole point: an equality test here would also refuse a
+                // docked keyboard in any scene whose coordinate space is not
+                // flush with the screen's — an iPhone binary in an iPad
+                // window, say — and leave the bar under the keyboard for the
+                // life of the process, with the glass cached and nothing to
+                // correct it.
+                guard end.maxY >= glass - 1 else { return }
                 let lift = max(0, glass - end.minY)
                 // A keyboard-type switch — emoji, a different language, a
                 // predictive row appearing and going — delivers a change-frame

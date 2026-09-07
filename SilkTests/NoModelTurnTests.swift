@@ -178,6 +178,14 @@ private let table: [NoModelRow] = [
     // in the reply she is reading. See docs/qa/no-model-verification-2026-09-03.md.
     .init(given: ["give me instagram"], say: "10",
           reply: .writeItOut(door: "Instagram", minutes: 10), grammar: true, remaining: 40),
+    // The door the bar last wrote out is the one a bare number names — one
+    // turn of memory, the app's (`AppModel.recentHintDoor`), so "tiktok" then
+    // "10" writes out TikTok and not the first door on the list.
+    .init(given: ["open tiktok"], say: "10",
+          reply: .writeItOut(door: "TikTok", minutes: 10), grammar: true, remaining: 40),
+    // And a whole sentence in between clears it.
+    .init(given: ["open tiktok", "how much is left"], say: "10",
+          reply: .writeItOut(door: "Instagram", minutes: 10), grammar: true, remaining: 40),
 
     // ---- STATUS ----
     .init(say: "how much is left", reply: .exact("40 min left."), grammar: true, remaining: 40),

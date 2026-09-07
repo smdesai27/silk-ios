@@ -223,6 +223,15 @@ enum Silk {
     /// moved only by the notification below.
     @MainActor private static var cachedReduceMotion = UIAccessibility.isReduceMotionEnabled
 
+    /// The one re-read outside the notification: a return from the background,
+    /// where the setting may have moved while Silk was suspended and the
+    /// notification's delivery is UIKit's promise rather than this file's.
+    /// Called from `AppModel.reconcileOnReturn`, so a missed post costs one
+    /// suspension and not the process.
+    @MainActor static func rereadReduceMotion() {
+        cachedReduceMotion = UIAccessibility.isReduceMotionEnabled
+    }
+
     /// The subscription, as a one-shot static so it cannot be installed twice
     /// and needs nobody to remember to install it once. Delivered on the main
     /// queue, which is what makes the write below main-actor-safe.

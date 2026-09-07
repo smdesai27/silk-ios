@@ -7,7 +7,15 @@ import Foundation
 /// Validator, and this parser always runs first.
 public enum DeterministicParser {
 
-    public static func parse(_ utterance: String, state: PolicyState) -> ParseOutcome {
+    /// `recentDoor` is the one thing the grammar is told about the turn
+    /// before: the door the bar last wrote out for her, if the last reply was
+    /// a hint. It is read by exactly one rule — the bare number — so that
+    /// "tiktok" answered "Write it out: unlock TikTok for 10 min." and then
+    /// "10" writes out TikTok and not the first door on the list. The
+    /// grammar stays a pure function of its arguments; the memory is the
+    /// app's, and one turn long (`AppModel.recentHintDoor`).
+    public static func parse(_ utterance: String, state: PolicyState,
+                             recentDoor: Door? = nil) -> ParseOutcome {
         let text = utterance.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return .silence }
         let tokens = NumberParser.tokenize(text)
@@ -99,7 +107,7 @@ public enum DeterministicParser {
         // door or ask to be let in. Without those two guards, "give me 20
         // minutes of tiktok before bedtime" reads its 20 as 8 PM and a spend
         // request lands as a global tighten.
-        if windowMention, door == nil, !hasOpeningVerb(tokens) {
+        if windowMention, door == nil, !hasAskFrame(tokens) {
             // One reading of the edge, used twice: the evening assumption and
             // the setter must never disagree about which edge this is, or a
             // stated 7 becomes 19:00 and then lands on the end.
@@ -428,7 +436,7 @@ public enum DeterministicParser {
         //    for her; the refusal below is rule 7's own, read here so the two
         //    halves of the spend grammar cannot disagree about "dont".
         if let d = door, hasPlaceBinding(text), numbers.isEmpty {
-            guard !aNegatorRefusesTheAsk(clauses()) else { return .silence }
+            guard !aNegatorRefusesTheAsk(clauses()), !asksForLess(tokens) else { return .silence }
             return .writeItOut(door: d, minutes: nil)
         }
 
@@ -497,7 +505,9 @@ public enum DeterministicParser {
             // tiktok for 45 minutes at lunch" was answered with an open door
             // and a debited pool, and the parse being non-silent meant the
             // widener never saw it.
-            guard !reportsRatherThanSpends(clauses(), state: state) else { return .silence }
+            let commits = statesACommitment(clauses(), state: state)
+            guard !reportsRatherThanSpends(clauses(), state: state, commitment: commits)
+            else { return .silence }
             // AND AN ASK NEEDS A VERB. This is the one point in the file that
             // mints minutes, and until now a door standing next to a number
             // was enough: "instagram 10" opened Instagram for ten minutes,
@@ -519,7 +529,7 @@ public enum DeterministicParser {
             // for 10" and "i'm spending 10 on instagram" carry the gerund of
             // one, which no token match can see — see `statesACommitment`,
             // which the mood gate above just consulted for the same sentence.
-            guard hasOpeningVerb(tokens) || statesACommitment(clauses(), state: state) else {
+            guard hasOpeningVerb(tokens) || commits else {
                 return .writeItOut(door: d, minutes: n)
             }
             return .command(.spend(door: d, minutes: n))
@@ -540,8 +550,15 @@ public enum DeterministicParser {
         //    TikTok for 10 min." to somebody refusing TikTok is not listening
         //    either. Rule 7's negator guard, for the same reason it is read in
         //    rule 6: one refusal for every shape of the ask.
+        //    AND NOT FOR A SENTENCE ASKING FOR LESS. "i need to use instagram
+        //    less", "i want to cut down on tiktok" carry an opening verb and
+        //    a door and mean the opposite of an ask; writing out the sentence
+        //    that opens the app is the wrong answer to somebody asking for
+        //    help closing it. They fall silent — the widener's, if there is
+        //    one — on a refusal-only word list (`asksForLess`), where a word
+        //    nobody thought of costs a hint and never a grant.
         if let d = door, numbers.isEmpty, hasOpeningVerb(tokens) {
-            guard !aNegatorRefusesTheAsk(clauses()) else { return .silence }
+            guard !aNegatorRefusesTheAsk(clauses()), !asksForLess(tokens) else { return .silence }
             return .writeItOut(door: d, minutes: nil)
         }
 
@@ -559,9 +576,16 @@ public enum DeterministicParser {
         //    hint has to name one to be a sentence. It is a guess, and it is
         //    free: nothing is debited, nothing opens, and the user reads the
         //    door's name in the reply before she types it.
+        //    The door is the one the bar last wrote out for her when there is
+        //    one (`recentDoor`, still hers — a door removed since is not
+        //    guessed), and the FIRST door otherwise, because a number names
+        //    none and the hint has to name one to be a sentence. Either way it
+        //    is free: nothing is debited, nothing opens, and she reads the
+        //    door's name in the reply before she types it.
         if let n = number, isBareQuantity(tokens) {
-            guard let first = state.doors.first else { return .silence }
-            return .writeItOut(door: first, minutes: n)
+            let remembered = recentDoor.flatMap { r in state.doors.first { $0.id == r.id } }
+            guard let hinted = remembered ?? state.doors.first else { return .silence }
+            return .writeItOut(door: hinted, minutes: n)
         }
 
         // 10. THE DOOR ALONE — "instagram", "tiktok please". The other half of
@@ -584,8 +608,12 @@ public enum DeterministicParser {
     /// the number ("twenty five" is two tokens and one quantity) or a word on
     /// the list.
     private static func isBareQuantity(_ tokens: [String]) -> Bool {
-        !tokens.isEmpty && tokens.allSatisfy { tok in
-            bareQuantityWords.contains(tok) || !NumberParser.allNumbers(in: tok).isEmpty
+        // "twenty five minutes please" is four tokens; six is already more
+        // than this shape can be, and the bound is what keeps a pasted
+        // ten-thousand-word sentence from being walked here at all.
+        guard (1...6).contains(tokens.count) else { return false }
+        return tokens.allSatisfy { tok in
+            bareQuantityWords.contains(tok) || Int(tok) != nil || NumberParser.isNumberWord(tok)
         }
     }
 
@@ -893,13 +921,21 @@ public enum DeterministicParser {
     private static let askVerbs: Set<String> = ["give", "gimme", "let", "open",
                                                 "unlock", "want", "need", "have"]
 
-    /// The opening verbs `askVerbs` does not carry — the stems the spend
-    /// grammar added when it made the verb list the thing that mints minutes.
+    /// The stems of `openingVerbs`, DERIVED from it and never written by
+    /// hand: the one-word verbs, and the first word of the phrasal ones whose
+    /// second word is an object or a particle ("give me", "let me", "go on",
+    /// "get on"). Frames that open with a pronoun or a modal ("i want", "can
+    /// i", "i'd like") contribute nothing — a negator does not stand on those.
     /// Read ONLY by `aNegatorRefusesTheAsk`, the spend path's own refusal, so
-    /// a stem here can turn a grant into silence and can do nothing else. The
-    /// cap family keeps reading `askVerbs` alone, which is the lexicon its own
-    /// rows were pinned against.
-    private static let unaskedOpeningVerbs: Set<String> = ["spend", "use", "go", "get"]
+    /// a stem here can turn a grant into silence and can do nothing else; and
+    /// derived so that the next verb added to the grant is refused by the
+    /// same edit, which is the hole the hand-kept copy of this list had. The
+    /// cap family keeps reading `askVerbs` alone, which is the lexicon its
+    /// own rows were pinned against.
+    private static let unaskedOpeningVerbs: Set<String> = Set(openingVerbPhrases.compactMap { phrase in
+        if phrase.count == 1 { return phrase[0] }
+        return phrase.count == 2 && (phrase[1] == "me" || phrase[1] == "on") ? phrase[0] : nil
+    })
 
     /// The words that can stand INSIDE a ceiling's own noun phrase: a
     /// determiner, a number, a measure or period word, the door being talked
@@ -3081,6 +3117,8 @@ public enum DeterministicParser {
     /// MORE THAN 10 of tiktok" negates the exceeding, not the giving, and the
     /// "more than" standing between the verb and the end of its clause is
     /// what says so.
+    private static let bareNegators: Set<String> = ["no", "not", "never", "none"]
+
     private static func aNegatorRefusesTheAsk(_ index: NumberParser.ClauseIndex) -> Bool {
         let t = index.tokens
         for i in t.indices where negators.contains(t[i]) {
@@ -3116,6 +3154,23 @@ public enum DeterministicParser {
             if t[verbAt] == "go" || t[verbAt] == "get" {
                 guard verbAt + 1 < t.count, t[verbAt + 1] == "on" else { continue }
             }
+            // A DERIVED STEM REFUSES ONLY THE CLAUSE THAT CARRIES THE ASK.
+            // "i dont use instagram much, unlock instagram for 10 min" opens
+            // with a negated "use" in a clause that asks for nothing, and
+            // then asks in the next one — with Silk's own hint sentence. The
+            // ask-verb family keeps its whole-sentence reading, which its
+            // rows were pinned against; the stems the tightening added
+            // ("use", "spend", "go on", "get on") are ordinary verbs of
+            // ordinary preambles, so their negation refuses the sentence only
+            // when the number stands in the same clause as the negator.
+            // The bare negators — "no", "not", "never", "none" — keep the whole-
+            // sentence reading even on a derived stem: "no use, instagram for
+            // 10" and "never use instagram for 10 minutes" are refusals wearing
+            // the noun and the imperative, and neither has a preamble to
+            // exempt. Only the verbal contractions ("dont", "shouldnt", …)
+            // open a preamble a real ask can follow.
+            if !askVerbs.contains(t[verbAt]), !bareNegators.contains(t[i]),
+               !clause.contains(where: { !NumberParser.allNumbers(in: t[$0]).isEmpty }) { continue }
             // The bounded-ask carve is scoped to the immediate "dont": "dont
             // give me more than 10 of tiktok" negates the exceeding. "NEVER
             // open insta for more than 20 minutes" is a standing rule, and
@@ -3191,7 +3246,7 @@ public enum DeterministicParser {
     ///    never as arbitrary prose: "meet me at 5, then we can doomscroll
     ///    tiktok" granted five minutes off a meeting time.
     private static func reportsRatherThanSpends(_ index: NumberParser.ClauseIndex,
-                                                state: PolicyState) -> Bool {
+                                                state: PolicyState, commitment: Bool) -> Bool {
         let t = index.tokens
         let numberAt = t.indices.first { !NumberParser.allNumbers(in: t[$0]).isEmpty }
         let anchor = numberAt
@@ -3207,8 +3262,12 @@ public enum DeterministicParser {
         // sentence a question — the same exemption `reportsRatherThanSets`
         // carries, read over the whole clause because the pinned ask puts its
         // "would" after the quantity ("…10 minutes of reddit would be nice").
+        // "i'd" is "i would" and tokenizes as ["i", "d"]; the clitic is the
+        // request modal in the spelling a thumb types.
         if !ahead.contains(where: { whWords.contains(t[$0]) }),
-           clause.contains(where: { requestModals.contains(t[$0]) }) { return false }
+           clause.contains(where: { requestModals.contains(t[$0]) || contractedWould(t, at: $0) }) {
+            return false
+        }
         if statesAVolition(t, clause: clause) { return false }
         // AN INVERSION IS A REQUEST, not the question a fronted auxiliary
         // usually marks — see `anInversionOpensTheClause`. Beside the two
@@ -3237,7 +3296,7 @@ public enum DeterministicParser {
         // somebody else's sentence, and behind four guards of its own
         // (`statesACommitment`) so a habit, a perfect, a past and a two-number
         // ambiguity are all still reports.
-        if statesACommitment(index, state: state) { return false }
+        if commitment { return false }
         // A spoken subject ahead of the quantity is a report — unless an ask
         // verb shares the clause: "ive hit my limit give me 20 of tiktok" is
         // commentary and then an ask, and the ask wins.
@@ -3680,10 +3739,53 @@ public enum DeterministicParser {
     /// The multi-word entries match CONSECUTIVE tokens, which is the same
     /// rule: "can i" is two tokens side by side, never "can" somewhere and "i"
     /// somewhere else.
+    ///
+    /// "give" stands alone as well as in "give me": "give tiktok 20 minutes"
+    /// is the ordinary ditransitive ask and was refused while "gimme tiktok
+    /// 20" granted. "using" is NOT here: on its own it is a participle, and
+    /// the one frame in which it asks — "i'm using instagram for 5 minutes" —
+    /// is read by `statesACommitment`, behind its guards, so that a bare
+    /// "using instagram for 10 minutes" is answered with the sentence to
+    /// write rather than minted by a list entry no guard stands on. "i'd
+    /// like" is the polite ask in the three spellings the tokenizer produces.
     private static let openingVerbs: [String] = [
-        "give me", "gimme", "open", "let me", "lemme", "unlock",
+        "give me", "give", "gimme", "open", "let me", "lemme", "unlock",
         "i want", "i need", "can i", "could i", "may i",
-        "spend", "use", "using", "go on", "get on",
+        "i d like", "id like", "i would like",
+        "spend", "use", "go on", "get on",
+    ]
+
+    /// The asks rule 2's window setter refuses to be: the frames that mean
+    /// "let me in", and only those. Rule 2 guards "give me 20 minutes before
+    /// bedtime" — a doorless ask that must not move the night — and it used
+    /// to read `openingVerbs` for that, which was six phrases when the guard
+    /// was written and is twenty now. Every stem the tightening added is one
+    /// a WINDOW sentence carries too: "i need down hours to start at 11",
+    /// "i spend too long on my phone at night, bedtime at 10" — and the
+    /// setter went quiet on all of them, reading the window back instead of
+    /// moving it. So the guard keeps the list it was measured against.
+    private static let askFrames: [String] = [
+        "give me", "open", "let me", "unlock", "i want", "can i",
+    ]
+    private static let askFramePhrases: [[String]] =
+        askFrames.map { $0.split(separator: " ").map(String.init) }
+    private static let askFrameHeads: Set<String> = Set(askFramePhrases.compactMap(\.first))
+
+    private static func hasAskFrame(_ tokens: [String]) -> Bool {
+        carries(askFramePhrases, heads: askFrameHeads, in: tokens)
+    }
+
+    /// Whether the sentence asks for LESS of the app. A refusal-only list read
+    /// by the two elliptical-ask rules: with an opening verb and a door and
+    /// no number, "i need to use instagram less" is otherwise the shape of a
+    /// request to be let in.
+    private static func asksForLess(_ tokens: [String]) -> Bool {
+        tokens.contains { lessWords.contains($0) }
+    }
+    private static let lessWords: Set<String> = [
+        "less", "fewer", "cut", "reduce", "reduced", "limit", "limited", "lower", "stop", "quit",
+        "block", "blocked", "lock", "locked", "close", "closed", "shut", "off", "away", "without",
+        "capped", "restricted", "removed", "gone", "deleted", "cap", "ceiling",
     ]
 
     /// `openingVerbs`, cut into tokens once. The lookup below walks the
@@ -3701,39 +3803,34 @@ public enum DeterministicParser {
     /// answer to "what are the words of this sentence" — the mistake this
     /// file's clause index exists to refuse.
     private static func hasOpeningVerb(_ tokens: [String]) -> Bool {
-        for i in tokens.indices where openingVerbHeads.contains(tokens[i]) {
-            // A COPULA OR A DETERMINER STANDING ON THE WORD MAKES IT SOMETHING
-            // ELSE. Half these lexemes are also nouns and adjectives — "open",
-            // "use", "spend" — and a list that mints minutes cannot read them
-            // wherever they fall.
-            //
-            // The sentence that forces it is SILK'S OWN RECEIPT. A grant is
-            // confirmed as "Instagram is open for 15 min." (SilkStrings
-            // .isOpenFor), and that sentence typed or pasted back carried a
-            // door, a number and the token "open", so it minted a SECOND
-            // fifteen minutes: another debit of the pool, another re-lock
-            // window, out of the app's own words. The hint's own comment
-            // (Strings.swift) pins the forward direction — "the hint typed
-            // back verbatim grants" — and this is the same seam facing the
-            // other way, which nothing was checking.
-            //
-            // "the open tab of instagram for 10 minutes" is the determiner
-            // half of it: a noun phrase, an app and a quantity, no request.
-            //
-            // ONLY THE AMBIGUOUS WORDS, and the round found out why the hard
-            // way: written over the whole list it read "im done after THIS,
-            // GIVE me ten minutes of instagram" as a noun phrase and stopped
-            // minting the corpus's own ask. "give me", "let me", "unlock",
-            // "can i" are verbs in every sentence English has; "open", "use"
-            // and "spend" are the three that are also things.
-            if i > tokens.startIndex, ambiguousOpeningVerbs.contains(tokens[i]),
-               copulas.contains(tokens[i - 1]) || determiners.contains(tokens[i - 1]) { continue }
-            for phrase in openingVerbPhrases where phrase[0] == tokens[i] {
+        carries(openingVerbPhrases, heads: openingVerbHeads, in: tokens, skippingNounReadings: true)
+    }
+
+    /// One walk over the tokens for a phrase list: `heads` says whether a
+    /// token can start any phrase, and only then are the phrases beginning
+    /// with it tried against the tokens that follow. `skippingNounReadings`
+    /// is the receipt guard below, wanted by the opening verbs and by nothing
+    /// else.
+    private static func carries(_ phrases: [[String]], heads: Set<String>, in tokens: [String],
+                                skippingNounReadings: Bool = false) -> Bool {
+        for i in tokens.indices where heads.contains(tokens[i]) {
+            if skippingNounReadings, nounReading(tokens, at: i) { continue }
+            for phrase in phrases where phrase[0] == tokens[i] {
                 guard i + phrase.count <= tokens.count else { continue }
                 if (1..<phrase.count).allSatisfy({ tokens[i + $0] == phrase[$0] }) { return true }
             }
         }
         return false
+    }
+
+    /// The receipt guard, as a predicate on one position.
+    private static func nounReading(_ tokens: [String], at i: Int) -> Bool {
+        // "no" stands with the determiners here and not on their list: "no
+        // use, instagram for 10" is a noun phrase, but "no" elsewhere in this
+        // file is a negator, and the cap rules read the list.
+        i > tokens.startIndex && ambiguousOpeningVerbs.contains(tokens[i])
+            && (copulas.contains(tokens[i - 1]) || determiners.contains(tokens[i - 1])
+                || tokens[i - 1] == "no")
     }
 
     /// The copula, in the spellings the tokenizer produces — "instagram's open
@@ -3750,7 +3847,7 @@ public enum DeterministicParser {
     /// open tab", "my instagram spend", "no use". The only entries the guard
     /// above may take back off the list, because they are the only ones whose
     /// second reading exists.
-    private static let ambiguousOpeningVerbs: Set<String> = ["open", "use", "using", "spend"]
+    private static let ambiguousOpeningVerbs: Set<String> = ["open", "use", "spend"]
 
     /// The `-ing` of the opening verbs, for the one frame that spells them
     /// that way: the user's own commitment. "im USING instagram for 5
@@ -3817,21 +3914,71 @@ public enum DeterministicParser {
     ///  - EXACTLY ONE NUMBER. Two numbers is the ambiguity `singleNumber` has
     ///    refused since the parser shipped, asked here so the exemption cannot
     ///    launder it.
+    ///
+    /// The exactly-one-number guard is the CALLER'S: rule 7 binds `number`
+    /// before it asks, and this is read from nowhere else, so the sentence's
+    /// numbers are not counted a second time here.
+    ///
+    /// TWO FRAMES, one shape. The present progressive — "i'm USING", "i'm
+    /// GOING ON" — and the intention — "i'll USE", "i will SPEND", "i'm
+    /// going to GO ON", "i'm gonna OPEN". The intention frame is the sentence
+    /// a person types when she is promising rather than announcing, and it
+    /// was silent: `will` is a modal the report gate reads as commentary, and
+    /// the widener, asked, did not read it either. The verb after the frame
+    /// has to be a base opening verb, directly — "i'll never use", "i won't
+    /// open" put a negator or a contraction where the verb must stand, and
+    /// stay reports.
+    ///
+    /// EVERY candidate position is tried, not the first: "im getting ready,
+    /// im going on instagram for 10 minutes" has a gerund that fails the
+    /// particle guard before the one that passes it.
     private static func statesACommitment(_ index: NumberParser.ClauseIndex,
                                           state: PolicyState) -> Bool {
         let t = index.tokens
-        guard let j = t.indices.first(where: { commitmentGerunds.contains(t[$0]) }),
-              firstPersonPresent(t, before: j),
-              let clause = index.clauseRange(containing: j),
-              !aboutAPeriod(t, clause: clause),
-              !clause.contains(where: { laterMarkers.contains(t[$0]) }),
-              !(clause.lowerBound..<j).contains(where: { speechVerbs.contains(t[$0]) })
-        else { return false }
-        if particledGerunds.contains(t[j]) {
-            guard j + 1 < t.count, t[j + 1] == "on",
-                  namesTheDoor(t, at: j + 2, state: state) else { return false }
+        for j in t.indices {
+            let gerund = commitmentGerunds.contains(t[j]) && firstPersonPresent(t, before: j)
+            let intention = commitmentStems.contains(t[j]) && firstPersonIntention(t, before: j)
+            guard gerund || intention,
+                  let clause = index.clauseRange(containing: j),
+                  !aboutAPeriod(t, clause: clause),
+                  !clause.contains(where: { laterMarkers.contains(t[$0]) }),
+                  !(clause.lowerBound..<j).contains(where: { speechVerbs.contains(t[$0]) })
+            else { continue }
+            if particledGerunds.contains(t[j]) || particledStems.contains(t[j]) {
+                guard j + 1 < t.count, t[j + 1] == "on",
+                      namesTheDoor(t, at: j + 2, state: state) else { continue }
+            }
+            return true
         }
-        return NumberParser.allNumbers(in: t.joined(separator: " ")).count == 1
+        return false
+    }
+
+    /// The base opening verbs an intention frame conjugates: "i'll USE",
+    /// "i will SPEND", "i'm going to OPEN". `go`/`get` need their particle,
+    /// exactly as their gerunds do.
+    private static let commitmentStems: Set<String> = ["use", "spend", "open", "unlock", "go", "get"]
+    private static let particledStems: Set<String> = ["go", "get"]
+
+    /// The first-person intention frame standing directly on `j`: "i'll" /
+    /// "ill" / "i will" / "i'm going to" / "im going to" / "i am going to" /
+    /// "i'm gonna" / "im gonna". Contractions arrive split ("i'll" is
+    /// ["i", "ll"]) or whole ("ill", which the tokenizer cannot tell from the
+    /// adjective, and reads as the frame only when a commitment verb stands
+    /// right after it).
+    private static func firstPersonIntention(_ t: [String], before j: Int) -> Bool {
+        guard j > 0 else { return false }
+        if t[j - 1] == "ill" { return true }
+        if j > 1, t[j - 2] == "i", t[j - 1] == "ll" || t[j - 1] == "will" { return true }
+        if j > 1, t[j - 2] == "im", t[j - 1] == "gonna" { return true }
+        if j > 2, t[j - 3] == "i", t[j - 2] == "m", t[j - 1] == "gonna" { return true }
+        guard j > 2, t[j - 2] == "going", t[j - 1] == "to" else { return false }
+        if t[j - 3] == "im" { return true }
+        return j > 3 && t[j - 4] == "i" && (t[j - 3] == "m" || t[j - 3] == "am")
+    }
+
+    /// "i'd" as the tokenizer spells it: the clitic "d" standing on "i".
+    private static func contractedWould(_ t: [String], at i: Int) -> Bool {
+        t[i] == "id" || (t[i] == "d" && i > 0 && t[i - 1] == "i")
     }
 
     /// Whether a door's name begins at `i` — one token or two, matched through

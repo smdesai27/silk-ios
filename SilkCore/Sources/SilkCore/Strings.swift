@@ -53,19 +53,16 @@ public enum SilkStrings {
     /// `unlock` because that is the one opening verb with no second reading:
     /// the hint typed back verbatim grants.
     ///
-    /// The minutes are shown only when they are minutes Silk could grant:
-    /// 1 through 300, the same range the Shortcuts `Spend` intent accepts
-    /// (SpendIntent.swift `inclusiveRange`). "instagram 0" and a pasted
-    /// nineteen-digit number both get the sentence with ten in it — a hint
-    /// reading "for 0 min." teaches a sentence that cannot grant, and the
-    /// parser hands the number over exactly as typed so that this is the one
-    /// place the bound lives.
+    /// The minutes are shown only when they are minutes Silk could grant —
+    /// `Validator.grantableMinutes`, the one range the Shortcuts intent and
+    /// this hint share. "instagram 0" and a pasted nineteen-digit number both
+    /// get the sentence with ten in it: a hint reading "for 0 min." teaches a
+    /// sentence that cannot grant, and the parser hands the number over
+    /// exactly as typed so that the bound has one home.
     public static func writeItOut(_ door: String, minutes: Int?) -> String {
-        let shown = minutes.flatMap { hintRange.contains($0) ? $0 : nil } ?? 10
+        let shown = minutes.flatMap { Validator.grantableMinutes.contains($0) ? $0 : nil } ?? 10
         return "\(writeItOut) unlock \(door) for \(shown) \(SilkStrings.minutes)."
     }
-    /// The minutes a hint may carry. Not a string; the composer's own bound.
-    static let hintRange = 1...300
 
     /// "11am or 11pm?", "7:30am or 7:30pm?" — the whole question, and the whole
     /// reply. A bare hour whose two readings move the night in opposite

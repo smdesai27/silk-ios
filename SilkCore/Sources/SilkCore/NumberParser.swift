@@ -484,11 +484,63 @@ public enum NumberParser {
         CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ":")).inverted
 
     static func tokenize(_ text: String) -> [String] {
-        let lowered = text.lowercased().replacingOccurrences(of: "-", with: " ")
-        guard lowered.contains(where: { apostrophes.contains($0) }) else {
-            return lowered.components(separatedBy: separators).filter { !$0.isEmpty }
+        var lowered = text.lowercased().replacingOccurrences(of: "-", with: " ")
+        if lowered.contains(where: { apostrophes.contains($0) }) { lowered = foldingApostrophes(lowered) }
+        if lowered.contains(":") { lowered = loosingColons(lowered) }
+        let raw = lowered.components(separatedBy: separators).filter { !$0.isEmpty }
+        guard raw.contains(where: { gluedUnit($0) != nil }) else { return raw }
+        return raw.flatMap { tok -> [String] in
+            guard let (number, unit) = gluedUnit(tok) else { return [tok] }
+            return [number, unit]
         }
-        return foldingApostrophes(lowered).components(separatedBy: separators).filter { !$0.isEmpty }
+    }
+
+    /// A COLON IS A SEPARATOR EVERYWHERE BUT INSIDE A CLOCK TIME. The
+    /// separator set keeps ":" so that "7:30" survives as one token, and
+    /// that kept it everywhere: "instagram: 10" tokenized as ["instagram:",
+    /// "10"], and "instagram:" is the name of no door. Only a colon with a
+    /// digit on both sides is a clock; every other one is punctuation and
+    /// becomes the space it was standing in for.
+    private static func loosingColons(_ text: String) -> String {
+        let chars = Array(text)
+        var out = String()
+        out.reserveCapacity(chars.count)
+        for i in chars.indices {
+            guard chars[i] == ":" else { out.append(chars[i]); continue }
+            let before = i > 0 && chars[i - 1].isNumber
+            let after = i + 1 < chars.count && chars[i + 1].isNumber
+            out.append(before && after ? ":" : " ")
+        }
+        return out
+    }
+
+    /// "10min", "10mins", "10m", "1h", "2hrs" — a number with its unit glued
+    /// on, which is how a thumb types it. Split into the two tokens they are,
+    /// so "unlock instagram for 10min" reads exactly as "unlock instagram for
+    /// 10 min" does, instead of answering with a hint that tells her to type
+    /// what she believes she just typed.
+    ///
+    /// A closed unit list, not "digits then letters": a door can be named
+    /// "9GAG" or "F1", and splitting those would erase the door. Only the
+    /// units the number parser already reads are peeled off.
+    private static func gluedUnit(_ token: String) -> (String, String)? {
+        guard let first = token.first, first.isNumber else { return nil }
+        let digits = token.prefix { $0.isNumber }
+        let rest = token.dropFirst(digits.count)
+        guard !rest.isEmpty, glueableUnits.contains(String(rest)) else { return nil }
+        return (String(digits), String(rest))
+    }
+    private static let glueableUnits: Set<String> = [
+        "min", "mins", "minute", "minutes", "m",
+        "h", "hr", "hrs", "hour", "hours",
+        "sec", "secs", "second", "seconds", "s",
+    ]
+
+    /// Whether the token is a number word on its own — "ten", "twenty",
+    /// "five" — without running the idiom scanner over it. Read by the
+    /// grammar's bare-quantity rule, whose question is one token at a time.
+    static func isNumberWord(_ token: String) -> Bool {
+        units[token] != nil || teens[token] != nil || tens[token] != nil
     }
 
     /// The four spellings of one mark. iOS smart punctuation types U+2019 by
