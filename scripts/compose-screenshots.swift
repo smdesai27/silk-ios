@@ -196,9 +196,9 @@ struct Shot {
 let shots = [
     Shot(number: "01",
          caption: """
-         When the budget is spent,
-         the blocked app shows
-         when it opens again.
+         In down hours,
+         a blocked app shows
+         the hour it opens again.
          """,
          capture: "shot-01.png", slack: 0),
     Shot(number: "02",

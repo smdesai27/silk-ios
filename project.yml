@@ -106,6 +106,10 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: { UIColorName: LaunchGround }
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # Required of every iOS app bundle at upload; Xcode's generated plists
+        # carry it and this hand-written one must too. Nothing else about the
+        # build says "iPhone only" — UIDeviceFamily does that.
+        LSRequiresIPhoneOS: true
         SilkAppGroup: $(SILK_APP_GROUP)
         SilkLogSubsystem: $(SILK_LOG_SUBSYSTEM)
         # No crypto, no network layer. Declaring the exemption here stops App

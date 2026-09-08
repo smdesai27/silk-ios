@@ -560,8 +560,9 @@ public enum SharedStore {
     /// extension, in front of the frame the user is waiting for. The tail is a
     /// separate key holding at most `DayLog.attemptsTailCap` entries, so the
     /// encode the render pays is bounded by 64 dates and not by the install's
-    /// whole history. The app folds it back (`foldAttemptsTail`), and until it
-    /// does, every reader below merges the two — see `attemptsMerged`.
+    /// whole history. The shield folds it back at the cap (`foldAttemptsTail`),
+    /// and until it does, every reader below merges the two — see
+    /// `attemptsMerged`.
     ///
     /// The overflow fold is the one path that still pays the full encode, and
     /// it is why the tail cannot silently lose reaches when the app is not
@@ -624,9 +625,10 @@ public enum SharedStore {
 
     /// Fold the render path's tail buffer into the attempts blob.
     ///
-    /// Called by the app — on a foreground and on the clock tick — because the
-    /// app is the process that may spend a whole-array encode. The shield
-    /// calls it only when its tail overflows.
+    /// Called by the shield, when its tail reaches the cap, and by nothing
+    /// else — one whole-array encode per 64 reaches, on a render, which is the
+    /// price of having one writer (below). It was the app's job for one
+    /// round, on every foreground and tick, and two folders was a race.
     ///
     /// No reader depends on this having run (`attemptsMerged` is the same
     /// answer either way) and no revision is bumped: nothing observable
@@ -783,7 +785,6 @@ public enum Wall {
     /// process — the app on foreground, the monitor on intervalDidEnd, the
     /// shield extensions on every render/tap. Fail-closed: if state can't be
     /// read, the wall goes up whole.
-    @discardableResult
     ///
     /// `restating` is the difference between a RENDER and a RESTATEMENT. The
     /// shield asks for the wall on every render, dozens of times a day, and
@@ -797,6 +798,7 @@ public enum Wall {
     /// The category clears ride the same switch: guarded once-per-install on
     /// the render path, unconditional on a restatement, so a migration flag
     /// restored ahead of the settings it describes can never wedge them.
+    @discardableResult
     public static func reconcile(now: Date = Date(), restating: Bool = false) -> Reconciled {
         // Three reads in, one write out. Everything between them — which of
         // the three states each blob is in, and what the wall should therefore

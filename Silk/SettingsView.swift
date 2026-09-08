@@ -37,6 +37,9 @@ struct SettingsView: View {
     /// as the three global rows raise the wheel.
     var onTapDoor: (String) -> Void
     var onAddDoor: () -> Void
+    /// The privacy policy, opened in Safari. A quiet row at the foot of the
+    /// page: not a rule, so it wears the add-row's affordance costume.
+    var onTapPrivacy: () -> Void
 
     var body: some View {
         // The same defence NowView mounts, and now literally the same code:
@@ -59,10 +62,12 @@ struct SettingsView: View {
     /// 62 + wordmark 13 + 64, then 52 a row, then the title block 44 + 15 + 14.
     /// The first two are the scaffold's seat, mounted by `silkFittedColumn` and
     /// counted here because they are part of the height being fitted.
-    /// The add row is a row like any other: 52 when it shows.
+    /// The add row is a row like any other: 52 when it shows. The Privacy row
+    /// at the foot is 34 of air and one more row.
     private var columnHeight: CGFloat {
         62 + 13 + 64 + 3 * 52 + 44 + 15 + 14
             + CGFloat(doors.count + (showsAddRow ? 1 : 0)) * 52
+            + 34 + 52
     }
 
     private var column: some View {
@@ -133,6 +138,16 @@ struct SettingsView: View {
                 }
             }
             .padding(.horizontal, 46)
+
+            // The policy, reachable from inside the app as the guideline asks
+            // (5.1.1(i)); it opens the hosted page (`SilkLinks`). Quiet, at the
+            // foot, off the rules' group: it states nothing about the day.
+            SettingsRow(name: SilkStrings.privacy, value: "",
+                        night: night, showsRule: false, quiet: true,
+                        axID: "silk.settings.privacy",
+                        action: onTapPrivacy)
+                .padding(.horizontal, 46)
+                .padding(.top, 34)
         }
     }
 }
@@ -607,7 +622,7 @@ struct DoorAddOverlay: View {
                      showsAddRow: true,
                      night: false,
                      onTapDownHours: {}, onTapBudget: {}, onTapUndo: {},
-                     onTapDoor: { _ in }, onAddDoor: {})
+                     onTapDoor: { _ in }, onAddDoor: {}, onTapPrivacy: {})
     }
 }
 
@@ -621,7 +636,7 @@ struct DoorAddOverlay: View {
                      showsAddRow: true,
                      night: true,
                      onTapDownHours: {}, onTapBudget: {}, onTapUndo: {},
-                     onTapDoor: { _ in }, onAddDoor: {})
+                     onTapDoor: { _ in }, onAddDoor: {}, onTapPrivacy: {})
     }
 }
 
@@ -735,7 +750,7 @@ private struct SettingsRehearsal: View {
                 onTapDownHours: { editing = .down },
                 onTapBudget: { editing = .budget },
                 onTapUndo: { editing = .undo },
-                onTapDoor: { _ in }, onAddDoor: {})
+                onTapDoor: { _ in }, onAddDoor: {}, onTapPrivacy: {})
 
             Button("\u{263E}") { night.toggle() }
                 .font(Silk.serif(15))

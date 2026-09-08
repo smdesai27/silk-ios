@@ -40,6 +40,7 @@
 		887AC1C3DE1DB42BED5A67AA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 704D0FDD76C4A32996253007 /* AppModel.swift */; };
 		909C10E2DD8695AC737E92FE /* ShieldConfigurationExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7314275C7464407E4787F3B /* ShieldConfigurationExtension.swift */; };
 		969518E52EEBCC905EE6B755 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = EBD9E28473C5EB7129F8AD9A /* SilkCore */; };
+		9B0711DED03BA94CCBC3C60E /* Links.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9EC54DF885E98BFCEE43B8F /* Links.swift */; };
 		9B91C13018275FD24DD3448D /* LedgerUndoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88C620EBDD7A30F5C31D633 /* LedgerUndoTests.swift */; };
 		9D68046401F49C696D8E8AAA /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0517AF5402B0AEB586771BE6 /* SharedStore.swift */; };
 		A974522AA74846A7F45F9521 /* SilkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CA53F3207E7AE5880420E33 /* SilkApp.swift */; };
@@ -186,6 +187,7 @@
 		EB1C355D83F2A45FDCC9520A /* Chrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chrome.swift; sourceTree = "<group>"; };
 		EFBBBFD0F5806BE7C321FC95 /* WaitModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitModelTests.swift; sourceTree = "<group>"; };
 		F34C80471DDBDB280CBA65A4 /* Silk.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Silk.entitlements; sourceTree = "<group>"; };
+		F9EC54DF885E98BFCEE43B8F /* Links.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Links.swift; sourceTree = "<group>"; };
 		FD9F14434B56F59EAB0DA9DB /* Silk.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Silk.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -248,6 +250,7 @@
 				CCA3FBD234194924E2ED701F /* Hedgerow.swift */,
 				C840695F3CB1140C74898A68 /* Info.plist */,
 				7A15D91F5D0F1DB70D57FE88 /* LaunchCatalog.swift */,
+				F9EC54DF885E98BFCEE43B8F /* Links.swift */,
 				4D0B8D10154233A0BF5424C9 /* MirrorParts.swift */,
 				2915B4038B33955C859B21BE /* MirrorView.swift */,
 				A928E6FABAA8B87E0F4C9975 /* NowView.swift */,
@@ -623,6 +626,7 @@
 				E991680108C07B056D17D6B6 /* EnsoPath.swift in Sources */,
 				77C84F52BBCFDD5A43AF19C8 /* Hedgerow.swift in Sources */,
 				FC88E375AB3C3A6F905AC76D /* LaunchCatalog.swift in Sources */,
+				9B0711DED03BA94CCBC3C60E /* Links.swift in Sources */,
 				44D77529D4F6F30068A42C1D /* MirrorParts.swift in Sources */,
 				B413BC5B70A31DCA05E3E74D /* MirrorView.swift in Sources */,
 				0F34172CD5594C0E74AF23BD /* NowView.swift in Sources */,

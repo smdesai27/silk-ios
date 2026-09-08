@@ -2302,15 +2302,15 @@ final class AppModel {
             weekAttemptsCache = nil
         }
         invalidateDayRecordsIfStale()
-        // A return is a visible move whatever the caches did: the greeting may
-        // have crossed a band while Silk slept, and the tick that would say so
-        // is a minute away. One write, and the screen is the present.
-        now = .now
         // The suspension is where external writes accumulate — a Shortcuts
         // grant performed against the store while this copy slept — so the
         // return is where the copy has to catch up, before anything on
         // screen reads it or any commit writes it back.
         syncLedgerIfStale()
+        // A return is a visible move whatever the caches did: the greeting may
+        // have crossed a band while Silk slept, and the tick that would say so
+        // is a minute away. One write, after the copy has caught up, and the
+        // screen is the present.
         now = .now
         wall.reconcile()
         refreshWallStanding()

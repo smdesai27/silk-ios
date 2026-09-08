@@ -651,7 +651,10 @@ private struct SilkFittedColumn: ViewModifier {
     func body(content: Content) -> some View {
         GeometryReader { geo in
             let reserve = max(0, Self.chromeReserve - geo.safeAreaInsets.bottom)
-            let usable = geo.size.height - reserve
+            // Floored at zero: a container shorter than the reserve — a
+            // landscape iPad window this binary cannot meet, or a first pass
+            // mid-layout — must scale the column to nothing, never mirror it.
+            let usable = max(0, geo.size.height - reserve)
             let scale = min(1, usable / max(1, columnHeight))
             VStack(spacing: 0) {
                 Color.clear.frame(height: Self.wordmarkSeat)

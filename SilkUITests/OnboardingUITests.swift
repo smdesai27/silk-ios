@@ -688,6 +688,18 @@ final class OnboardingUITests: SilkWalk {
         expect(doorRow, labelContains: "No cap", "an uncapped door's row did not read the wheel's first seat")
     }
 
+    /// Guideline 5.1.1(i): the privacy policy is reachable inside the app. The
+    /// row stands at the foot of Settings; it is not tapped here, because
+    /// tapping opens Safari and the walk would lose the app.
+    @MainActor
+    func testSettingsCarriesThePrivacyPolicyRow() throws {
+        let app = launchFresh()
+        completeSetup(app)
+        let privacyRow = element(app, "silk.settings.privacy")
+        tap(app.buttons["silk.dot.2"], "the Settings dot", raising: privacyRow, "the Privacy row")
+        expect(privacyRow, labelContains: "Privacy", "the Privacy row did not read its name")
+    }
+
     /// The feature end to end, from the only surface that has it: set a ceiling
     /// on the wheel, watch the receipt and the row read it back, then ask the bar
     /// for more minutes than the ceiling allows and get the ceiling.

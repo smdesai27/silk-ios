@@ -288,7 +288,10 @@ public enum NumberParser {
     /// records: a grant SIXTY TIMES the stated ask, in the loosening
     /// direction. The spend and cap paths decline a seconds unit the way
     /// `numberIsNotMinutes` declines hours, and silence reaches the widener.
-    private static let secondUnits: Set<String> = ["second", "seconds", "sec", "secs"]
+    /// "s" is here as well as among the glued units: "90s" is peeled to
+    /// ["90", "s"] by the tokenizer, and a guard reading this set has to see
+    /// the same second the tokenizer did, or ninety seconds is ninety minutes.
+    private static let secondUnits: Set<String> = ["second", "seconds", "sec", "secs", "s"]
 
     /// The words a speaker puts BETWEEN a number and its hour word for
     /// emphasis, and nothing else. "give me 2 whole hours of tiktok" stated

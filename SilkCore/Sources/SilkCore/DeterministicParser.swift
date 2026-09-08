@@ -2630,7 +2630,7 @@ public enum DeterministicParser {
         // door, asked with the noun-phrase whitelist every other rule here uses,
         // so an unrecognised word declines.
         if periodPhrase(t, in: clause), numbers.count == 1, !t.contains("budget"),
-           doorIsATopic(t, clause: clause, doorAt: doorStart, state: state) {
+           doorIsATopic(t, clause: clause, doorStart: doorStart, state: state) {
             // A PARTICIPLE HEADING THE CLAUSE IS A HABIT REPORT WITH ITS
             // SUBJECT ELIDED, NOT A RULE. `doorIsATopic` answers yes
             // unconditionally when the door does not lead, and the mood gate
@@ -2726,7 +2726,34 @@ public enum DeterministicParser {
             && !auxiliaries.contains(t[lead]) && !whWords.contains(t[lead])
             && !negators.contains(t[lead]) && !capRemovers.contains(t[lead])
             && !isNounPhraseWord(t, lead, state: state)
+        // AND A CAP NOUN STANDING DIRECTLY ON THE DOOR, IN A CLAUSE THAT
+        // STATES NO QUANTITY, IS A MENTION — WHEN ANOTHER CLAUSE ASKS IN
+        // FULL. "forget THE TIKTOK CAP, give me 20 minutes", "give me 20 of
+        // instagram, ignore the tiktok cap": "tiktok cap" is one compound
+        // noun, the door's cap referred to, and the determiner widening
+        // above made that spelling reach this arm, whose terminating silence
+        // threw away a whole grant standing in the next clause. Three
+        // conditions, each one a sentence that was granted without it:
+        // the noun must stand ON the door, because the setter opens the
+        // ceiling's own phrase between them ("give tiktok A hard cap");
+        // the clause must carry no quantity at all — `numbers`, the
+        // idiom-aware count, not a token scan, because "give the tiktok cap
+        // AN HOUR" holds sixty with no token reading as a number and was
+        // funded an hour of the app it asked to cap; and some OTHER clause
+        // must carry an opening verb, because the grant this exception
+        // keeps must be a whole ask, not the bare "20 minutes" after "set
+        // the tiktok cap," which the fragment rule would otherwise write out
+        // as an unlock of the door just asked to be held. When all three
+        // hold the mention is left to the clause that asks; the cap it
+        // names is not loosened by that, since a standing ceiling clamps
+        // every grant on its door (`Validator`), so "raise the tiktok cap,
+        // give me 20 minutes" spends twenty of whatever the ceiling leaves.
+        let capNounSitsOnTheDoor = lexeme == doorEnd + 1
+        let anotherClauseAsks = clauseRanges(index)
+            .contains { $0 != clause && hasOpeningVerb(Array(t[$0])) }
+        let aMentionOfTheCap = capNounSitsOnTheDoor && numbers.isEmpty && anotherClauseAsks
         if !shaped, let lexeme, capNouns.contains(t[lexeme]), lexeme > doorEnd,
+           !aMentionOfTheCap,
            doorStart > clause.lowerBound,
            askVerbs.contains(t[doorStart - 1]) || leadingVerbTakesTheDoor,
            !statesAVolition(t, clause: clause),
@@ -3006,10 +3033,10 @@ public enum DeterministicParser {
     /// which is what says the next word continues the phrase instead of
     /// predicating something of it. A door at the end of its clause predicates
     /// nothing by construction and answers yes.
-    private static func doorIsATopic(_ t: [String], clause: Range<Int>, doorAt: Int,
+    private static func doorIsATopic(_ t: [String], clause: Range<Int>, doorStart: Int,
                                      state: PolicyState) -> Bool {
-        guard doorAt == clause.lowerBound else { return true }
-        var after = doorAt + 1
+        guard doorStart == clause.lowerBound else { return true }
+        var after = doorStart + 1
         // The possessive's orphan. "tiktok's" reaches here as ["tiktok", "s"] —
         // the tokenizer splits on the apostrophe — and that "s" is the door's
         // own name continuing, not a predicate of it. Without this, "tiktok's 20
@@ -3080,10 +3107,10 @@ public enum DeterministicParser {
             // unit, and a ceiling of a fraction of a minute cannot be
             // written; "cap tiktok at 30 seconds" declines exactly as the
             // hours arm below declines, and for the same directional reason.
-            if NumberParser.statesSeconds(
-                following: t[min(i + 1, clause.upperBound)..<min(i + 3, clause.upperBound)]) {
-                return true
-            }
+            // Through `statesSeconds`, which is the lexicon plus the glued
+            // "s" the lexicon's own two unit lists disagree about: "cap
+            // tiktok at 90s" wrote ninety MINUTES as standing policy.
+            if statesSeconds(t, after: i, within: clause.upperBound) { return true }
             // The abbreviated meridiem, as its two tokens. "9 a day" is not one:
             // the "a" has to be followed by the "m".
             if i + 2 < clause.upperBound, t[i + 1] == "p" || t[i + 1] == "a", t[i + 2] == "m" {
@@ -3293,11 +3320,27 @@ public enum DeterministicParser {
         let t = index.tokens
         for i in t.indices where NumberParser.readsAsNumber(t[i]) {
             guard let clause = index.clauseRange(containing: i) else { continue }
-            let upper = min(i + 3, clause.upperBound)
-            guard i + 1 < upper else { continue }
-            if NumberParser.statesSeconds(following: t[(i + 1)..<upper]) { return true }
+            if statesSeconds(t, after: i, within: clause.upperBound) { return true }
         }
         return false
+    }
+
+    /// Whether a seconds unit stands on the number at `i` — the slice bounds
+    /// for `NumberParser.statesSeconds`, hoisted out of the two guards that
+    /// ask it. The lexicon is `NumberParser.secondUnits`, and it holds the
+    /// bare "s" the tokenizer peels from "90s": between a `glueableUnits`
+    /// that called "s" a seconds unit and a `secondUnits` that did not sat a
+    /// SIXTY-TIMES grant — "unlock instagram for 90s" spent ninety minutes
+    /// and "cap tiktok at 90s" wrote ninety as a ceiling, through the
+    /// spelling a thumb types, while every spelled-out form was already
+    /// declined. The two lists agree now. That widening cannot change what
+    /// a number READS as, because `secondUnits` is read by `statesSeconds`
+    /// and by nothing else, and both guards only REFUSE: `allNumbers` still
+    /// reports 90, provenance is untouched, and the sentence reaches the
+    /// widener instead of the mint.
+    private static func statesSeconds(_ t: [String], after i: Int, within upper: Int) -> Bool {
+        guard i + 1 < upper else { return false }
+        return NumberParser.statesSeconds(following: t[(i + 1)..<min(i + 3, upper)])
     }
 
     /// Whether the clause a spend would read is a REPORT or incidental prose
@@ -4116,7 +4159,8 @@ public enum DeterministicParser {
                   let clause = index.clauseRange(containing: j),
                   !aboutAPeriod(t, clause: clause),
                   !clause.contains(where: { laterMarkers.contains(t[$0]) }),
-                  !(clause.lowerBound..<j).contains(where: { speechVerbs.contains(t[$0]) })
+                  !(clause.lowerBound..<j).contains(where: { speechVerbs.contains(t[$0]) }),
+                  !aLaterClauseRetractsIt(index, after: clause)
             else { continue }
             if particledGerunds.contains(t[j]) || particledStems.contains(t[j]) {
                 // The particle has to govern the DOOR. The question here is not
@@ -4133,6 +4177,74 @@ public enum DeterministicParser {
         }
         return false
     }
+
+    /// Whether a LATER clause takes the intention back. "i'll use instagram
+    /// for 10 minutes, no i wont" states an intention and then withdraws it in
+    /// the next breath, and the frame minted the ten minutes anyway — the door
+    /// opened and the pool was debited for a plan the sentence itself cancels.
+    /// Without the frame that sentence is a report (its subject is spoken and
+    /// "use" is no ask verb) and was silent; the intention frame is what made
+    /// it a grant, so the retraction is this widening's own to refuse.
+    ///
+    /// THE SHAPE IS `aLaterClauseDeclinesTheAsk`'S, one family over: a clause
+    /// standing AFTER the frame's own, which must CONTAIN a negation or a
+    /// spoken decline and may carry nothing else beyond that vocabulary, the
+    /// transparent `answerSlotAdverbs`, and the first-person words a person
+    /// takes an intention back with ("no i wont", "no wait", "nah", "actually
+    /// no", "nvm"). Anything else in the clause is a second thought about
+    /// something other than the ask — "i'll use instagram for 10 minutes, not
+    /// tiktok" names the door it does mean and still spends, and "…, no more
+    /// than that" bounds the ask rather than cancelling it.
+    ///
+    /// SCOPED TO THE INTENTION, exactly as the cap family scopes its own
+    /// veto to a clause carrying a request modal: a plain imperative is not
+    /// retracted by a trailing decline, so "unlock instagram for 10 min, no"
+    /// and "give me 10 minutes of instagram, no i wont" keep granting. What
+    /// can be taken back is what was only ever promised.
+    ///
+    /// Read ONLY from `statesACommitment`'s guard chain, so a word seated in
+    /// the filler set can do exactly one thing: turn a commitment-framed grant
+    /// into the silence it was before the frame existed.
+    /// AND A COMMA IS NOT A RULE. "i'll use instagram for 10 minutes no i
+    /// wont" is the same sentence typed without the pause, and a veto that
+    /// reads only whole clauses would leave it granting — the punctuation
+    /// dependency `door(_:in:)` already records paying for once. So the same
+    /// vocabulary is read a second way: as the TRAILING RUN of the frame's own
+    /// clause. The run is taken from the end backwards and stops at the first
+    /// word that is not retraction vocabulary, so it can never reach past the
+    /// ask it is cancelling ("…for 10 minutes no more" stops on "more",
+    /// "…and no i wont stop" stops on "stop").
+    private static func aLaterClauseRetractsIt(_ index: NumberParser.ClauseIndex,
+                                               after clause: Range<Int>) -> Bool {
+        let t = index.tokens
+        if clauseRanges(index).contains(where: { later in
+            later.lowerBound >= clause.upperBound && isARetraction(t, later)
+        }) { return true }
+        var start = clause.upperBound
+        while start > clause.lowerBound, isARetractionWord(t[start - 1]) { start -= 1 }
+        return start < clause.upperBound && isARetraction(t, start..<clause.upperBound)
+    }
+
+    private static func isARetraction(_ t: [String], _ range: Range<Int>) -> Bool {
+        range.contains { negators.contains(t[$0]) || spokenDeclines.contains(t[$0]) }
+            && range.allSatisfy { isARetractionWord(t[$0]) }
+    }
+
+    private static func isARetractionWord(_ w: String) -> Bool {
+        negators.contains(w) || spokenDeclines.contains(w)
+            || answerSlotAdverbs.contains(w) || retractionWords.contains(w)
+    }
+
+    /// The words a retraction carries besides its own negation: the speaker,
+    /// the contractions the tokenizer splits off her ("i'll" is ["i", "ll"]),
+    /// the intention's own tail, and the two words English cancels with
+    /// ("wait", "mind"). Read only by the scan above, where an entry admits
+    /// one more clause as a retraction and can therefore only subtract a
+    /// grant.
+    private static let retractionWords: Set<String> = [
+        "i", "im", "m", "ill", "ll", "id", "d", "ive", "ve", "am",
+        "gonna", "going", "to", "wait", "mind",
+    ]
 
     /// The first-person intention frame standing directly on `j`: "i'll" /
     /// "ill" / "i will" / "i'm going to" / "im going to" / "i am going to" /
@@ -4160,10 +4272,45 @@ public enum DeterministicParser {
         return firstPersonPresent(t, before: j - 2)
     }
 
-    /// "i'd" as the tokenizer spells it: the clitic "d" standing on "i".
+    /// "i'd" as the tokenizer spells it: the clitic "d" standing on "i", or
+    /// the bare "id" a thumb types without the apostrophe.
+    ///
+    /// AND "ID" IS ALSO A NOUN. The bare spelling was read as the modal
+    /// wherever it stood, and the request-modal exemption it buys is the one
+    /// thing standing between an ordinary REPORT and rule 7's mint: "my id is
+    /// 250, open instagram" handed the identity document's number to the ask
+    /// beside it and granted 250 minutes — the whole day's pool and an open
+    /// door — where "my code is 250, open instagram" is correctly silent.
+    ///
+    /// The test is the one `nounReading` already makes for "open", "use" and
+    /// "spend": a determiner standing on the word makes it a noun. Two more
+    /// closed-class tells come with it, because "i would" can be followed by
+    /// neither — a finite auxiliary ("my id IS 250") and a number ("id 250").
+    /// Each is a refusal only, so a spelling nobody thought of leaves the
+    /// exemption exactly where it was.
+    ///
+    /// The apostrophe spelling keeps its unconditional reading: "i'd is 250"
+    /// is not English, and the two spellings must compile alike wherever both
+    /// are English — which is why the counterfactual "i'd use instagram for 10
+    /// minutes if i could" still grants, exactly as "i would use…" does. That
+    /// hole belongs to `requestModals` and to the conditional mood, not to the
+    /// clitic.
     private static func contractedWould(_ t: [String], at i: Int) -> Bool {
-        t[i] == "id" || (t[i] == "d" && i > 0 && t[i - 1] == "i")
+        if t[i] == "d" { return i > 0 && t[i - 1] == "i" }
+        guard t[i] == "id" else { return false }
+        if i > t.startIndex,
+           determiners.contains(t[i - 1]) || possessiveDeterminers.contains(t[i - 1]) {
+            return false
+        }
+        guard i + 1 < t.count else { return true }
+        return !auxiliaries.contains(t[i + 1]) && !NumberParser.readsAsNumber(t[i + 1])
     }
+
+    /// The possessives `determiners` does not carry — that set is read by the
+    /// cap family's phrase scans, where a word added changes what counts as a
+    /// ceiling's own noun phrase, and these have no business there. Read only
+    /// by the noun test above, and only to REFUSE an exemption.
+    private static let possessiveDeterminers: Set<String> = ["your", "his", "her", "their", "its"]
 
     /// The words that place a clause somewhere other than now. Read ONLY to
     /// REFUSE the commitment exemption, beside `aboutAPeriod` and for the same

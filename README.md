@@ -12,7 +12,7 @@ See [`docs/design/per-app-caps.md`](docs/design/per-app-caps.md).
 
 | Path | What it is |
 |---|---|
-| `SilkCore/` | The spine as a pure-Swift package: parser, number tokenizer, clause index, validator, polarity engine, grant ledger, per-app ceilings, the wait's clock and price, the launch catalogue's data. `swift test` runs on macOS **and on Linux** — 987 tests across 177 suites (three generations of fuzz corpora, a seeded 20k-input fuzzer, see `docs/qa/`, the wait's frame-budget bounds, and the re-lock's lateness bounds), no simulator needed. The sources import Foundation and nothing else and carry no conditional compilation at all, which is what lets 986 of the repo's 1,122 cases answer in a container; CI's `spine-linux` job is what keeps that true. |
+| `SilkCore/` | The spine as a pure-Swift package: parser, number tokenizer, clause index, validator, polarity engine, grant ledger, per-app ceilings, the wait's clock and price, the launch catalogue's data. `swift test` runs on macOS **and on Linux** — 1,031 tests across 185 suites (three generations of fuzz corpora, a seeded 20k-input fuzzer, see `docs/qa/`, the wait's frame-budget bounds, and the re-lock's lateness bounds), no simulator needed. The sources import Foundation and nothing else and carry no conditional compilation at all, which is what lets 1,030 of the repo's 1,167 cases answer in a container; CI's `spine-linux` job is what keeps that true. |
 | `Silk/` | The app: Now, Mirror + Settings, the bar and its conversation, the compile pipeline, wall controller, the launch catalogue's one `UIApplication` call, the `Spend` App Intent, the on-device model widener. |
 | `Shared/` | The App Group bridge (`SharedStore`) and the single wall (`Wall.reconcile()`), shared with all three extensions. |
 | `SilkMonitor/` · `SilkShield/` · `SilkShieldAction/` | The Screen Time extensions: re-lock layers, the statement-only shield, the one OK button. |
@@ -92,10 +92,10 @@ entitlement, and Apple must grant it by hand (see `docs/market/what-is-buildable
 2. **Edges never yield.** Budget gone, a door's own ceiling spent, or down hours means no. Refusals
    are four words and a time, and they name the door when the door is what ran out — "0 left today."
    beside a hero reading 30 is a lie.
-3. **Loosening waits for tomorrow** — unless a physical key the phone doesn't hold is tapped.
+3. **Loosening waits for tomorrow** — unless the held rule's one button, "Apply now.", is tapped.
    Tightening is instant. Polarity is computed by state diff, never parsed from words.
 4. **The wall fails closed.** The ledger is the truth; a dead extension closes doors late, never
    leaves them open. The model proposes; the validator disposes.
 5. **No notification permission, ever.** Every word the app says comes from
-   `SilkCore/Sources/SilkCore/Strings.swift` — 74 of them today, 64 constants and 10 that compose. The
+   `SilkCore/Sources/SilkCore/Strings.swift` — 75 of them today, 65 constants and 10 that compose. The
    file is the vocabulary, and nothing outside it may speak.
