@@ -99,8 +99,12 @@ final class ToastCenter {
         current = toast
 
         // Read before the sleep: the lifetime the toast was shown with is the
-        // lifetime it gets, even if the setting moves under it.
-        let lifetime = action == nil ? Self.plainLifetime : undoLifetime
+        // lifetime it gets, even if the setting moves under it. Under
+        // VoiceOver an action-bearing toast lives three times as long: the
+        // announcement is the only way its Undo is found, and it is found by
+        // ear, after the message, at speech pace.
+        var lifetime = action == nil ? Self.plainLifetime : undoLifetime
+        if action != nil, UIAccessibility.isVoiceOverRunning { lifetime *= 3 }
         expiry = Task { [weak self] in
             try? await Task.sleep(for: lifetime)
             // A replaced toast cancels its predecessor mid-sleep; the loser
@@ -261,8 +265,12 @@ struct ToastHost<Content: View>: View {
                 // A toast lives seconds and never takes focus, so its words
                 // are announced. Replacement is a text change on the same
                 // view, which is why this keys on the message, not appearance.
+                // The action is part of what is announced: "Reddit 20 min.
+                // Undo." — without it the one control on the toast was never
+                // spoken before it expired.
                 .onChange(of: toast.message, initial: true) { _, message in
-                    AccessibilityNotification.Announcement(message).post()
+                    let spoken = toast.actionLabel.map { "\(message) \($0)" } ?? message
+                    AccessibilityNotification.Announcement(spoken).post()
                 }
         }
     }

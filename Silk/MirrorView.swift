@@ -217,6 +217,10 @@ struct MirrorView: View {
                     // One spoken element — "82, Sunday" — Now's hero pattern:
                     // the day rides as the value, the numeral keeps its label.
                     .accessibilityValue(Text(dayName))
+                    // The walk names the element, not the numeral: a bare
+                    // `staticTexts["81"]` resolved to whichever "81" came
+                    // first in traversal (WalkSupport's `enso(_:reading:)`).
+                    .accessibilityIdentifier("silk.mirror.value")
                 Text(dayName)
                     .font(Silk.sans(12))
                     .tracking(Silk.track(0.015, 12))

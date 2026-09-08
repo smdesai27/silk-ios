@@ -114,6 +114,7 @@ struct ShieldOverlay: View {
                     .font(Silk.serif(40))
                     .tracking(Silk.track(-0.02, 40))
                     .foregroundStyle(night ? Silk.paperAlpha(0.90) : Silk.ink)
+                    .accessibilityIdentifier("silk.shield.title")
                 if !app.isEmpty {
                     Text(app)
                         .font(Silk.sans(13.5))

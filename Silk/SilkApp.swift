@@ -186,6 +186,13 @@ struct RootView: View {
                                         model.conversation.blur()
                                     }
                                     .ignoresSafeArea()
+                                    // Named, as the wheel's and the editor's
+                                    // backdrops are: with the thread open this
+                                    // is the one way out, and a bare catcher is
+                                    // no element at all to VoiceOver — no way to
+                                    // put the keyboard down or close the thread.
+                                    .accessibilityLabel(Text(SilkStrings.ok))
+                                    .accessibilityAddTraits(.isButton)
                             }
 
                             // The thread, over the dimmed stage, under the shield and
@@ -263,8 +270,14 @@ struct RootView: View {
                         // So the stratum is hidden outright, on the same
                         // container the blur is scoped to, which is by
                         // construction everything the veil covers and nothing
-                        // it does not.
-                        .accessibilityHidden(model.waiting != nil)
+                        // it does not. The shield and the wheel cover the same
+                        // stratum with the same veil, and hid nothing: a
+                        // VoiceOver user meeting the wall could swipe past it
+                        // into the doors and the bar behind it and act on them.
+                        // Every overlay that stands over the page hides it.
+                        .accessibilityHidden(model.waiting != nil
+                                             || model.shield != nil
+                                             || model.picker != nil)
 
                         // ── The overlay stratum ───────────────────────────
                         //

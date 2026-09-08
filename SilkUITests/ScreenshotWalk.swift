@@ -130,8 +130,7 @@ final class ScreenshotWalk: SilkWalk {
         let instagram = app.buttons.matching(
             NSPredicate(format: "label BEGINSWITH %@", "Instagram")).firstMatch
         XCTAssertTrue(instagram.waitForExistence(timeout: Self.appear), "the Instagram row is missing")
-        let title = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "7:00")).firstMatch
+        let title = app.staticTexts["silk.shield.title"]
         tap(instagram, "the Instagram door row", raising: title, "the shield")
 
         settle(1.2)
@@ -216,7 +215,9 @@ final class ScreenshotWalk: SilkWalk {
         // through the real decode. Its spoken value is the weekday name, so a
         // hero that had fallen back to today's running score would read
         // "Today" here and fail.
-        let hero = app.staticTexts["81"]
+        let hero = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier == %@ AND label == %@", "silk.mirror.value", "81")
+        ).firstMatch
         XCTAssertTrue(hero.waitForExistence(timeout: Self.appear),
                       "the hero is not showing the seeded last closed day")
         XCTAssertNotEqual(hero.value as? String, "Today",

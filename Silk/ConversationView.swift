@@ -232,6 +232,11 @@ struct SilkStage: ViewModifier {
             // rather than popping out from beneath it.
             .opacity(SilkStage.opacity(dimmed: dimmed, veiled: veiled))
             .allowsHitTesting(!dimmed)
+            // Hit-dead is not enough: at .05 the page was still every
+            // element in the VoiceOver tree, and a swipe during a
+            // conversation walked the thread, then the doors under it.
+            // What yields to the conversation leaves the tree with it.
+            .accessibilityHidden(dimmed || veiled)
             .animation(Silk.motion(0.45), value: dimmed)
             .animation(Silk.motion(Silk.Motion.overlay), value: veiled)
     }
@@ -329,13 +334,19 @@ private struct TurnCell: View {
     var newest: Bool
     var night: Bool
     var onUndo: () -> Void
+    @Environment(\.colorSchemeContrast) private var contrast
 
     /// Only the newest turn at full strength; the past drops to .4
     /// (Silk Mockup.dc.html:52, 391-394 `ex-past`). Applied piecewise below
     /// rather than once on the cell: a cell-wide `.opacity(0.4)` renders the
     /// dim but silently stops the Undo pill's taps — the press fell through
     /// to the tap-out catcher and tore the whole thread down.
-    private var dim: Double { newest ? 1 : 0.4 }
+    ///
+    /// Under Increase Contrast the past stays at full strength. The .4 is the
+    /// one multiplier the AA-floored ramp does not cover: a past reply lands
+    /// near 2:1 on either ground, and a turn is "past" while its Undo is
+    /// still live, so the pill's own label went with it.
+    private var dim: Double { newest || contrast == .increased ? 1 : 0.4 }
 
     var body: some View {
         VStack(spacing: 0) {

@@ -76,12 +76,17 @@ struct NowView: View {
 
     /// Silk speaks here — always serif, always a complete sentence with a period.
     /// The exception is ☾, which is not a sentence: during down hours there is
-    /// nothing to say, and the glyph says it.
+    /// nothing to say, and the glyph says it. Spoken, it is the sentence the
+    /// bar would answer with — a glyph reaches VoiceOver as a symbol's name or
+    /// as nothing, and the screen's only line cannot be either.
     private var greeting: some View {
         Text(model.greeting)
             .font(Silk.serif(21))
             .tracking(Silk.track(-0.005, 21))
             .foregroundStyle(night ? Silk.paperAlpha(0.82) : Silk.inkAlpha(0.90))
+            .accessibilityLabel(Text(model.isDownHours
+                ? "\(SilkStrings.downHoursOpens) \(model.policy.downHours.end.displayWithMeridiem)."
+                : model.greeting))
     }
 
     /// One number owns the screen. The stroke is the budget — spent time is bare
