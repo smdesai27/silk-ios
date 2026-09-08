@@ -2726,34 +2726,26 @@ public enum DeterministicParser {
             && !auxiliaries.contains(t[lead]) && !whWords.contains(t[lead])
             && !negators.contains(t[lead]) && !capRemovers.contains(t[lead])
             && !isNounPhraseWord(t, lead, state: state)
-        // AND A CAP NOUN STANDING DIRECTLY ON THE DOOR, IN A CLAUSE THAT
-        // STATES NO QUANTITY, IS A MENTION — WHEN ANOTHER CLAUSE ASKS IN
-        // FULL. "forget THE TIKTOK CAP, give me 20 minutes", "give me 20 of
-        // instagram, ignore the tiktok cap": "tiktok cap" is one compound
-        // noun, the door's cap referred to, and the determiner widening
-        // above made that spelling reach this arm, whose terminating silence
-        // threw away a whole grant standing in the next clause. Three
-        // conditions, each one a sentence that was granted without it:
-        // the noun must stand ON the door, because the setter opens the
-        // ceiling's own phrase between them ("give tiktok A hard cap");
-        // the clause must carry no quantity at all — `numbers`, the
-        // idiom-aware count, not a token scan, because "give the tiktok cap
-        // AN HOUR" holds sixty with no token reading as a number and was
-        // funded an hour of the app it asked to cap; and some OTHER clause
-        // must carry an opening verb, because the grant this exception
-        // keeps must be a whole ask, not the bare "20 minutes" after "set
-        // the tiktok cap," which the fragment rule would otherwise write out
-        // as an unlock of the door just asked to be held. When all three
-        // hold the mention is left to the clause that asks; the cap it
-        // names is not loosened by that, since a standing ceiling clamps
-        // every grant on its door (`Validator`), so "raise the tiktok cap,
-        // give me 20 minutes" spends twenty of whatever the ceiling leaves.
-        let capNounSitsOnTheDoor = lexeme == doorEnd + 1
-        let anotherClauseAsks = clauseRanges(index)
-            .contains { $0 != clause && hasOpeningVerb(Array(t[$0])) }
-        let aMentionOfTheCap = capNounSitsOnTheDoor && numbers.isEmpty && anotherClauseAsks
+        // AND A CAP NOUN STANDING DIRECTLY ON THE DOOR IS THE SAME FRAME.
+        // "forget the tiktok cap, give me 20 minutes" is silenced whole by
+        // this arm, and that is the price of the arm, paid knowingly. One
+        // round tried to except the compound — "the tiktok cap" as the
+        // door's cap MENTIONED, its grant left to the clause that asks —
+        // and the exception was attacked until it broke three ways in one
+        // round: a tightening wears the same compound ("lower the tiktok
+        // cap, i need twenty minutes" funded the door it asked to hold); a
+        // quantity the tokenizer cannot see ("give the tiktok cap 1h30") made
+        // a stated ceiling read as no ceiling; and "another clause asks" was
+        // a phrase scan that could not see the negator, the speech verb or
+        // the quote around it ("she said give me 20 minutes, set the tiktok
+        // cap" granted). Each patch was a narrower widening, and the
+        // doctrine is that a widening that hijacks prose is removed, not
+        // repaired (docs/design/canon.md; the parser's own history in
+        // `CapsAdversarialProbeTests`). A sentence that names a door's cap
+        // and asks for minutes in the same breath is one command too many
+        // for this grammar, and silence hands it to the widener, which may
+        // read it, rather than to the mint, which may not.
         if !shaped, let lexeme, capNouns.contains(t[lexeme]), lexeme > doorEnd,
-           !aMentionOfTheCap,
            doorStart > clause.lowerBound,
            askVerbs.contains(t[doorStart - 1]) || leadingVerbTakesTheDoor,
            !statesAVolition(t, clause: clause),

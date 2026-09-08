@@ -324,47 +324,38 @@ private func expectNeverLoosensInstantly(_ text: String,
         #expect(m == 10, "the door's own ceiling clamps, not the grammar")
     }
 
-    /// AND A MENTION OF THE CAP IS NOT A SETTER. The widening above let the
-    /// recipient frame see "the tiktok" on the verb with a cap noun in its
-    /// wake, and terminate — which silenced whole sentences whose grant stood
-    /// in the next clause. "the tiktok cap" is one compound noun, the door's
-    /// cap referred to; a setter opens the ceiling's own phrase between the
-    /// door and the noun ("give tiktok A hard cap", pinned silent in
-    /// `CapsAdversarialProbeTests`). A compound in a clause that states no
-    /// quantity, beside another clause that asks in full, is left to the
-    /// clause that asks. The cap is not loosened by that: a standing ceiling
-    /// clamps every grant on its door, so the third row spends the ten the
-    /// ceiling leaves.
+    /// AND A MENTION OF THE CAP IS THE SAME FRAME. "forget the tiktok cap,
+    /// give me 20 minutes" is silenced whole, and these rows are why: one
+    /// round excepted the compound — "the tiktok cap" as the door's cap
+    /// mentioned, the grant left to the clause that asks — and the
+    /// exception was attacked until it broke three ways: a tightening wears
+    /// the same compound; a quantity the tokenizer cannot see reads as no
+    /// quantity; and "another clause asks" was a phrase scan blind to the
+    /// negator, the speech verb and the quote around the phrase. The
+    /// exception is gone, and every row here is the sentence that broke it,
+    /// beside the sentences it was written for. Silence hands them to the
+    /// widener; the mint never sees them.
     @Test(arguments: [
-        ("forget the tiktok cap, give me 20 minutes", "TikTok"),
-        ("give me 20 minutes of instagram, forget the tiktok cap", "Instagram"),
-        ("raise the tiktok cap, give me 20 minutes", "TikTok"),
-    ])
-    func aMentionOfTheCapLeavesTheGrantToTheClauseThatAsks(_ row: (String, String)) {
-        expectSpend(row.0, door: row.1, minutes: 20, capped)
-        guard case .grant(_, let m, _) = validate(row.0, capped) else {
-            Issue.record("\"\(row.0)\" was \(validate(row.0, capped)), not a grant")
-            return
-        }
-        #expect(m == 10, "the door's own ceiling clamps, not the grammar")
-    }
-
-    /// AND THE EXCEPTION IS NO WIDER THAN THAT. Each of these carries the
-    /// compound and was granted or hinted while the exception keyed on a
-    /// token scan of the door's own clause: the idiom quantity ("an hour")
-    /// that no token reads as a number, and the bare minutes in the next
-    /// clause, which the fragment rule wrote out as an unlock of the door
-    /// just asked to be held. The restriction the grammar cannot compile
-    /// terminates, as it always did.
-    @Test(arguments: [
+        ("forget the tiktok cap, give me 20 minutes", "the sentence the exception was written for"),
+        ("give me 20 minutes of instagram, forget the tiktok cap", "the same, reversed"),
+        ("raise the tiktok cap, give me 20 minutes", "a loosening, then an ask"),
+        ("lower the tiktok cap, i need twenty minutes", "a tightening wears the compound"),
+        ("tighten the tiktok cap, i want 20 minutes less", "the same, asking for less"),
+        ("set the tiktok cap, unlock tiktok for 20", "a full ask on the door just asked to be held"),
+        ("give the tiktok cap 1h30, give me 20 minutes", "a glued quantity the tokenizer cannot read"),
+        ("give the tiktok cap 1:30, give me 20 minutes", "a clock quantity"),
+        ("give the tiktok cap a couple hours, give me 20 minutes", "a vague quantity"),
+        ("she said give me 20 minutes, set the tiktok cap", "a report beside the compound"),
+        ("forget the tiktok cap, i never said give me 20 minutes", "a negated report"),
+        ("set the tiktok cap, \"unlock tiktok for 20\" is banned", "a quote"),
         ("give the tiktok cap an hour", "an idiom quantity in the recipient's clause"),
         ("give the tiktok limit half an hour", "the same, halved"),
-        ("set the tiktok cap, 20 minutes", "the number in a second breath, no ask verb"),
+        ("set the tiktok cap, 20 minutes", "the number in a second breath"),
         ("lower the instagram cap, 20 minutes", "the same, another verb"),
         ("keep the tiktok limit, 20", "the same, bare"),
-        ("give my tiktok cap a rest, 20 minutes", "a loosening ask, no opening verb after it"),
+        ("give my tiktok cap a rest, 20 minutes", "a loosening ask, bare minutes after it"),
     ])
-    func aCompoundWithoutAnAskElsewhereStillTerminates(_ row: (String, String)) {
+    func aCompoundOnTheDoorTerminatesWhateverTheOtherClauseSays(_ row: (String, String)) {
         expectNoMinutes(row.0, row.1, capped)
         expectNoHint(row.0, row.1, capped)
         expectSilence(row.0, row.1, capped)
