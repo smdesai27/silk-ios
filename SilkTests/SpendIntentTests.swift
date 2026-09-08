@@ -26,42 +26,12 @@ private func performSpend(door: String, minutes: Int) async throws -> String {
     return SpendIntent.lastDialog
 }
 
-@MainActor
-private func freshPolicy(budget: Int = 40,
-                         downHours: DownHours? = nil,
-                         doors: [Door]? = nil,
-                         caps: [UUID: Int] = [:]) -> Door {
-    SharedStore.wipeAll()
-    SpendIntent.lastDialog = ""
-    SpendIntent.beforeGrantSave = nil
-    SpendIntent.testForceWallUp = nil
-    WallController.testForceArmed = nil
-    let door = doors?.first ?? Door(name: "Instagram")
-    let roster = doors ?? [door]
-    SharedStore.save(policy: PolicyState(budgetMinutes: budget,
-                                         downHours: downHours ?? nightWellClearOfNow(),
-                                         doors: roster,
-                                         doorCaps: caps))
-    return door
-}
-
-@MainActor
-private func freshModel(budget: Int = 40, doors: [Door]) -> AppModel {
-    SharedStore.wipeAll()
-    SpendIntent.lastDialog = ""
-    SpendIntent.beforeGrantSave = nil
-    SpendIntent.testForceWallUp = nil
-    WallController.testForceArmed = nil
-    let model = AppModel()
-    model.completeSetup(doors: doors,
-                        doorSelections: [:],
-                        wallSelection: .init(),
-                        budget: budget,
-                        downHours: nightWellClearOfNow())
-    #expect(UIApplication.shared.applicationState != .background,
-            "the host app is not foreground — a wait below will be born parked")
-    return model
-}
+// The two fixtures are `TestSupport`'s. Both wipe the App Group AND put the
+// four intent seams back — `lastDialog`, `beforeGrantSave`, `testForceWallUp`
+// and `WallController.testForceArmed` — because those are exactly as global to
+// the process as the store they sit beside, and this file is the one that arms
+// them. `WaitIntentTests` used to reset none of the four and inherited whatever
+// this suite left behind.
 
 @Suite(.serialized) @MainActor struct SpendIntentDialogs {
 
@@ -285,14 +255,22 @@ private func freshModel(budget: Int = 40, doors: [Door]) -> AppModel {
 @Suite(.serialized) @MainActor struct SpendIntentConcurrency {
 
     @Test func anIntentWriteDuringAnInAppWaitIsSeenAtLanding() async throws {
-        UserDefaults.standard.set("0.8", forKey: "silkWait")
-        defer { UserDefaults.standard.removeObject(forKey: "silkWait") }
+        defer { unpinTheSeams() }
 
         let instagram = Door(name: "Instagram")
         let tiktok = Door(name: "TikTok")
-        let model = freshModel(doors: [instagram, tiktok])
+        let (model, _) = freshModel(doors: [instagram, tiktok],
+                                    downHours: nightWellClearOfNow(),
+                                    silkWait: "0.8", requiringForeground: true)
 
-        await model.handle("give me twenty minutes of instagram")
+        // The grammar's own claim on the sentence, before it is typed: the
+        // simulator carries Apple Intelligence, and a sentence the grammar fell
+        // silent on would reach the widener and come back with a verdict that
+        // is a property of the machine. The ordering this test is about would
+        // then be measured through it.
+        let ask = "give me twenty minutes of instagram"
+        try claimed(ask, model)
+        await model.handle(ask)
         #expect(model.waiting != nil, "no wait was raised over a granted ask")
         #expect(model.remainingMinutes == 40, "the pool moved before the ink landed")
 

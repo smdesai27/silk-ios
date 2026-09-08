@@ -23,23 +23,7 @@ import UIKit
 //
 // Hosted by the app, so `SharedStore` resolves against the real App Group. That
 // makes state global to the process, which is why every test starts from
-// `freshModel()`.
-
-// MARK: - Fixtures
-
-@MainActor
-private func freshModel(budget: Int = 40,
-                        downHours: DownHours = noWindowTonight()) -> (AppModel, Door) {
-    SharedStore.wipeAll()
-    let model = AppModel()
-    let door = Door(name: "Instagram")
-    model.completeSetup(doors: [door],
-                        doorSelections: [:],
-                        wallSelection: .init(),
-                        budget: budget,
-                        downHours: downHours)
-    return (model, door)
-}
+// `freshModel()` — `TestSupport`'s, now, rather than a seventh copy of it.
 
 // MARK: - The conversation on its own
 

@@ -4,13 +4,7 @@ import Testing
 
 // MARK: - Fixtures
 
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
-
-private func at(_ hour: Int, _ minute: Int, _ second: Int = 0) -> Date {
+private func relockClock(_ hour: Int, _ minute: Int, _ second: Int = 0) -> Date {
     cal.date(from: DateComponents(year: 2026, month: 7, day: 29,
                                   hour: hour, minute: minute, second: second))!
 }
@@ -37,23 +31,23 @@ private func scheduledClose(_ w: RelockWindow, expiry: Date) -> Date? {
 
 @Suite struct RelockWindowTests {
     @Test func aGrantLongerThanTheFloorSchedulesAtItsOwnExpiry() {
-        let w = RelockWindow(now: at(14, 3), relockAt: at(14, 33))
+        let w = RelockWindow(now: relockClock(14, 3), relockAt: relockClock(14, 33))
 
         #expect(w.clamped == false)
-        #expect(w.primaryEnd == at(14, 33))
-        #expect(w.backupEnd == at(14, 35))
+        #expect(w.primaryEnd == relockClock(14, 33))
+        #expect(w.backupEnd == relockClock(14, 35))
         #expect(w.thresholdMinutes == 30)
     }
 
     @Test func aGrantShorterThanTheFloorSchedulesLateNeverEarly() {
-        let now = at(14, 3)
-        let relockAt = at(14, 8)
+        let now = relockClock(14, 3)
+        let relockAt = relockClock(14, 8)
         let w = RelockWindow(now: now, relockAt: relockAt)
 
         #expect(w.clamped)
         // The floor lands at 14:18:30, and a schedule cannot say the thirty —
         // so the end is the mark above it. Later than the floor, never below.
-        #expect(w.primaryEnd == at(14, 19))
+        #expect(w.primaryEnd == relockClock(14, 19))
         #expect(w.primaryEnd >= now.addingTimeInterval(RelockWindow.scheduleFloor))
         #expect(w.primaryEnd > relockAt)
         // The threshold keeps the five minutes actually granted: it is spent
@@ -68,11 +62,11 @@ private func scheduledClose(_ w: RelockWindow, expiry: Date) -> Date? {
         // reconcile finds nothing to close and the wake is spent for nothing.
         // Stated at 14:34 it closes the door thirteen seconds late, which is
         // the direction this file exists to keep every move in.
-        let relockAt = at(14, 33, 47)
-        let w = RelockWindow(now: at(14, 3, 47), relockAt: relockAt)
+        let relockAt = relockClock(14, 33, 47)
+        let w = RelockWindow(now: relockClock(14, 3, 47), relockAt: relockAt)
 
-        #expect(w.primaryEnd == at(14, 34))
-        #expect(w.backupEnd == at(14, 36))
+        #expect(w.primaryEnd == relockClock(14, 34))
+        #expect(w.backupEnd == relockClock(14, 36))
         // Stated on the mark, the schedule's own truncation is a no-op — which
         // is the property `WallController.arm` leans on when it reads
         // `[.hour, .minute]` off these two dates.
@@ -82,7 +76,7 @@ private func scheduledClose(_ w: RelockWindow, expiry: Date) -> Date? {
     }
 
     @Test func theThresholdRoundsUpSoItNeverUndercutsTheMinutesGranted() {
-        let w = RelockWindow(now: at(14, 3), relockAt: at(14, 23, 1))
+        let w = RelockWindow(now: relockClock(14, 3), relockAt: relockClock(14, 23, 1))
 
         #expect(w.thresholdMinutes == 21)
     }
@@ -91,7 +85,7 @@ private func scheduledClose(_ w: RelockWindow, expiry: Date) -> Date? {
         // The Validator truncates a grant at the night edge, and a spend a
         // second before that edge can arrive here with no time on it. A
         // threshold of zero arms nothing at all.
-        let now = at(21, 59, 59)
+        let now = relockClock(21, 59, 59)
         let w = RelockWindow(now: now, relockAt: now)
 
         #expect(w.clamped)
@@ -117,7 +111,7 @@ private func scheduledClose(_ w: RelockWindow, expiry: Date) -> Date? {
     /// the expiry the ledger holds.
     @Test func aDoorClosesWithinAMinuteOfExpiryWhicheverSecondItWasAskedOn() {
         for second in 0..<60 {
-            let now = at(14, 3, second)
+            let now = relockClock(14, 3, second)
             let relockAt = now.addingTimeInterval(30 * 60)
             let w = RelockWindow(now: now, relockAt: relockAt)
 
@@ -137,7 +131,7 @@ private func scheduledClose(_ w: RelockWindow, expiry: Date) -> Date? {
     /// cover a failure is instead carrying the happy path.
     @Test func thePrimaryScheduleIsTheOneThatCloses() {
         for second in 0..<60 {
-            let now = at(9, 17, second)
+            let now = relockClock(9, 17, second)
             let relockAt = now.addingTimeInterval(45 * 60)
             let w = RelockWindow(now: now, relockAt: relockAt)
 
@@ -155,7 +149,7 @@ private func scheduledClose(_ w: RelockWindow, expiry: Date) -> Date? {
     /// short grant that event is the only layer near expiry at all.
     @Test func aClampedGrantIsLateFromTheSchedulesAndOnTimeFromTheThreshold() {
         for second in 0..<60 {
-            let now = at(14, 3, second)
+            let now = relockClock(14, 3, second)
             let relockAt = now.addingTimeInterval(2 * 60)
             let w = RelockWindow(now: now, relockAt: relockAt)
 
@@ -174,7 +168,7 @@ private func scheduledClose(_ w: RelockWindow, expiry: Date) -> Date? {
     @Test func everyScheduledIntervalClearsTheFifteenMinuteMinimum() {
         for second in 0..<60 {
             for minutes in [1, 2, 5, 14, 15, 16, 17, 30, 120] {
-                let now = at(14, 3, second)
+                let now = relockClock(14, 3, second)
                 let w = RelockWindow(now: now,
                                      relockAt: now.addingTimeInterval(Double(minutes) * 60))
                 let start = asScheduled(now)

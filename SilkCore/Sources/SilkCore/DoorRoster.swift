@@ -16,8 +16,9 @@ public enum DoorRoster {
     public static let maxDoors = 6
 
     /// Catalogue names not already claimed by a door, in catalogue order.
-    /// `taken` is every spoken form of every door (name and aliases), so a
-    /// door answering to "x" keeps the catalogue's "X" off the list too.
+    /// `taken` is every spoken form of every door — its name and nothing else
+    /// now that `Door.spokenForms` is a one-element list — so a door answering
+    /// to "x" keeps the catalogue's "X" off the list too.
     /// Case-insensitive throughout — "instagram" and "Instagram" are one name.
     public static func available(catalog: [String], taken: [String]) -> [String] {
         let taken = Set(taken.map { $0.lowercased() })

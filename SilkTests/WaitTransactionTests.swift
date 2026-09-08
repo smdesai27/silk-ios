@@ -22,7 +22,8 @@ import UIKit
 //
 // Hosted by the app, so `SharedStore` resolves against the real App Group. That
 // makes state global to the process, which is why every test starts from
-// `freshModel()`.
+// `freshModel(...)` — `TestSupport`'s, now, with this file's own window, its own
+// price and the foreground guard passed in rather than copied.
 //
 // `.serialized` and `@MainActor` for the reason `WaitModelTests` gives. Worth
 // adding, because these tests suspend and its do not: `.serialized` only orders
@@ -30,26 +31,6 @@ import UIKit
 // `SharedStore.wipeAll()` out of the middle of one of the sleeps below is the
 // scheme's `parallelizable = "NO"` on SilkTests. If that ever becomes YES,
 // these three go flaky and nothing else in the target will.
-
-@MainActor
-private func freshModel(budget: Int = 40) -> (AppModel, Door) {
-    SharedStore.wipeAll()
-    let model = AppModel()
-    let door = Door(name: "Instagram")
-    model.completeSetup(doors: [door],
-                        doorSelections: [:],
-                        wallSelection: .init(),
-                        budget: budget,
-                        downHours: nightWellClearOfNow())
-    // Every wait below is born watching, and that is only true while the host
-    // app is foreground. `raiseWait` parks a wait created in the background
-    // (the C1 fix), so a runner that started tests before the scene activated
-    // would fail nine cases at once with nine unrelated-looking messages.
-    // Named here instead, once.
-    #expect(UIApplication.shared.applicationState != .background,
-            "the host app is not foreground — every wait below will be born parked")
-    return (model, door)
-}
 
 @Suite(.serialized) @MainActor struct WaitTransactionTests {
 
@@ -65,6 +46,12 @@ private func freshModel(budget: Int = 40) -> (AppModel, Door) {
     /// uses this exact string), so the deterministic grammar answers it and the
     /// on-device widener is never reached. Twenty against forty does not clamp,
     /// which is what lets the balance be asserted as a number.
+    ///
+    /// Asserted rather than assumed: every `handle` below is preceded by
+    /// `try claimed(Self.ask, model)`. The simulator carries Apple Intelligence,
+    /// so a grammar that stopped claiming this sentence would not fail — it
+    /// would hand it to a model, get a grant back, and every timing and ledger
+    /// assertion in this file would go on being green about the weather.
     private static let ask = "give me twenty minutes of instagram"
 
     /// What the grant read-back says when it finally lands. Written out rather
@@ -86,13 +73,15 @@ private func freshModel(budget: Int = 40) -> (AppModel, Door) {
     /// walk around. Nothing else in the repo asserts the blob is untouched
     /// mid-wait: the UI walk can only see the hero still reading 40.
     @Test func nothingMovesWhileTheVeilStandsAndTheGrantLandsOnceWhenItFalls() async throws {
-        UserDefaults.standard.set("\(Self.waitSeconds)", forKey: "silkWait")
-        defer { UserDefaults.standard.removeObject(forKey: "silkWait") }
+        defer { unpinTheSeams() }
 
-        let (model, door) = freshModel()
+        let (model, door) = freshModel(downHours: nightWellClearOfNow(),
+                                       silkWait: "\(Self.waitSeconds)",
+                                       requiringForeground: true)
         let untouched = SharedStore.loadLedger()
         let said = Date.now
 
+        try claimed(Self.ask, model)
         await model.handle(Self.ask)
 
         // `handle` returned by way of `raiseWait`, not by way of `apply`: the
@@ -167,17 +156,27 @@ private func freshModel(budget: Int = 40) -> (AppModel, Door) {
     /// than by calling the closure out of the turn, because the pill is what a
     /// user has.
     @Test func undoAfterAWaitPutsTheMinutesBackAndShutsTheDoor() async throws {
-        UserDefaults.standard.set("\(Self.waitSeconds)", forKey: "silkWait")
-        defer { UserDefaults.standard.removeObject(forKey: "silkWait") }
+        defer { unpinTheSeams() }
 
-        let (model, door) = freshModel()
+        let (model, door) = freshModel(downHours: nightWellClearOfNow(),
+                                       silkWait: "\(Self.waitSeconds)",
+                                       requiringForeground: true)
+        try claimed(Self.ask, model)
         await model.handle(Self.ask)
         let landed = await settle { model.waiting == nil }
         #expect(landed, "the ink never landed")
 
         #expect(model.remainingMinutes == 20)
         #expect(model.ledger.grants.count == 1)
-        #expect(model.state(of: door) != .live, "the grant never opened the door")
+        // The exact state, and the inequality it replaces is why. `!= .live`
+        // is satisfied by `.rest` as readily as by `.open`, and `.rest` is a
+        // SHUT door — so a landing that recorded the grant and then closed the
+        // door would have passed this line with the message "the grant never
+        // opened the door" printed nowhere. The row draws `.open` and only
+        // `.open` with a leaf and a deadline; that deadline is the assertion.
+        let landedGrant = try #require(model.ledger.grants.first)
+        #expect(model.state(of: door) == .open(until: landedGrant.expiresAt),
+                "the grant left the door reading \(model.state(of: door)) rather than open till its own expiry")
 
         let turn = try #require(model.conversation.turns.last,
                                 "the wait ended without answering its turn")
@@ -222,12 +221,14 @@ private func freshModel(budget: Int = 40) -> (AppModel, Door) {
     /// the one that can actually run under a veil — the veil covers Settings,
     /// but this call is also where a Shortcut and an undone add arrive.
     @Test func aDoorDeletedMidWaitDropsTheAskAndSpendsNothing() async throws {
-        UserDefaults.standard.set("\(Self.waitSeconds)", forKey: "silkWait")
-        defer { UserDefaults.standard.removeObject(forKey: "silkWait") }
+        defer { unpinTheSeams() }
 
-        let (model, door) = freshModel()
+        let (model, door) = freshModel(downHours: nightWellClearOfNow(),
+                                       silkWait: "\(Self.waitSeconds)",
+                                       requiringForeground: true)
         let untouched = SharedStore.loadLedger()
 
+        try claimed(Self.ask, model)
         await model.handle(Self.ask)
         #expect(model.waiting != nil, "no wait was raised over a granted ask")
 
@@ -267,12 +268,14 @@ private func freshModel(budget: Int = 40) -> (AppModel, Door) {
     /// The other writer is not hypothetical. `SpendIntent` writes the App Group
     /// from its own process while the app sits behind a veil, and stamps the
     /// blob exactly as this does.
-    @Test func aPoolEmptiedByAnotherWriterMidWaitIsRefusedRatherThanGranted() async {
-        UserDefaults.standard.set("\(Self.waitSeconds)", forKey: "silkWait")
-        defer { UserDefaults.standard.removeObject(forKey: "silkWait") }
+    @Test func aPoolEmptiedByAnotherWriterMidWaitIsRefusedRatherThanGranted() async throws {
+        defer { unpinTheSeams() }
 
-        let (model, door) = freshModel()
+        let (model, door) = freshModel(downHours: nightWellClearOfNow(),
+                                       silkWait: "\(Self.waitSeconds)",
+                                       requiringForeground: true)
 
+        try claimed(Self.ask, model)
         await model.handle(Self.ask)
         #expect(model.waiting != nil, "no wait was raised over a granted ask")
         #expect(model.remainingMinutes == 40, "the pool moved before the ink landed")
@@ -331,11 +334,13 @@ private func freshModel(budget: Int = 40) -> (AppModel, Door) {
     /// touching what is asserted.
     ///
     /// Delete `startClock()` from `clearWait` and `now` never moves again.
-    @Test func theMinuteClockIsRunningAgainOnTheFarSideOfAWait() async {
-        UserDefaults.standard.set("\(Self.waitSeconds)", forKey: "silkWait")
-        defer { UserDefaults.standard.removeObject(forKey: "silkWait") }
+    @Test func theMinuteClockIsRunningAgainOnTheFarSideOfAWait() async throws {
+        defer { unpinTheSeams() }
 
-        let (model, _) = freshModel()
+        let (model, _) = freshModel(downHours: nightWellClearOfNow(),
+                                    silkWait: "\(Self.waitSeconds)",
+                                    requiringForeground: true)
+        try claimed(Self.ask, model)
         await model.handle(Self.ask)
         #expect(model.waiting != nil, "no wait was raised over a granted ask")
 

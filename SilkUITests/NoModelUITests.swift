@@ -23,19 +23,11 @@ import XCTest
 /// of the machine. With it, the screen is the one a phone with the feature
 /// switched off actually shows.
 ///
-/// Helper shapes (`wait`, `tap`, `say`, the teardown) are copied from
-/// `OnboardingUITests` rather than shared: they are private there, and each
-/// carries a comment naming the failure it exists for.
-final class NoModelUITests: XCTestCase {
-
-    /// Something the current screen already owns.
-    private static let appear: TimeInterval = 12
-    /// A sheet or an overlay arriving on a gesture.
-    private static let overlay: TimeInterval = 20
-    /// The first frame of a cold process.
-    private static let launch: TimeInterval = 90
-    /// A reply in the thread: the deliberate ~480 ms beat plus room.
-    private static let answer: TimeInterval = 15
+/// The waits, the taps, the typing and the teardown are `SilkWalk`'s — the base
+/// class in `WalkSupport.swift`. They used to be copied here from
+/// `OnboardingUITests`, without the comments that say what each one exists for;
+/// the copies are gone and the reasoning is in one place.
+final class NoModelUITests: SilkWalk {
 
     /// The four words, with the typographic apostrophe `SilkStrings` actually
     /// carries. Spelled with an escape so a copy-paste through an editor that
@@ -49,117 +41,6 @@ final class NoModelUITests: XCTestCase {
     /// person reads off the glass and not a call to the same function that
     /// produced it.
     private static let writeItOut = "Write it out: unlock Instagram for 10 min."
-
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-    }
-
-    override func tearDown() {
-        MainActor.assumeIsolated {
-            NoModelUITests.stop(XCUIApplication())
-        }
-    }
-
-    // MARK: - The helpers, as OnboardingUITests writes them
-
-    @MainActor
-    private func wait(for element: XCUIElement, _ predicate: String,
-                      _ arguments: [Any] = [], timeout: TimeInterval) -> Bool {
-        let deadline = Date.now.addingTimeInterval(timeout)
-        repeat {
-            let expectation = XCTNSPredicateExpectation(
-                predicate: NSPredicate(format: predicate, argumentArray: arguments),
-                object: element)
-            let left = max(deadline.timeIntervalSinceNow, 1)
-            if XCTWaiter().wait(for: [expectation], timeout: left) == .completed { return true }
-        } while Date.now < deadline
-        return false
-    }
-
-    @MainActor
-    private func tap(_ element: XCUIElement, _ what: String,
-                     timeout: TimeInterval = NoModelUITests.appear,
-                     file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertTrue(wait(for: element, "exists == true AND isHittable == true", timeout: timeout),
-                      "\(what) never became tappable", file: file, line: line)
-        element.tap()
-    }
-
-    /// A tap that has to raise something, and asks a second time when the first
-    /// went missing under SpringBoard's consent alert.
-    @MainActor
-    private func tap(_ trigger: XCUIElement, _ what: String,
-                     raising target: XCUIElement, _ raised: String,
-                     timeout: TimeInterval = NoModelUITests.overlay,
-                     file: StaticString = #filePath, line: UInt = #line) {
-        tap(trigger, what, file: file, line: line)
-        if target.waitForExistence(timeout: timeout) { return }
-        Self.dismissScreenTimeConsent(timeout: 0)
-        if trigger.isHittable { trigger.tap() }
-        XCTAssertTrue(target.waitForExistence(timeout: timeout),
-                      "\(raised) did not rise on \(what)", file: file, line: line)
-    }
-
-    @MainActor
-    @discardableResult
-    private static func dismissScreenTimeConsent(timeout: TimeInterval = 4) -> Bool {
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let decline = springboard.buttons.matching(
-            NSPredicate(format: "label CONTAINS[c] %@", "Allow")
-        ).firstMatch
-        let dont = springboard.buttons.matching(
-            NSPredicate(format: "label BEGINSWITH[c] %@", "Don")
-        ).firstMatch
-        if dont.waitForExistence(timeout: timeout) {
-            dont.tap()
-            _ = dont.waitForNonExistence(timeout: NoModelUITests.overlay)
-            return true
-        }
-        // Nothing to decline. `decline` is queried only so a run that shows the
-        // alert in some other shape is visible in the failure log rather than
-        // silently timing out three helpers later.
-        _ = decline.exists
-        return false
-    }
-
-    @MainActor
-    private static func stop(_ app: XCUIApplication) {
-        guard app.state != .notRunning else { return }
-        dismissScreenTimeConsent(timeout: 0)
-        XCUIDevice.shared.press(.home)
-        _ = app.wait(for: .runningBackgroundSuspended, timeout: 2)
-        app.terminate()
-        guard !app.wait(for: .notRunning, timeout: Self.appear) else { return }
-        app.terminate()
-        _ = app.wait(for: .notRunning, timeout: Self.appear)
-    }
-
-    @MainActor
-    private func element(_ app: XCUIApplication, _ id: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: id).firstMatch
-    }
-
-    /// Types a sentence at the bar, waiting for focus and asking once more if
-    /// it went — the cold-simulator first-focus drop recorded in the 2026-09-02
-    /// scout notes.
-    @MainActor
-    private func say(_ bar: XCUIElement, _ sentence: String,
-                     file: StaticString = #filePath, line: UInt = #line) {
-        tap(bar, "the bar", file: file, line: line)
-        if !waitForFocus(bar, timeout: 4) {
-            tap(bar, "the bar, again", file: file, line: line)
-            _ = waitForFocus(bar, timeout: 4)
-        }
-        bar.typeText(sentence)
-    }
-
-    @MainActor
-    @discardableResult
-    private func waitForFocus(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
-        let focused = expectation(for: NSPredicate(format: "hasKeyboardFocus == true"),
-                                  evaluatedWith: element)
-        return XCTWaiter().wait(for: [focused], timeout: timeout) == .completed
-    }
 
     /// A fresh launch with the model switched off. The night window is parked
     /// six hours ahead of the wall clock for the reason `OnboardingUITests`
@@ -260,16 +141,14 @@ final class NoModelUITests: XCTestCase {
         //    because silence here would hand "instagram 10" to a model that
         //    reads it as the grant the grammar just declined.
         say(bar, "instagram 10\n")
-        let guidance = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Write it out")
-        ).firstMatch
+        let guidance = reply(app, containing: "Write it out")
         XCTAssertTrue(guidance.waitForExistence(timeout: Self.answer),
                       "half a spend was left unanswered with no model behind the bar")
         XCTAssertEqual(guidance.label, Self.writeItOut,
                        "the guidance read \"\(guidance.label)\"")
         // Nothing moved: the whole budget is still on the ring, no door row
         // carries a re-lock time, and there is nothing to take back.
-        XCTAssertTrue(app.staticTexts["40"].waitForExistence(timeout: Self.appear),
+        XCTAssertTrue(enso(app, reading: 40).waitForExistence(timeout: Self.appear),
                       "a sentence that granted nothing moved the balance")
         XCTAssertFalse(labelled(app, beginsWith: "Instagram, open till").exists,
                        "a sentence that granted nothing opened the door")
@@ -280,9 +159,7 @@ final class NoModelUITests: XCTestCase {
         // 2. THE SPEND, in the sentence the reply just spelled out. The
         //    grammar's hot path, and the widener never sees it.
         say(bar, "unlock Instagram for 10 min\n")
-        let grant = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Instagram is open for 10")
-        ).firstMatch
+        let grant = reply(app, containing: "Instagram is open for 10")
         XCTAssertTrue(grant.waitForExistence(timeout: Self.answer),
                       "the grant read-back did not appear with no model behind the bar")
         XCTAssertEqual(grant.label, "Instagram is open for 10 min.",
@@ -292,7 +169,7 @@ final class NoModelUITests: XCTestCase {
         let row = labelled(app, beginsWith: "Instagram, open till")
         XCTAssertTrue(wait(for: row, "exists == true", timeout: Self.appear),
                       "the Instagram row does not show a re-lock time after the grant")
-        XCTAssertTrue(app.staticTexts["30"].waitForExistence(timeout: Self.appear),
+        XCTAssertTrue(enso(app, reading: 30).waitForExistence(timeout: Self.appear),
                       "the ensō did not debit to 30")
         shoot("02 — unlock Instagram for 10 min — \(row.label)")
 
@@ -308,9 +185,7 @@ final class NoModelUITests: XCTestCase {
         let sent = Date.now
         bar.typeText("how about a little tiktok\n")
         let typed = Date.now
-        let refusal = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "get that.")
-        ).firstMatch
+        let refusal = reply(app, containing: "get that.")
         XCTAssertTrue(refusal.waitForExistence(timeout: Self.answer),
                       "a sentence nothing could read was left unanswered")
         let landed = Date.now
@@ -320,19 +195,31 @@ final class NoModelUITests: XCTestCase {
         let sinceFocus = landed.timeIntervalSince(sent)
         print(String(format: "[no-model-walk] refusal visible %.3f s after the newline "
                      + "(%.3f s from the tap into the bar)", sinceTyping, sinceFocus))
-        // The widener's own deadline is two seconds and a silent one must never
-        // make anyone wait for it. The bound is loose because it is measured
-        // through XCUITest's polling, which is worth a second on its own.
-        XCTAssertLessThan(sinceTyping, 4.0,
-                          "the refusal took \(sinceTyping)s to appear — a silent widener "
-                          + "must not put a turn behind its two-second deadline")
-        XCTAssertTrue(app.staticTexts["30"].exists, "a refused sentence moved the balance")
+        // PRINTED, NOT ASSERTED, and the deleted bound is why.
+        //
+        // It read `XCTAssertLessThan(sinceTyping, 4.0)` with a message about
+        // the widener's two-second deadline — but what the stopwatch above
+        // actually measures is a `waitForExistence` returning, which is
+        // XCUITest polling an accessibility tree across a process boundary on
+        // a simulator. That poll is worth a second on its own on a good day
+        // and several on a loaded runner, so the margin between the product's
+        // number and the bound was mostly the harness. A test that fails
+        // because the runner was busy, with a message accusing the parser, is
+        // worse than no test: it teaches the reader to disbelieve the suite.
+        //
+        // The property is not lost. `NoModelTurnTests` measures the same
+        // refusal five times against `SilkModelParser.deadline` with no
+        // simulator between the clock and the code
+        // (`theRefusalLandsOnTheBeatAndNothingIsLeftRunning`), which is where a
+        // bound like this can mean something. What this walk is for is that the
+        // refusal appears ON THE GLASS at all, which the assertion above says.
+        XCTAssertTrue(enso(app, reading: 30).exists, "a refused sentence moved the balance")
         shoot(String(format: "03 — paraphrase refused in %.2fs", sinceTyping))
 
         // 4. THE BUDGET. A raise is a loosening, so canon parks it and the
         //    receipt names the day and the number.
         say(bar, "budget 60\n")
-        let parked = app.staticTexts["Tomorrow: 60"]
+        let parked = reply(app, saying: "Tomorrow: 60")
         XCTAssertTrue(parked.waitForExistence(timeout: Self.answer),
                       "the budget change was not answered with its receipt")
         shoot("04 — budget 60 — Tomorrow: 60")
@@ -340,7 +227,7 @@ final class NoModelUITests: XCTestCase {
         // 5. THE BALANCE. Ten spent out of forty, and the raise is not in force
         //    until tomorrow.
         say(bar, "how much is left\n")
-        let balance = app.staticTexts["30 min left."]
+        let balance = reply(app, saying: "30 min left.")
         XCTAssertTrue(balance.waitForExistence(timeout: Self.answer),
                       "the balance question was not answered")
         shoot("05 — how much is left — 30 min left.")

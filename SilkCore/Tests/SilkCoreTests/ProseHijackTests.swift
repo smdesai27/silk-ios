@@ -13,30 +13,6 @@ import Foundation
 // silences the chatter and the fix that silences the command are one careless
 // widening apart.
 
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
-
-private let afternoon = cal.date(from: DateComponents(year: 2026, month: 8, day: 4, hour: 15))!
-
-private let instagram = Door(name: "Instagram")
-private let tiktok = Door(name: "TikTok")
-private let youtube = Door(name: "YouTube")
-private let reddit = Door(name: "Reddit")
-
-private func makeState(budget: Int = 40, caps: [UUID: Int] = [:]) -> PolicyState {
-    PolicyState(budgetMinutes: budget,
-                downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
-                doors: [instagram, tiktok, youtube, reddit],
-                doorCaps: caps)
-}
-
-private func parse(_ utterance: String, _ state: PolicyState = makeState()) -> ParseOutcome {
-    DeterministicParser.parse(utterance, state: state)
-}
-
 private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (String, Int)? {
     guard case .command(.spend(let door, let minutes)) = parse(utterance, state) else { return nil }
     return (door.name, minutes)
@@ -259,7 +235,7 @@ private func budget(_ utterance: String) -> Int? {
         "insta stole 25 minutes from me",
         "insta stole an hour from me",
         "insta steals 25 minutes from me every day",
-        "tiktok ate an hour of my afternoon",
+        "tiktok ate an hour of my afternoon()",
         "insta is stealing an hour of my day",
         "tiktok drained 40 minutes of my day",
         "youtube sucked 30 minutes out of my evening",
@@ -488,7 +464,7 @@ private func budget(_ utterance: String) -> Int? {
     private func widened(_ command: Command, saying utterance: String) -> Verdict {
         let state = makeState()
         return Validator.validate(.command(command), utterance: utterance, state: state,
-                                  ledger: GrantLedger(), now: afternoon, calendar: cal)
+                                  ledger: GrantLedger(), now: afternoon(), calendar: cal)
     }
 
     /// Membership was checked against every clock, but the meridiem flag was
@@ -519,7 +495,7 @@ private func budget(_ utterance: String) -> Int? {
         func verdict(_ text: String) -> Verdict {
             Validator.validate(DeterministicParser.parse(text, state: state),
                                utterance: text, state: state,
-                               ledger: GrantLedger(), now: afternoon, calendar: cal)
+                               ledger: GrantLedger(), now: afternoon(), calendar: cal)
         }
         #expect(verdict("down hours till 11") == .refuseSayAmOrPm(at: TimeOfDay(hour: 11)))
         guard case .ruleChange = verdict("down hours till 7") else {

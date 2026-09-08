@@ -2,8 +2,6 @@ import Testing
 import Foundation
 @testable import SilkCore
 
-private let night = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7))
-
 private func policy(budget: Int = 60,
                     hours: DownHours = night,
                     doors: [Door] = [Door(name: "Instagram")],
@@ -16,9 +14,6 @@ private func policy(budget: Int = 60,
 /// Stable ids, because a cap is keyed by one. The default `doors:` above mints
 /// a fresh `Door` on every call, which is fine for the scalar fields and is
 /// exactly wrong for a dictionary keyed by door.
-private let tiktok = Door(name: "TikTok")
-private let instagram = Door(name: "Instagram")
-
 private func capPolicy(_ caps: [UUID: Int]) -> PolicyState {
     policy(doors: [tiktok, instagram], caps: caps)
 }

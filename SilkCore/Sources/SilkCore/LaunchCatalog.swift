@@ -10,12 +10,14 @@ import Foundation
 /// lives in the spine. The split is not tidiness. This file states the
 /// invariants that turn "and it opens" from a courtesy into a guarantee: a
 /// display name whose lowercased form is missing from `names` is a chip that
-/// cannot be tapped into a door, an entry with neither scheme nor link is a
-/// door that opens nothing, and one name on two entries is a word that means
-/// two apps. Every one of those compiles. While the catalogue imported UIKit no
-/// headless suite could see it, so none of them could be asserted — see
-/// `LaunchCatalogTests`, which now asserts all three in the same three seconds
-/// as the parser.
+/// cannot be tapped into a door; an entry with neither scheme nor link is a
+/// door that opens nothing; one name on two entries is a word that means two
+/// apps; a name the tokenizer would split, or one carrying a capital, is a name
+/// the parser can never match; and a scheme or link `URL(string:)` refuses is a
+/// way in that fails before it reaches iOS. Every one of those compiles. While
+/// the catalogue imported UIKit no headless suite could see it, so none of them
+/// could be asserted — see `LaunchCatalogTests`, which now asserts all five in
+/// the same three seconds as the parser.
 ///
 /// DISPLAY NAMES ARE THE ONE DELIBERATE EXCEPTION to "everything the app says
 /// comes from Strings.swift". A brand name is user data, not Silk's voice:
@@ -142,14 +144,12 @@ public enum LaunchCatalog {
         .init(display: "Amazon", names: ["amazon"], scheme: "com.amazon.mobile.shopping://", universalLink: "https://www.amazon.com/"),
     ]
 
-    /// Whether a spoken name resolves to a catalogue entry, converting "and it
-    /// opens" from a courtesy into a guarantee.
-    static func knows(_ name: String) -> Bool {
-        entry(named: name) != nil
-    }
-
-    /// The entry a spoken name belongs to. One lookup, so `knows`, the app's
-    /// `open` and setup's display lookup cannot disagree about what a name is.
+    /// The entry a spoken name belongs to, and the ONE lookup in this file —
+    /// the app's `open`, setup's display lookup and the tests all come through
+    /// here, so they cannot disagree about what a name is. A `knows(_:)`
+    /// spelling of the same question stood beside it, read by nothing but the
+    /// tests that were written for it; the question is `entry(named:) != nil`
+    /// and now that is how it is asked.
     public static func entry(named name: String) -> Entry? {
         let key = name.lowercased()
         return entries.first { $0.names.contains(key) }

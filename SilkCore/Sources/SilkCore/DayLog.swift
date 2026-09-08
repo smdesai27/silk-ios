@@ -107,12 +107,12 @@ public enum DayLog {
     /// It ships because taking fifteen minutes as 5 + 5 + 5 is a different day
     /// from taking it once and the score could not previously tell them apart
     /// — not because the literature priced it.
-    public static let switchCost: Double = 2
+    private static let switchCost: Double = 2
 
     /// The switch term's ceiling, as a share of the day's granted minutes.
     /// §4.4 sets it against *weighted* minutes; with no time-of-day curve
     /// shipped every multiplier is 1.0, so the two are the same number here.
-    public static let switchCap: Double = 0.5
+    private static let switchCap: Double = 0.5
 
     /// What fragmentation costs: `c` per grant after the first, never more
     /// than half the minutes those grants bought.
@@ -131,7 +131,7 @@ public enum DayLog {
     /// is bounded against the minutes, so fragmentation can add at most half
     /// again to what the grants already cost, and can never be the whole of a
     /// day's number. Stated rather than quietly assumed.
-    public static func fragmentation(unlocks: Int, grantedMinutes: Int) -> Double {
+    static func fragmentation(unlocks: Int, grantedMinutes: Int) -> Double {
         guard unlocks > 1 else { return 0 }
         return min(switchCost * Double(unlocks - 1),
                    switchCap * Double(grantedMinutes))
@@ -168,7 +168,7 @@ public enum DayLog {
 
     /// The cap `recordAttempt` enforces on the attempts blob. Mirrored here
     /// because §3.5's observability rule turns on the blob being *at* it.
-    public static let attemptsCap = 2000
+    static let attemptsCap = 2000
 
     /// How many attempts the render path's append buffer holds before it has
     /// to pay for a fold. Small on purpose: the shield encodes the whole tail
@@ -222,13 +222,13 @@ public enum DayLog {
     /// the user — a timezone change, not a day. It draws a ring rather than a
     /// fill, because `observed` has a span term even though `fraction` does
     /// not (§3.3).
-    public static let sameSpan = (min: 20.0 * 3600, max: 28.0 * 3600)
+    static let sameSpan = (min: 20.0 * 3600, max: 28.0 * 3600)
 
     /// The largest backfill a single walk will emit. A 90-day absence is
     /// expected (§3.7); this exists so a boundary that has moved absurdly far
     /// cannot spin. It matches the record cap, so a walk can never produce
     /// more records than the store keeps.
-    public static let maxWalk = 2000
+    static let maxWalk = 2000
 
     // MARK: Summarising one day
 
@@ -252,7 +252,7 @@ public enum DayLog {
     /// the product was dead. Requiring a heartbeat inside the day converts
     /// that from unfalsifiable to detected. It is the only liveness signal
     /// Silk has.
-    public static func summarise(dayStart: Date,
+    static func summarise(dayStart: Date,
                                  downHours: DownHours,
                                  grants: [Grant],
                                  attempts: [Date],
@@ -409,7 +409,7 @@ public enum DayLog {
     /// later pass, when the attempts blob has moved on.
     ///
     /// Capped like every other array in the store, dropping oldest first.
-    public static func merge(existing: [DayRecord], adding fresh: [DayRecord]) -> [DayRecord] {
+    static func merge(existing: [DayRecord], adding fresh: [DayRecord]) -> [DayRecord] {
         var byDay: [Date: DayRecord] = [:]
         for record in existing { byDay[record.dayStart] = record }
         for record in fresh where byDay[record.dayStart] == nil {
@@ -422,7 +422,7 @@ public enum DayLog {
 
     /// How many closed days the store keeps — 2000, about 5.5 years, matching
     /// the convention every other array in `SharedStore` follows.
-    public static let recordCap = 2000
+    static let recordCap = 2000
 
     /// The permanent daily schedule's window, anchored at the day boundary.
     ///
@@ -451,12 +451,12 @@ public enum DayLog {
     /// only from a beat inside the day, so the beat log must be able to vouch
     /// for at least as many days as a walk can ever summarise — a smaller cap
     /// would silently ring every day older than the beats that survived.
-    public static let heartbeatCap = 2200
+    static let heartbeatCap = 2200
 
     /// The dedupe window: firings closer together than this are the daemon
     /// restating an interval, not a new day — unless the Silk day turned
     /// between them, which `heartbeatLog` checks separately.
-    public static let heartbeatDedupe: TimeInterval = 3600
+    private static let heartbeatDedupe: TimeInterval = 3600
 
     /// Fold a firing into the beat log, or return nil when it is a
     /// restatement not worth a write.
@@ -546,7 +546,7 @@ public enum DayLog {
     /// combination of DST, timezone travel and a missed firing can open it:
     /// a live daemon beats every day, and even a beat lost to a crash leaves
     /// the next one within two day-lengths of the one before.
-    public static let evidenceGap: TimeInterval = 2 * sameSpan.max
+    private static let evidenceGap: TimeInterval = 2 * sameSpan.max
 
     /// The newest evidence instant the chain can vouch for, or nil when no
     /// evidence is trusted at all.
@@ -571,7 +571,7 @@ public enum DayLog {
     ///
     /// With no anchor (no summarised past day) every instant is trusted —
     /// the fresh-install bootstrap keeps its behavior.
-    public static func corroborationHorizon(evidence: [Date],
+    static func corroborationHorizon(evidence: [Date],
                                             anchoredAt anchor: Date?) -> Date? {
         let sorted = evidence.sorted()
         guard let newest = sorted.last else { return nil }

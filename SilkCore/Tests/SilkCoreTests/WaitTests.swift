@@ -81,9 +81,12 @@ private let noon = Date(timeIntervalSinceReferenceDate: 800_000_000)
         }
         #expect(abs(w.watched - 6) < 1e-9)
     }
-}
 
-@Suite struct WaitCanOnlyEndWhileWatched {
+    // MARK: - waitCanOnlyEndWhileWatched
+    //
+    // Its own one-test suite until now, and `WaitWatching` is where it belongs:
+    // every row here is about what `watched` does and does not accumulate, and
+    // this is the strongest statement of that. The proposition keeps its name.
 
     /// The property the whole surface rests on. If a wait could finish while
     /// nobody was looking, she would come back to a completed wait sitting
@@ -700,14 +703,18 @@ private struct SeededRNG {
         // Measured from the second park, it dies at the same two minutes.
         #expect(w.isStale(at: noon.addingTimeInterval(91 + Wait.staleAfter + 1)))
     }
-}
 
-/// The surface draws `fraction` and the model lands on `isOver`, and nothing
-/// asserted that the two ever agree. They have to, exactly: a whole mark sitting
-/// with nothing happening is the one failure this screen may not have, and a
-/// door opening under an unfinished stroke is the other.
-@Suite struct WaitTheInkIsWholeExactlyWhenItLands {
+    // MARK: - waitTheInkIsWholeExactlyWhenItLands
+    //
+    // A one-test suite until now, folded into the suite next door: both are
+    // about a wait read at an instant that is not the one it was written at —
+    // staleness on the wall clock, the ink on the reading clock. The
+    // proposition keeps its name.
 
+    /// The surface draws `fraction` and the model lands on `isOver`, and nothing
+    /// asserted that the two ever agree. They have to, exactly: a whole mark
+    /// sitting with nothing happening is the one failure this screen may not
+    /// have, and a door opening under an unfinished stroke is the other.
     @Test func theyStillAgreeAcrossAPauseAndAResume() {
         var w = ask()
         w.watch(from: 0)

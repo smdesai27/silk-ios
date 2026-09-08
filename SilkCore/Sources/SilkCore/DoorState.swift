@@ -212,6 +212,6 @@ extension DownHours {
     /// Mockup.dc.html:334). Both ends carry the meridiem because the sentence
     /// spans the night — a bare "10:00 to 7:00" reads as a nine-hour morning.
     public var runText: String {
-        "\(SilkStrings.downHoursRun) \(start.displayWithMeridiem) \(SilkStrings.to) \(end.displayWithMeridiem)."
+        SilkStrings.downHoursRun(from: start.displayWithMeridiem, to: end.displayWithMeridiem)
     }
 }

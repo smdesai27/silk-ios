@@ -53,6 +53,16 @@ run_spine() {
   fi
 }
 
+# WARNING — THIS WIPES THE APP GROUP ON WHATEVER IT RUNS AGAINST. SilkTests is
+# hosted by the app and nearly every suite in it starts from
+# `SharedStore.wipeAll()`: the policy, the ledger, the door bindings, the
+# attempts history and the day log, gone, in the real App Group of the real
+# install.
+#
+# Harmless on the simulator below, which is the only destination this script
+# ever names. Not harmless on a phone: pointing this at the device carrying the
+# build the re-lock protocol is being run against destroys the install's state
+# mid-protocol and the run has to start over from onboarding.
 run_unit() {
   rule "SilkTests — xcodebuild test (~1 min)"
   mkdir -p "$DERIVED"
@@ -173,7 +183,7 @@ fi
 # Three of the four lanes are built out of xcodebuild, which exists only on a
 # Mac. The spine is not: SilkCore is a plain SwiftPM package importing
 # Foundation and nothing else, so `swift test` answers for it on Linux exactly
-# as it does here — 978 of the repo's 1,098 cases, one short of the spine's whole
+# as it does here — 986 of the repo's 1,122 cases, one short of the spine's whole
 # 971 because a single Darwin-shaped ratio names itself and skips. That is
 # deliberate, and .github/workflows/ci.yml has a job holding it true: it is what
 # lets the tests that matter most run in a container or a cloud session instead

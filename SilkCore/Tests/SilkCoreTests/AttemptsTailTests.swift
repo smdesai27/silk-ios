@@ -102,14 +102,27 @@ private func attempts(_ count: Int, from offset: Int = 0) -> [Date] {
                              wallStanding: true, calendar: calendar)
         }
 
-        // Before the fold a reader merges; after it the store holds the merged
-        // array and the tail is gone. Both must read the same.
-        let beforeFold = verdict(merged)
-        let afterFold = verdict(DayLog.foldedAttempts(blob: merged, tail: []))
-        #expect(beforeFold.observed == afterFold.observed)
-        #expect(beforeFold.reaches == afterFold.reaches)
-        #expect(beforeFold.observed == false,
+        // THE TAIL IS WHAT DECIDES THE READING, and that is what makes this
+        // test worth running. The blob alone is one short of its cap, so a
+        // reader that lost the tail calls the day observed; the merged array
+        // is AT the cap, so the truncation term fires and it is not. The two
+        // verdicts must therefore DIFFER — an assertion a fold that dropped
+        // the tail, or capped the blob before appending it, cannot satisfy.
+        let readingIt = verdict(merged)
+        let ignoringTheTail = verdict(blob)
+        #expect(ignoringTheTail.observed,
+                "the fixture is not sensitive to the tail; the test below proves nothing")
+        #expect(readingIt.observed == false,
                 "a blob at its cap over a day older than its first entry was called observed")
+
+        // And the fold, replayed. Once it has run the store holds `merged` and
+        // the tail is still there to be folded again — the doubled fold the
+        // shield and the app can race into. It must not move the verdict.
+        // (Comparing against `foldedAttempts(blob: merged, tail: [])` is what
+        // used to stand here, and that is `merged` by definition: a value
+        // compared with itself. Replaying the real tail exercises the dedupe.)
+        #expect(verdict(DayLog.foldedAttempts(blob: merged, tail: tail)) == readingIt,
+                "a doubled fold moved the day's verdict")
     }
 
     /// The same reading on a store that is NOT at its cap: the fold must not
@@ -130,7 +143,14 @@ private func attempts(_ count: Int, from offset: Int = 0) -> [Date] {
         #expect(verdict(merged).observed, "a two-entry record was called unobservable")
         #expect(verdict(merged).reaches == 2,
                 "the reach the render path appended is missing from the day's count")
-        #expect(verdict(merged).reaches == verdict(DayLog.foldedAttempts(blob: merged, tail: [])).reaches)
+        // The replayed fold, not a fold of an empty tail: `foldedAttempts(blob:
+        // merged, tail: [])` returns `merged` unchanged, so the line that used
+        // to stand here compared a value with itself. Handing the fold the same
+        // tail it already absorbed is the race the dedupe exists for, and the
+        // reach count must survive it — a doubled count is a wrong verdict on
+        // a real day, which is worse than a missing one.
+        #expect(verdict(DayLog.foldedAttempts(blob: merged, tail: tail)).reaches == 2,
+                "a doubled fold double-counted the reach")
     }
 
     /// The tail cap is the render path's budget, and it has to be well under

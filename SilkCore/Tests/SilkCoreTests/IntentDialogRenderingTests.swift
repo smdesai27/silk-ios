@@ -65,8 +65,17 @@ private enum BarDialog {
         #expect(SpendDialog.silence.isEmpty)
     }
 
+    /// The intent speaks the shield's sentence rather than a second copy of it.
+    ///
+    /// `SpendDialog.blockingOff == SilkStrings.blockingOff` used to stand here
+    /// and could not fail: the former is *defined* as the latter
+    /// (`SpendDialog.swift:49`), so it was a value compared with itself and
+    /// would have stayed green if the sentence had been rewritten to anything
+    /// at all. The pinnable fact is the sentence, asserted at both ends — a
+    /// second copy introduced anywhere has to disagree with one of them.
     @Test func blockingOffIsTheShieldsOwnSentence() {
-        #expect(SpendDialog.blockingOff == SilkStrings.blockingOff)
+        #expect(SilkStrings.blockingOff == "Blocking is off.")
+        #expect(SpendDialog.blockingOff == "Blocking is off.")
     }
 
     /// One row per fact the two surfaces can both speak. `same` is the

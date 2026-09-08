@@ -9,19 +9,7 @@ import Testing
 // the No-cap seat, parks a cap loosening, or reaches a receipt with a grant
 // running. Everything below is the coverage that did not exist.
 
-private let reddit = Door(name: "Reddit")
-private let tiktok = Door(name: "TikTok")
-private let instagram = Door(name: "Instagram")
-
-private let night = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7))
-
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
-
-private func at(_ hour: Int, _ minute: Int = 0) -> Date {
+private func capsAt(_ hour: Int, _ minute: Int = 0) -> Date {
     cal.date(from: DateComponents(year: 2026, month: 8, day: 4, hour: hour, minute: minute))!
 }
 
@@ -112,7 +100,7 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
 
 @Suite struct CapReceiptTests {
     @Test func anOrdinaryTightenNamesTheDoorAndTheCeiling() {
-        let now = at(10)
+        let now = capsAt(10)
         let before = policy()
         let after = policy(caps: [tiktok.id: 20])
         #expect(Caps.receipt(for: after, movedFrom: before, ledger: GrantLedger(),
@@ -122,8 +110,8 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
 
     @Test func aCeilingAlreadyBittenSaysWhenTheDoorLifts() {
         // 30 spent this morning, capped at 20 this afternoon, nothing running.
-        let now = at(15)
-        let ledger = spent(reddit, 30, from: at(10))
+        let now = capsAt(15)
+        let ledger = spent(reddit, 30, from: capsAt(10))
         let after = policy(caps: [reddit.id: 20])
         #expect(Caps.receipt(for: after, movedFrom: policy(), ledger: ledger,
                              now: now, dayStart: dayStart(now), calendar: cal)
@@ -139,16 +127,16 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
     /// Validator answered `.restated`. Four surfaces, one door, one second, and
     /// the only one she is shown was the false one.
     @Test func aRunningGrantOutranksTheCeilingTheReceiptJustSet() {
-        let now = at(10, 5)
-        let ledger = spent(reddit, 30, from: at(10))          // expires 10:30
+        let now = capsAt(10, 5)
+        let ledger = spent(reddit, 30, from: capsAt(10))          // expires 10:30
         let after = policy(caps: [reddit.id: 20])
 
         // The premise: the door really is open, and really is out of ceiling.
-        #expect(ledger.activeGrant(for: reddit, at: now)?.expiresAt == at(10, 30))
+        #expect(ledger.activeGrant(for: reddit, at: now)?.expiresAt == capsAt(10, 30))
         #expect(ledger.remainingMinutes(cap: 20, doorID: reddit.id,
                                         dayStart: dayStart(now)) == 0)
         #expect(ledger.state(of: reddit, at: now, dayStart: dayStart(now),
-                             cap: 20, calendar: cal) == .open(until: at(10, 30)))
+                             cap: 20, calendar: cal) == .open(until: capsAt(10, 30)))
 
         // So the receipt names the ceiling, and does not claim a shut door.
         #expect(Caps.receipt(for: after, movedFrom: policy(), ledger: ledger,
@@ -158,8 +146,8 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
 
     @Test func theShutSentenceReturnsTheMomentTheGrantExpires() {
         // Same state, five minutes after the grant ran out. Nothing else moved.
-        let now = at(10, 31)
-        let ledger = spent(reddit, 30, from: at(10))
+        let now = capsAt(10, 31)
+        let ledger = spent(reddit, 30, from: capsAt(10))
         #expect(Caps.receipt(for: policy(caps: [reddit.id: 20]), movedFrom: policy(),
                              ledger: ledger, now: now, dayStart: dayStart(now), calendar: cal)
                 == "Reddit \(SilkStrings.closedUntil) 7:00.")
@@ -167,22 +155,27 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
 
     @Test func aClearedCeilingHasNoReceiptOfItsOwn() {
         // A clear is a loosening: it parks, and "Applies tomorrow." is the reply.
-        let now = at(10)
+        let now = capsAt(10)
         #expect(Caps.receipt(for: policy(), movedFrom: policy(caps: [tiktok.id: 20]),
                              ledger: GrantLedger(), now: now, dayStart: dayStart(now),
                              calendar: cal) == nil)
     }
 
     @Test func aRemovedDoorTakesItsCapWithoutClaimingACapChange() {
-        let now = at(10)
+        let now = capsAt(10)
         let before = policy(caps: [tiktok.id: 20])
         let after = policy([reddit, instagram])       // TikTok and its cap gone
         #expect(Caps.receipt(for: after, movedFrom: before, ledger: GrantLedger(),
                              now: now, dayStart: dayStart(now), calendar: cal) == nil)
     }
 
-    @Test func aChangeThatMovedNoCeilingLeavesThePoolSentenceStanding() {
-        let now = at(10)
+    /// A budget change is not a ceiling change, so `receipt` — which composes
+    /// the CAP sentence and nothing else — has nothing to say about it and
+    /// returns nil. The old name, "leaves the pool sentence standing", claimed
+    /// a fact about a sentence this function neither writes nor knows of; what
+    /// the body asserts is the silence.
+    @Test func aBudgetChangeComposesNoCapReceipt() {
+        let now = capsAt(10)
         var after = policy()
         after.budgetMinutes = 30
         #expect(Caps.receipt(for: after, movedFrom: policy(), ledger: GrantLedger(),
@@ -190,15 +183,21 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
     }
 
     @Test func twoMovedCeilingsNameTheFirstInDoorOrderEveryTime() {
-        let now = at(10)
+        let now = capsAt(10)
         let before = policy()
         let after = policy(caps: [tiktok.id: 20, reddit.id: 30])
         // Doors are [Reddit, TikTok, Instagram]; the dictionary's order is not.
-        for _ in 0..<20 {
-            #expect(Caps.receipt(for: after, movedFrom: before, ledger: GrantLedger(),
-                                 now: now, dayStart: dayStart(now), calendar: cal)
-                    == "Reddit 30 \(SilkStrings.minutes) \u{00B7} \(SilkStrings.perDay).")
-        }
+        // ONE call, not twenty. `receipt` is pure and its argument is one
+        // dictionary instance, whose iteration order is fixed for the life of
+        // that instance — so twenty calls in a row could only ever agree with
+        // each other, and the seed that WOULD vary the order varies per process
+        // and is therefore already varied by every run of the suite. A door
+        // list walked in dictionary order picks TikTok about half the time; a
+        // door list walked in `doors` order picks Reddit every time, on every
+        // seed, and this is that assertion.
+        #expect(Caps.receipt(for: after, movedFrom: before, ledger: GrantLedger(),
+                             now: now, dayStart: dayStart(now), calendar: cal)
+                == "Reddit 30 \(SilkStrings.minutes) \u{00B7} \(SilkStrings.perDay).")
     }
 }
 
@@ -232,12 +231,17 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
         #expect(Caps.pendingSummary(next: next, live: live) == nil)
     }
 
+    /// ONE call, for the reason `twoMovedCeilingsNameTheFirstInDoorOrderEveryTime`
+    /// states at length: `pendingSummary` is pure, the dictionary it is handed
+    /// is one instance whose iteration order does not change inside a process,
+    /// and the hashing seed that would change it is already re-rolled on every
+    /// run of the suite. Twenty identical calls agreed with each other and with
+    /// nothing else. Doors are [Reddit, TikTok, Instagram], so `doors` order
+    /// says TikTok and a dictionary walk says either.
     @Test func theRowNamesTheFirstDoorInDoorOrderEveryTime() {
         let live = policy()
         let next = policy(caps: [tiktok.id: 45, instagram.id: 30])
-        for _ in 0..<20 {
-            #expect(Caps.pendingSummary(next: next, live: live) == "TikTok 45")
-        }
+        #expect(Caps.pendingSummary(next: next, live: live) == "TikTok 45")
     }
 
     // The card's half of the same fact: the value alone, because the card is
@@ -293,8 +297,13 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
     /// A loosening no surface can summarise — turning the wall itself off has no
     /// pending row and no card — still gets an answer. "Tomorrow:" with nothing
     /// after it would be worse than the constant it replaces.
+    ///
+    /// Pinned to the SENTENCE and not to the constant. The constant is private
+    /// now — `parked` is the only reader — and `parked(nil) == appliesTomorrow`
+    /// was the same expression twice: it could not have failed while the
+    /// fallback existed at all, whatever the fallback said.
     @Test func aLooseningNothingCanNameFallsBackToTheConstant() {
-        #expect(SilkStrings.parked(nil) == SilkStrings.appliesTomorrow)
+        #expect(SilkStrings.parked(nil) == "Applies tomorrow.")
     }
 
     /// THE GEOMETRY PIN, and the reason it is a test rather than a comment.
@@ -396,37 +405,37 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
     }
 
     @Test func anUncappedDoorIsOfferedThePool() {
-        #expect(askable(policy(), GrantLedger(), at(15)) == 40)
+        #expect(askable(policy(), GrantLedger(), capsAt(15)) == 40)
     }
 
     @Test func aCeilingBindsBelowThePool() {
-        #expect(askable(policy(caps: [reddit.id: 30]), GrantLedger(), at(15)) == 30)
+        #expect(askable(policy(caps: [reddit.id: 30]), GrantLedger(), capsAt(15)) == 30)
     }
 
     @Test func aSpentCeilingOffersNothing() {
-        let l = spent(reddit, 30, from: at(10))
-        #expect(askable(policy(caps: [reddit.id: 30]), l, at(15)) == 0)
+        let l = spent(reddit, 30, from: capsAt(10))
+        #expect(askable(policy(caps: [reddit.id: 30]), l, capsAt(15)) == 0)
         // …and the pool it does not touch is still there for another door.
-        #expect(askable(policy(caps: [reddit.id: 30]), l, at(15), tiktok) == 10)
+        #expect(askable(policy(caps: [reddit.id: 30]), l, capsAt(15), tiktok) == 10)
     }
 
     @Test func aDoorClosedByHandOffersNothing() {
         var l = GrantLedger()
-        l.closeDoor(reddit, at: at(12), until: at(21))
-        #expect(askable(policy(), l, at(15)) == 0)
+        l.closeDoor(reddit, at: capsAt(12), until: capsAt(21))
+        #expect(askable(policy(), l, capsAt(15)) == 0)
     }
 
     /// REGRESSION PIN. Down hours 22:00, budget 40, nothing spent, no ceiling,
     /// clock 21:50. The shield used to render "Open Silk · 40 left today"; the
     /// bar mints ten, because a grant cannot cross the edge.
     @Test func theDownHoursEdgeBindsLikeEveryOtherClamp() {
-        #expect(askable(policy(), GrantLedger(), at(21, 50)) == 10)
-        #expect(askable(policy(caps: [reddit.id: 30]), GrantLedger(), at(21, 50)) == 10)
+        #expect(askable(policy(), GrantLedger(), capsAt(21, 50)) == 10)
+        #expect(askable(policy(caps: [reddit.id: 30]), GrantLedger(), capsAt(21, 50)) == 10)
     }
 
     @Test func insideTheNightThereIsNothingToAskFor() {
-        #expect(askable(policy(), GrantLedger(), at(23)) == 0)
-        #expect(askable(policy(), GrantLedger(), at(22)) == 0)
+        #expect(askable(policy(), GrantLedger(), capsAt(23)) == 0)
+        #expect(askable(policy(), GrantLedger(), capsAt(22)) == 0)
     }
 
     /// The property the wall rests on: whatever this says she may have, asking
@@ -443,20 +452,20 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
     /// therefore the property for every state the SHIELD can actually be in.
     @Test func theWallPromisesOnlyWhatTheBarWillMint() {
         var closed = GrantLedger()
-        closed.closeDoor(reddit, at: at(12), until: at(21))
+        closed.closeDoor(reddit, at: capsAt(12), until: capsAt(21))
 
         let fixtures: [(String, PolicyState, GrantLedger, Date)] = [
-            ("plain", policy(), GrantLedger(), at(15)),
-            ("capped", policy(caps: [reddit.id: 30]), GrantLedger(), at(15)),
-            ("cap under pool", policy(caps: [reddit.id: 5]), GrantLedger(), at(15)),
-            ("pool under cap", policy(budget: 10, caps: [reddit.id: 60]), GrantLedger(), at(15)),
-            ("part spent", policy(caps: [reddit.id: 30]), spent(reddit, 10, from: at(10)), at(15)),
-            ("cap spent", policy(caps: [reddit.id: 30]), spent(reddit, 30, from: at(10)), at(15)),
-            ("pool spent", policy(), spent(tiktok, 40, from: at(10)), at(15)),
-            ("closed by hand", policy(), closed, at(15)),
-            ("near the edge", policy(), GrantLedger(), at(21, 50)),
-            ("at the edge", policy(), GrantLedger(), at(22)),
-            ("inside the night", policy(), GrantLedger(), at(23)),
+            ("plain", policy(), GrantLedger(), capsAt(15)),
+            ("capped", policy(caps: [reddit.id: 30]), GrantLedger(), capsAt(15)),
+            ("cap under pool", policy(caps: [reddit.id: 5]), GrantLedger(), capsAt(15)),
+            ("pool under cap", policy(budget: 10, caps: [reddit.id: 60]), GrantLedger(), capsAt(15)),
+            ("part spent", policy(caps: [reddit.id: 30]), spent(reddit, 10, from: capsAt(10)), capsAt(15)),
+            ("cap spent", policy(caps: [reddit.id: 30]), spent(reddit, 30, from: capsAt(10)), capsAt(15)),
+            ("pool spent", policy(), spent(tiktok, 40, from: capsAt(10)), capsAt(15)),
+            ("closed by hand", policy(), closed, capsAt(15)),
+            ("near the edge", policy(), GrantLedger(), capsAt(21, 50)),
+            ("at the edge", policy(), GrantLedger(), capsAt(22)),
+            ("inside the night", policy(), GrantLedger(), capsAt(23)),
         ]
 
         for (name, p, l, now) in fixtures {
@@ -487,9 +496,9 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
     @Test func aDoorClosedByHandIsNamedOverACappedOutOne() {
         // TikTok sorts before Instagram and is capped out; Instagram was closed
         // by hand a second ago, and that is the fact the clause exists to state.
-        let now = at(15)
-        var l = spent(tiktok, 20, from: at(10))
-        l.closeDoor(instagram, at: at(14), until: nil)
+        let now = capsAt(15)
+        var l = spent(tiktok, 20, from: capsAt(10))
+        l.closeDoor(instagram, at: capsAt(14), until: nil)
         let p = policy([tiktok, instagram], caps: [tiktok.id: 20])
         let rule = l.ruleInForce(for: p, at: now, dayStart: dayStart(now), calendar: cal)
         #expect(rule?.door == instagram)
@@ -497,23 +506,23 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
     }
 
     @Test func aCappedOutDoorIsStillNamedWhenNothingWasClosedByHand() {
-        let now = at(15)
-        let l = spent(tiktok, 20, from: at(10))
+        let now = capsAt(15)
+        let l = spent(tiktok, 20, from: capsAt(10))
         let p = policy([reddit, tiktok], caps: [tiktok.id: 20])
         #expect(l.ruleInForce(for: p, at: now, dayStart: dayStart(now), calendar: cal)?.door
                 == tiktok)
     }
 
     @Test func aStatedHourRidesOutWithTheDoor() {
-        let now = at(15)
+        let now = capsAt(15)
         var l = GrantLedger()
-        l.closeDoor(reddit, at: at(14), until: at(21))
+        l.closeDoor(reddit, at: capsAt(14), until: capsAt(21))
         #expect(l.ruleInForce(for: policy(), at: now, dayStart: dayStart(now),
-                              calendar: cal)?.lifts == at(21))
+                              calendar: cal)?.lifts == capsAt(21))
     }
 
     @Test func aDayWithNoRuleInForceNamesNothing() {
-        let now = at(15)
+        let now = capsAt(15)
         #expect(GrantLedger().ruleInForce(for: policy(), at: now, dayStart: dayStart(now),
                                           calendar: cal) == nil)
     }
@@ -523,20 +532,20 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
     /// and the fallback are one pass over the same `.rest` test, so the fallback
     /// cannot be stranded by a preference that does not hold.
     @Test func aPreferenceThatDoesNotHoldCannotStrandTheFallback() {
-        let now = at(15)
+        let now = capsAt(15)
         // TikTok is capped out. Reddit is recorded closed today AND carries a
         // grant running past `now` — a state `closeDoor` cannot produce, because
         // it truncates live grants, but one the ledger's own initialiser can
         // hold, and the clause must not lose TikTok to it either way.
         let l = GrantLedger(
-            grants: [Grant(door: tiktok, minutes: 20, issuedAt: at(10), expiresAt: at(10, 20)),
-                     Grant(door: reddit, minutes: 30, issuedAt: at(14, 50), expiresAt: at(15, 20))],
-            closedToday: [reddit.id: at(14)])
+            grants: [Grant(door: tiktok, minutes: 20, issuedAt: capsAt(10), expiresAt: capsAt(10, 20)),
+                     Grant(door: reddit, minutes: 30, issuedAt: capsAt(14, 50), expiresAt: capsAt(15, 20))],
+            closedToday: [reddit.id: capsAt(14)])
         let p = policy([reddit, tiktok], caps: [tiktok.id: 20])
 
         #expect(l.isClosed(reddit.id, at: now, dayStart: dayStart(now)))
         #expect(l.state(of: reddit, at: now, dayStart: dayStart(now), cap: nil,
-                        calendar: cal) == .open(until: at(15, 20)))
+                        calendar: cal) == .open(until: capsAt(15, 20)))
         // The capped-out door is still named.
         #expect(l.ruleInForce(for: p, at: now, dayStart: dayStart(now), calendar: cal)?.door
                 == tiktok)

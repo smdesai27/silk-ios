@@ -343,6 +343,61 @@ private func daysAgo(_ n: Int) -> Date {
                 "a render well past the dedupe window was swallowed")
     }
 
+    /// THE REVISION IS A COUNTER OF APPENDS AND NOT OF CALLS. `AppModel`'s
+    /// minute tick and its return-from-background both hold a decoded week of
+    /// buckets and drop it only when this integer moves — one integer read
+    /// against four JSON decodes, sixty times an hour — so anything that moves
+    /// the revision without changing what a reader sees is a full invalidation
+    /// pass and a re-decode of the whole attempts blob, paid to redraw a chart
+    /// that is identical.
+    ///
+    /// A burst of shield renders is exactly that shape. Renders arrive in
+    /// bursts, `recordAttempt` collapses everything inside sixty seconds into
+    /// one reach, and the bump sits after the two dedupe guards — so a swallowed
+    /// render must leave the counter where it stood.
+    @Test func aSwallowedDuplicateReachDoesNotMoveTheRevision() {
+        SharedStore.wipeAll()
+        let now = Date()
+        SharedStore.recordAttempt(at: now)
+        let afterFirst = SharedStore.attemptsRevision()
+
+        // Thirty seconds later: inside the window, so the record does not move.
+        SharedStore.recordAttempt(at: now.addingTimeInterval(30))
+        #expect(SharedStore.attemptsMerged().count == 1,
+                "the fixture's second render was not swallowed — this test is not about the dedupe any more")
+        #expect(SharedStore.attemptsRevision() == afterFirst,
+                "a render swallowed by the 60-second dedupe moved the revision: every cache in the app fell for a reach that never happened")
+
+        // And past it, where a reach really is recorded and the counter must
+        // move — otherwise the assertion above is satisfied by a counter that
+        // never moves at all.
+        SharedStore.recordAttempt(at: now.addingTimeInterval(90))
+        #expect(SharedStore.attemptsRevision() != afterFirst,
+                "a reach past the dedupe window left every cached week chart standing on the old blob")
+    }
+
+    /// And the fold moves it either, which is the same argument from the other
+    /// side: `foldAttemptsTail` changes where the record is STORED and not what
+    /// any reader can see (`foldingPreservesTheRecordAndEmptiesTheTail` above
+    /// is that claim). A revision bumped there would invalidate every cache in
+    /// the app on a bookkeeping write — and the app folds on its own minute
+    /// tick, so it would be doing it to itself, once a minute, forever.
+    @Test func foldingTheTailDoesNotMoveTheRevision() {
+        SharedStore.wipeAll()
+        let base = Date().addingTimeInterval(-3600)
+        for i in 0..<3 { SharedStore.recordAttempt(at: base.addingTimeInterval(Double(i) * 120)) }
+        let before = SharedStore.attemptsRevision()
+        #expect(before > 0, "the fixture recorded nothing, so there is no fold to test")
+
+        SharedStore.foldAttemptsTail()
+
+        #expect(SharedStore.attemptsRevision() == before,
+                "the fold moved the revision — the app invalidates its own week chart on every tick that folds")
+        // Not a tautology: the fold really did happen.
+        #expect(SharedStore.defaults.data(forKey: "silk.attempts.tail") == nil,
+                "nothing was folded, so the assertion above says nothing")
+    }
+
     /// The tail cannot grow without bound while the app is never opened: at
     /// its cap the render folds rather than evicting, so nothing is lost and
     /// the tail stays small.
@@ -455,5 +510,137 @@ private func daysAgo(_ n: Int) -> Date {
         #expect(model.now == wake,
                 "a grant expired inside this minute and the rows were never asked to redraw")
         #expect(model.now != settled)
+    }
+
+    /// The OTHER half of the face, and the one the night crossing above cannot
+    /// reach: the greeting's band. "Good morning." and "Good afternoon." are the
+    /// same page in two different sentences, and `face` carries the band — 20,
+    /// 17, 12 or 0 — precisely so the tick can tell 11:59 from 12:00 while
+    /// telling 12:01 from 12:59.
+    ///
+    /// Both minutes are broad daylight under the fixture's 10 PM–7 AM window, so
+    /// `night` is equal across them and the band is the only thing that moves.
+    /// Delete the band from `Face` and the greeting reads "Good morning." until
+    /// something else happens to write `now` — which on a quiet afternoon is the
+    /// next grant.
+    @Test func crossingAGreetingBandMovesIt() {
+        Self.seed()
+        let model = AppModel()
+        let settled = Self.settled(model, at: Self.today(11, 59))
+        #expect(model.isDownHours == false,
+                "the fixture began inside its own night — the crossing below is not a band change")
+
+        let noon = Self.today(12, 0)
+        model.tick(at: noon, transition: nil)
+
+        #expect(model.now == noon,
+                "the morning became the afternoon and the greeting was never asked to redraw")
+        #expect(model.now != settled)
+        #expect(model.isDownHours == false,
+                "the fixture crossed into its night as well — this is no longer a band-only test")
+    }
+
+    /// The `ledgerMoved` arm: another process wrote the App Group while Silk sat
+    /// here. The tick's own sync folds it in, and a fold that did not also write
+    /// `now` would leave the balance, the door rows and the receipt drawing a
+    /// ledger this copy no longer holds.
+    ///
+    /// Not hypothetical: `SpendIntent` performs in its own background process,
+    /// against this store, with no scene to tell Silk anything.
+    @Test func aWriteFromAnotherProcessMovesIt() {
+        Self.seed()
+        let model = AppModel()
+        let anchor = Self.today(14, 0)
+        let settled = Self.settled(model, at: anchor)
+        #expect(model.ledger.grants.isEmpty, "the fixture started with a grant in it")
+
+        // Somebody else, mid-minute.
+        var theirs = SharedStore.loadLedger()
+        theirs.record(Grant(door: Door(name: "Instagram"), minutes: 10, issuedAt: .now,
+                            expiresAt: Date.now.addingTimeInterval(10 * 60)))
+        SharedStore.save(ledger: theirs)
+
+        let wake = anchor.addingTimeInterval(60)
+        model.tick(at: wake, transition: nil)
+
+        #expect(model.ledger.grants.count == 1,
+                "the tick never re-read the store another process had written")
+        #expect(model.now == wake,
+                "a grant landed from another process and this copy's screen was never told")
+        #expect(model.now != settled)
+    }
+
+    /// AND A DROPPED CACHE IS A VISIBLE MOVE. A shield render in the other half
+    /// of an iPad split screen records a reach while Silk stays `.active`: the
+    /// attempts revision moves and nothing else does. Both of Mirror's caches
+    /// are `@ObservationIgnored`, so nilling one tells no view anything — the
+    /// score would have gone on standing on the old blob until the next band
+    /// change, which on an afternoon is hours.
+    ///
+    /// `todayScore` is read first on purpose. The cache the tick compares does
+    /// not exist until something asks for the week, and a test that skipped that
+    /// line would be asserting the `cachesMoved` arm against a nil cache — which
+    /// takes the arm nowhere and passes for the wrong reason.
+    @Test func aReachRecordedWhileSilkStaysOpenMovesIt() {
+        Self.seed()
+        let model = AppModel()
+        let anchor = Self.today(14, 0)
+        let settled = Self.settled(model, at: anchor)
+        // Mirror, asked once, so there is a decoded week to invalidate.
+        _ = model.todayScore
+
+        SharedStore.recordAttempt(at: .now)
+
+        let wake = anchor.addingTimeInterval(60)
+        model.tick(at: wake, transition: nil)
+
+        #expect(model.now == wake,
+                "a reach recorded beside Silk moved the revision and the score was never asked to redraw")
+        #expect(model.now != settled)
+    }
+
+    /// THE NEGATIVE HALF, and it is the one the whole gate exists for: a plain
+    /// minute writes nothing and reconciles nothing.
+    ///
+    /// The receipt is `silk.migrated.categories`. `WallController.reconcile()`
+    /// is `Wall.reconcile(restating: true)`, and a restatement sets that flag
+    /// unconditionally on every path that writes the app layer — so clearing it
+    /// after the settling tick gives this test a one-bit record of whether the
+    /// reconcile ran, from outside, with no Screen Time authorization and no
+    /// `ManagedSettingsStore` to read. Nothing else in the suite can see a
+    /// reconcile at all.
+    ///
+    /// The control is the last two lines. Without them the assertions above are
+    /// satisfied by a `tick` that does nothing ever, which is the failure mode a
+    /// gate like this actually has.
+    @Test func aPlainMinuteReconcilesNothingAndWritesNothing() {
+        Self.seed()
+        // A reach, so the tail is a real blob and not an absent key: "unchanged"
+        // has to be a comparison of something. Recorded before the model is
+        // built, so the revision it bumps is the one the model starts from.
+        SharedStore.recordAttempt(at: Date().addingTimeInterval(-3600))
+        let model = AppModel()
+        let anchor = Self.today(14, 0)
+        _ = Self.settled(model, at: anchor)
+
+        SharedStore.defaults.removeObject(forKey: "silk.migrated.categories")
+        let tail = SharedStore.defaults.data(forKey: "silk.attempts.tail")
+        let stamp = SharedStore.ledgerStamp()
+        #expect(tail != nil, "the fixture put no reach in the tail, so there is nothing to hold still")
+
+        model.tick(at: anchor.addingTimeInterval(60), transition: nil)
+
+        #expect(SharedStore.categoryShieldsMigrated == false,
+                "a minute in which nothing moved restated the wall — four decodes and a cross-process write into the Screen Time daemon, to say what it already knew")
+        #expect(SharedStore.defaults.data(forKey: "silk.attempts.tail") == tail,
+                "a plain minute rewrote the attempts tail")
+        #expect(SharedStore.ledgerStamp() == stamp,
+                "a plain minute wrote the ledger back — every other process now believes the truth moved")
+
+        // The control: a wake the tick is allowed to act on does all of it.
+        let later = anchor.addingTimeInterval(120)
+        model.tick(at: later, transition: anchor.addingTimeInterval(90))
+        #expect(SharedStore.categoryShieldsMigrated,
+                "a wake at a passed transition did not reconcile either — the assertions above pass for a tick that has stopped doing anything at all")
     }
 }

@@ -9,9 +9,14 @@ import XCTest
 /// are composed outside the simulator (`scripts/compose-screenshots.swift`);
 /// this file only produces the raw device captures.
 ///
-/// The helpers below are copied from `OnboardingUITests` rather than shared —
-/// they are private there, and a capture walk should not be able to change the
-/// walk that proves the product works.
+/// The waits, the taps, the typing and the teardown are `SilkWalk`'s — the base
+/// class in `WalkSupport.swift`. They used to be copied from
+/// `OnboardingUITests` on the argument that a capture harness should not be
+/// able to change the walk that proves the product works; what actually
+/// happened is that the copies drifted (this file's consent query looked in a
+/// different place from `NoModelUITests`') and carried none of the comments
+/// naming the failures each helper exists for. The capture-specific parts — the
+/// slider drag, the settle, the PNG attachment — are still this file's alone.
 //  Re-running the whole set, end to end. Nothing here is inferred from the
 //  conversation that first produced the images; this is the recipe.
 //
@@ -84,14 +89,7 @@ import XCTest
 //    swift "$W/scripts/compose-screenshots.swift" \
 //      "$W/docs/market/screenshots/raw" "$W/docs/market/screenshots/6.9"
 //
-final class ScreenshotWalk: XCTestCase {
-
-    // MARK: - How long the walk waits (see OnboardingUITests for the reasoning)
-
-    private static let appear: TimeInterval = 12
-    private static let overlay: TimeInterval = 20
-    private static let launch: TimeInterval = 90
-    private static let answer: TimeInterval = 15
+final class ScreenshotWalk: SilkWalk {
 
     /// Not a test, and it must not run like one. `scripts/ci.sh ui` runs the
     /// whole bundle, and this walk drags a system slider by knob position and
@@ -103,15 +101,9 @@ final class ScreenshotWalk: XCTestCase {
     /// runner process with the prefix stripped, which is why the gate reads
     /// `SILK_SHOTS` and the command line sets `TEST_RUNNER_SILK_SHOTS`.
     override func setUpWithError() throws {
-        continueAfterFailure = false
+        try super.setUpWithError()
         try XCTSkipUnless(ProcessInfo.processInfo.environment["SILK_SHOTS"] == "1",
                           "screenshot walk: run with TEST_RUNNER_SILK_SHOTS=1")
-    }
-
-    override func tearDown() {
-        MainActor.assumeIsolated {
-            ScreenshotWalk.stop(XCUIApplication())
-        }
     }
 
     /// Wiped state, and the wait switched off. The wait's veil is a real part
@@ -155,13 +147,12 @@ final class ScreenshotWalk: XCTestCase {
         // Twenty spent leaves forty, and the ensō is four-sixths drawn — the
         // ring has something to say, which it does not at a full budget.
         say(bar, "unlock TikTok for 20 min\n")
-        let readBack = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "TikTok is open for 20")).firstMatch
+        let readBack = reply(app, containing: "TikTok is open for 20")
         XCTAssertTrue(readBack.waitForExistence(timeout: Self.answer), "the grant did not land")
 
         blur(app)
         XCTAssertTrue(readBack.waitForNonExistence(timeout: Self.overlay), "the thread did not clear")
-        XCTAssertTrue(app.staticTexts["40"].waitForExistence(timeout: Self.appear),
+        XCTAssertTrue(enso(app, reading: 40).waitForExistence(timeout: Self.appear),
                       "the ensō did not debit to 40")
 
         settle(1.2)
@@ -176,8 +167,7 @@ final class ScreenshotWalk: XCTestCase {
         let bar = completeSetup(app, budget: 60)
 
         say(bar, "unlock Instagram for 10 min\n")
-        let readBack = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Instagram is open for 10")).firstMatch
+        let readBack = reply(app, containing: "Instagram is open for 10")
         XCTAssertTrue(readBack.waitForExistence(timeout: Self.answer), "the grant did not land")
 
         // The thread over the dimmed page, kept as an alternate: it is the
@@ -269,67 +259,7 @@ final class ScreenshotWalk: XCTestCase {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).tap()
     }
 
-    // MARK: - Getting there (copied from OnboardingUITests)
-
-    @MainActor
-    @discardableResult
-    private static func dismissScreenTimeConsent(timeout: TimeInterval = 4) -> Bool {
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let decline = springboard.alerts.buttons.matching(
-            NSPredicate(format: "label BEGINSWITH %@", "Don")).firstMatch
-        guard decline.waitForExistence(timeout: timeout) else { return false }
-        decline.tap()
-        _ = decline.waitForNonExistence(timeout: Self.appear)
-        return true
-    }
-
-    @MainActor
-    private func wait(for element: XCUIElement, _ predicate: String,
-                      _ arguments: [Any] = [], timeout: TimeInterval) -> Bool {
-        let deadline = Date.now.addingTimeInterval(timeout)
-        repeat {
-            let expectation = XCTNSPredicateExpectation(
-                predicate: NSPredicate(format: predicate, argumentArray: arguments),
-                object: element)
-            let left = max(deadline.timeIntervalSinceNow, 1)
-            if XCTWaiter().wait(for: [expectation], timeout: left) == .completed { return true }
-        } while Date.now < deadline
-        return false
-    }
-
-    @MainActor
-    private func tap(_ element: XCUIElement, _ what: String,
-                     timeout: TimeInterval = ScreenshotWalk.appear,
-                     file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertTrue(wait(for: element, "exists == true AND isHittable == true", timeout: timeout),
-                      "\(what) never became tappable", file: file, line: line)
-        element.tap()
-    }
-
-    @MainActor
-    private func tap(_ trigger: XCUIElement, _ what: String,
-                     raising target: XCUIElement, _ raised: String,
-                     timeout: TimeInterval = ScreenshotWalk.overlay,
-                     file: StaticString = #filePath, line: UInt = #line) {
-        tap(trigger, what, file: file, line: line)
-        if target.waitForExistence(timeout: timeout) { return }
-        Self.dismissScreenTimeConsent(timeout: 0)
-        if trigger.isHittable { trigger.tap() }
-        XCTAssertTrue(target.waitForExistence(timeout: timeout),
-                      "\(raised) did not rise on \(what)", file: file, line: line)
-    }
-
-    @MainActor
-    private static func stop(_ app: XCUIApplication) {
-        guard app.state != .notRunning else { return }
-        dismissScreenTimeConsent(timeout: 0)
-        XCUIDevice.shared.press(.home)
-        _ = app.wait(for: .runningBackgroundSuspended, timeout: 2)
-        app.terminate()
-        guard !app.wait(for: .notRunning, timeout: Self.appear) else { return }
-        app.terminate()
-        _ = app.wait(for: .notRunning, timeout: Self.appear)
-    }
+    // MARK: - Getting there
 
     @MainActor
     private func launchFresh(_ extra: [String] = []) -> XCUIApplication {
@@ -459,30 +389,4 @@ final class ScreenshotWalk: XCTestCase {
                       "the picker sheet did not come down", file: file, line: line)
     }
 
-    @MainActor
-    private func element(_ app: XCUIApplication, _ id: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: id).firstMatch
-    }
-
-    /// Types a sentence at the bar. A cold simulator has been seen to take the
-    /// session's first focus and then drop it, so the walk waits for focus and
-    /// asks once more if it went. (OnboardingUITests.say)
-    @MainActor
-    private func say(_ bar: XCUIElement, _ sentence: String,
-                     file: StaticString = #filePath, line: UInt = #line) {
-        tap(bar, "the bar", file: file, line: line)
-        if !waitForFocus(bar, timeout: 4) {
-            tap(bar, "the bar, again", file: file, line: line)
-            _ = waitForFocus(bar, timeout: 4)
-        }
-        bar.typeText(sentence)
-    }
-
-    @MainActor
-    @discardableResult
-    private func waitForFocus(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
-        let focused = expectation(for: NSPredicate(format: "hasKeyboardFocus == true"),
-                                  evaluatedWith: element)
-        return XCTWaiter().wait(for: [focused], timeout: timeout) == .completed
-    }
 }

@@ -19,32 +19,26 @@ import UIKit
 //
 // Hosted by the app, so `SharedStore` resolves against the real App Group. That
 // makes state global to the process, which is why every test starts from
-// `freshModel()`.
+// `freshModel(...)` — `TestSupport`'s, now, rather than a seventh copy of it.
 
 // MARK: - Fixtures
-
-@MainActor
-private func freshModel(budget: Int = 40,
-                        downHours: DownHours = noWindowTonight()) -> (AppModel, Door) {
-    SharedStore.wipeAll()
-    let model = AppModel()
-    let door = Door(name: "Instagram")
-    model.completeSetup(doors: [door],
-                        doorSelections: [:],
-                        wallSelection: .init(),
-                        budget: budget,
-                        downHours: downHours)
-    // Every wait below is born watching, and that is only true while the host
-    // app is foreground. `raiseWait` parks a wait created in the background
-    // (the C1 fix), so a runner that started tests before the scene activated
-    // would fail nine cases at once with nine unrelated-looking messages.
-    // Named here instead, once.
-    #expect(UIApplication.shared.applicationState != .background,
-            "the host app is not foreground — every wait below will be born parked")
-    return (model, door)
-}
+//
+// `freshModel(requiringForeground: true)` throughout — every wait below is born
+// watching, and that is only true while the host app is foreground. `raiseWait`
+// parks a wait created in the background (the C1 fix), so a runner that started
+// tests before the scene activated would fail nine cases at once with nine
+// unrelated-looking messages. The fixture names that once.
 
 @Suite(.serialized) @MainActor struct WaitLifecycle {
+
+    /// The two sentences this file types, and both are ones the deterministic
+    /// grammar claims outright — `try claimed(_:_:)` before every `handle` says
+    /// so, and ends the case if it ever stops being true. The simulator carries
+    /// Apple Intelligence, so a sentence the grammar fell silent on would reach
+    /// the widener and every assertion about the veil below it would be a
+    /// property of the machine.
+    private let ten = "unlock instagram for ten"
+    private let five = "unlock instagram for five"
 
     // MARK: - (f) No wait to draw: the grant lands in the same pass
 
@@ -60,12 +54,13 @@ private func freshModel(budget: Int = 40,
     /// `waitLength` clamps at zero, the only consumer is
     /// `guard Wait.isWorthDrawing(length)`, and 0 and 0.2 are indistinguishable
     /// to every line below it. `WaitModelSmoke` pins the seam's arithmetic.
-    @Test func anAskPricedUnderTheDrawThresholdLandsWithoutAVeil() async {
+    @Test func anAskPricedUnderTheDrawThresholdLandsWithoutAVeil() async throws {
         defer { unpinTheSeams() }
         UserDefaults.standard.set("0.2", forKey: "silkWait")   // < Wait.tooShortToDraw
-        let (model, _) = freshModel()
+        let (model, _) = freshModel(requiringForeground: true)
 
-        await model.handle("unlock instagram for ten")
+        try claimed(ten, model)
+        await model.handle(ten)
 
         #expect(model.waiting == nil, "a wait shorter than its own fade was drawn anyway")
         #expect(model.remainingMinutes == 30, "the grant did not land in the same pass")
@@ -86,19 +81,21 @@ private func freshModel(budget: Int = 40,
     /// whole point of the case: if `.restated` fell through to `raiseWait` the
     /// veil would still be standing on the line after it, and the assertion
     /// fails immediately rather than in a timing window.
-    @Test func aRestatedAskRaisesNoWaitAndDebitsNothing() async {
+    @Test func aRestatedAskRaisesNoWaitAndDebitsNothing() async throws {
         defer { unpinTheSeams() }
-        let (model, _) = freshModel()
+        let (model, _) = freshModel(requiringForeground: true)
 
         // The opening grant, with no ceremony, so the door is genuinely open
         // behind the second sentence.
         UserDefaults.standard.set("0", forKey: "silkWait")
-        await model.handle("unlock instagram for ten")
+        try claimed(ten, model)
+        await model.handle(ten)
         #expect(model.remainingMinutes == 30, "the opening grant did not land")
 
         // Five minutes asked against nine still running: covered, so restated.
         UserDefaults.standard.set("30", forKey: "silkWait")
-        await model.handle("unlock instagram for five")
+        try claimed(five, model)
+        await model.handle(five)
 
         #expect(model.waiting == nil, "an ask already covered was made to watch a wait")
         #expect(model.remainingMinutes == 30, "a restated ask debited the pool a second time")
@@ -140,12 +137,24 @@ private func freshModel(budget: Int = 40,
     /// at it" — a sentence about the feature, pointing at the machine. Thirty
     /// cannot be reached by any stall that leaves the rest of the suite green,
     /// and no assertion below wants a landing.
+    ///
+    /// **And no upper bounds on the readings.** Two of these used to say
+    /// `banked < 1.5` and `resumed < 1.5`, with messages that named the runner
+    /// stalling — which is what they were measuring. A wait that banked 1.6
+    /// seconds across a 300 ms sleep is a machine that was busy, and there is
+    /// no change to `pauseWait` or `resumeWait` those assertions could catch
+    /// that the equalities below do not catch better: the property is that the
+    /// span STOPS while nobody watches and RESUMES from where it stopped, and
+    /// both of those are equalities against a number the test never chose. The
+    /// readings are printed instead, so a run that was slow says so in the log
+    /// without saying it in red.
     @Test func leavingBanksTheWatchingAndComingBackGoesOnFromThere() async throws {
         defer { unpinTheSeams() }
         UserDefaults.standard.set("30", forKey: "silkWait")
-        let (model, _) = freshModel()
+        let (model, _) = freshModel(requiringForeground: true)
 
-        await model.handle("unlock instagram for ten")
+        try claimed(ten, model)
+        await model.handle(ten)
         #expect(model.waiting != nil, "the wait did not rise over a granted ask")
         #expect(model.waiting?.wait.isWatching == true,
                 "the wait was born parked — the host app was not foreground when it rose")
@@ -155,8 +164,8 @@ private func freshModel(budget: Int = 40,
 
         let banked = try #require(model.waiting?.wait.watched)
         #expect(banked >= 0.2, "the span she watched before leaving was not banked")
-        #expect(banked < 1.5, "the pause landed far later than it was asked for — the runner stalled")
         #expect(model.waiting?.wait.isWatching == false, "the departure did not stop the ink")
+        print("[wait] banked \(banked)s across a 300 ms sleep")
 
         // Away. Nothing accrues, nothing lands, nothing is spent.
         try await Task.sleep(for: .milliseconds(400))
@@ -175,11 +184,97 @@ private func freshModel(budget: Int = 40,
         try await Task.sleep(for: .milliseconds(300))
         let resumed = try #require(model.waiting?.wait.watched(at: Monotonic.reading))
         #expect(resumed > banked + 0.2, "the resumed wait did not accrue")
-        #expect(resumed < 1.5, "the resumed reading came far later than it was asked for — the runner stalled")
+        print("[wait] resumed to \(resumed)s across a second 300 ms sleep")
 
         // Disarm: a landing left sleeping would fire into whatever runs next,
         // and `SharedStore` is process-global.
         model.pauseWait()
+    }
+
+    // MARK: - What a return owes, and when it is allowed to pay
+
+    /// **A bounce is not a return.** `foregrounded(returningFromBackground:)`
+    /// is called on every scene activation, and most of them suspended nothing:
+    /// a permission alert, a share sheet, a banner pulled down and let go. The
+    /// paragraph a genuine return owes — reread the motion setting, drop two
+    /// caches, re-read the App Group, reconcile the wall, retry the heartbeat,
+    /// mature a pending, compact the ledger — is a multi-frame hitch, and
+    /// spending it on a banner's bounce would drop frames on the one screen in
+    /// Silk that is nothing but motion.
+    ///
+    /// Observable as the ledger, because that is the one thing in the paragraph
+    /// another process can move: a grant written from outside moves the stamp,
+    /// and a copy that re-read it would be carrying the row. `false` here means
+    /// nothing was suspended, so the row must still be invisible to this model.
+    ///
+    /// The negative half of `aReturnUnderAStandingWaitIsSpentByTheLanding`
+    /// below: together they say the work is skipped when it is not owed and
+    /// deferred — never dropped — when it is owed but cannot be spent yet.
+    @Test func aBounceThatSuspendedNothingDoesNotRereadTheAppGroup() async throws {
+        defer { unpinTheSeams() }
+        let (model, _) = freshModel(requiringForeground: true)
+
+        // Another process, writing the store this copy has already read. Half
+        // an hour out, so nothing about it can expire inside this test and give
+        // the minute clock a reason to wake early and sync on its own.
+        let elsewhere = Door(name: "TikTok")
+        var theirs = SharedStore.loadLedger()
+        theirs.record(Grant(door: elsewhere, minutes: 5, issuedAt: .now,
+                            expiresAt: Date.now.addingTimeInterval(30 * 60)))
+        SharedStore.save(ledger: theirs)
+        try #require(model.ledger.grants.isEmpty,
+                     "the fixture's model had already folded in the other writer")
+
+        model.foregrounded(returningFromBackground: false)
+
+        #expect(model.ledger.grants.isEmpty,
+                "a bounce re-read the App Group — the paragraph only a suspension owes ran on a scene event that suspended nothing")
+        #expect(model.waiting == nil, "a bounce raised a veil out of nothing")
+    }
+
+    /// And the other half: a return that IS owed, arriving while the veil
+    /// stands, is parked rather than run — and the landing spends it.
+    ///
+    /// The ordering is the whole assertion. `reconcileOnReturn` ends in
+    /// `startClock()`, which puts back the very clock `raiseWait` cancelled, so
+    /// running it under a standing wait resumed the minute tick hitching the ink
+    /// for the rest of the wait. Parking it on `foregroundWorkDeferred` and
+    /// spending it in `clearWait` — the single door every ending wait leaves by
+    /// — is what keeps the veil smooth without dropping the work.
+    ///
+    /// Read through the ledger for the reason above, and asserted twice: BEFORE
+    /// the landing the other writer's row must be invisible, AFTER it the copy
+    /// must have caught up. One assertion alone proves nothing — the first
+    /// passes for a return that dropped the work on the floor, the second for a
+    /// return that ran it immediately.
+    @Test func aReturnUnderAStandingWaitIsSpentByTheLanding() async throws {
+        defer { unpinTheSeams() }
+        let (model, _) = freshModel(silkWait: "0.8", requiringForeground: true)
+
+        try claimed(ten, model)
+        await model.handle(ten)
+        let standing = try #require(model.waiting, "the wait did not rise over a granted ask")
+
+        // She left, and somebody else wrote while she was away.
+        model.pauseWait()
+        let elsewhere = Door(name: "TikTok")
+        var theirs = SharedStore.loadLedger()
+        theirs.record(Grant(door: elsewhere, minutes: 5, issuedAt: .now,
+                            expiresAt: Date.now.addingTimeInterval(30 * 60)))
+        SharedStore.save(ledger: theirs)
+
+        // And came back, to a veil that is still standing.
+        model.foregrounded()
+
+        #expect(model.waiting?.turn == standing.turn,
+                "the return dropped the wait it came back to")
+        #expect(model.ledger.grants.contains { $0.doorID == elsewhere.id } == false,
+                "the return's paragraph ran under a standing veil — the minute clock is back up and hitching the ink")
+
+        #expect(await settle { model.waiting == nil }, "the veil never came down")
+
+        #expect(model.ledger.grants.contains { $0.doorID == elsewhere.id },
+                "the landing never spent the parked return — this copy is still behind the App Group, with nothing left to tell it so")
     }
 
     // MARK: - (c) A wait found past its window
@@ -195,10 +290,11 @@ private func freshModel(budget: Int = 40,
         defer { unpinTheSeams() }
         UserDefaults.standard.set("30", forKey: "silkWait")    // unfinishable by accident
         UserDefaults.standard.set("0.2", forKey: "silkStale")
-        let (model, _) = freshModel()
+        let (model, _) = freshModel(requiringForeground: true)
         model.conversation.focused = true
 
-        await model.handle("unlock instagram for ten")
+        try claimed(ten, model)
+        await model.handle(ten)
         let turn = try #require(model.waiting?.turn)
         #expect(model.conversation.turns.contains(where: { $0.id == turn }),
                 "the ask the wait is holding is not in the thread")
@@ -224,10 +320,11 @@ private func freshModel(budget: Int = 40,
         defer { unpinTheSeams() }
         UserDefaults.standard.set("30", forKey: "silkWait")
         UserDefaults.standard.set("5", forKey: "silkStale")
-        let (model, _) = freshModel()
+        let (model, _) = freshModel(requiringForeground: true)
         model.conversation.focused = true
 
-        await model.handle("unlock instagram for ten")
+        try claimed(ten, model)
+        await model.handle(ten)
         let turn = try #require(model.waiting?.turn)
 
         model.pauseWait()
@@ -258,13 +355,15 @@ private func freshModel(budget: Int = 40,
     @Test func aSecondAskArrivingBehindAStandingWaitIsDroppedNotLanded() async throws {
         defer { unpinTheSeams() }
         UserDefaults.standard.set("30", forKey: "silkWait")
-        let (model, door) = freshModel()
+        let (model, door) = freshModel(requiringForeground: true)
 
-        await model.handle("unlock instagram for ten")
+        try claimed(ten, model)
+        await model.handle(ten)
         let first = try #require(model.waiting, "the wait did not rise over a granted ask")
         #expect(first.wait.minutes == 10)
 
-        await model.handle("unlock instagram for five")
+        try claimed(five, model)
+        await model.handle(five)
 
         // The standing wait is the first one still: same turn, same door, same
         // minutes, same price.

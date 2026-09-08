@@ -27,18 +27,6 @@ import FamilyControls
 //
 // Hosted by the app, so `SharedStore` resolves against the real App Group.
 
-// MARK: - Fixtures
-
-@MainActor
-private func freshModel(doors: [Door], budget: Int = 40) -> AppModel {
-    SharedStore.wipeAll()
-    UserDefaults.standard.set("0", forKey: "silkWait")
-    let model = AppModel()
-    model.completeSetup(doors: doors, doorSelections: [:], wallSelection: .init(),
-                        budget: budget, downHours: nightWellClearOfNow())
-    return model
-}
-
 // MARK: -
 
 @Suite(.serialized) @MainActor struct ADoorlessSelectionIsRetired {
@@ -52,17 +40,18 @@ private func freshModel(doors: [Door], budget: Int = 40) -> AppModel {
     /// which is the point. The sweep belongs to `commit`, not to the removal
     /// paths, so the orphan cannot survive by arriving through a door nobody
     /// thought to sweep.
-    @Test func aSelectionUnderADoorlessIdIsPrunedOnTheNextCommit() async {
+    @Test func aSelectionUnderADoorlessIdIsPrunedOnTheNextCommit() async throws {
         defer { unpinTheSeams() }
         let door = Door(name: "Instagram")
-        let model = freshModel(doors: [door])
+        let (model, _) = freshModel(doors: [door], downHours: nightWellClearOfNow(),
+                                   silkWait: "0")
         let orphan = UUID()
         SharedStore.save(doorSelections: [door.id: FamilyActivitySelection(),
                                           orphan: FamilyActivitySelection()])
         #expect(SharedStore.loadDoorSelections().count == 2, "the fixture did not store two")
 
         let sentence = "budget of 20"
-        claimed(sentence, model)
+        try claimed(sentence, model)
         await model.handle(sentence)
         #expect(model.policy.budgetMinutes == 20, "the tighten did not land, so no commit ran")
 
@@ -83,18 +72,19 @@ private func freshModel(doors: [Door], budget: Int = 40) -> AppModel {
     ///
     /// Three doors rather than two, because a seat is only observable when
     /// there is somewhere else the door could have landed.
-    @Test func removingTheMiddleDoorAndPuttingItBackKeepsItsSeat() async {
+    @Test func removingTheMiddleDoorAndPuttingItBackKeepsItsSeat() async throws {
         defer { unpinTheSeams() }
         let instagram = Door(name: "Instagram")
         let tiktok = Door(name: "TikTok")
         let youtube = Door(name: "YouTube")
-        let model = freshModel(doors: [instagram, tiktok, youtube])
+        let (model, _) = freshModel(doors: [instagram, tiktok, youtube],
+                                   downHours: nightWellClearOfNow(), silkWait: "0")
         SharedStore.save(doorSelections: [instagram.id: FamilyActivitySelection(),
                                           tiktok.id: FamilyActivitySelection(),
                                           youtube.id: FamilyActivitySelection()])
 
         let sentence = "remove tiktok"
-        claimed(sentence, model)
+        try claimed(sentence, model)
 
         await model.handle(sentence)
 

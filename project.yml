@@ -261,4 +261,26 @@ schemes:
       config: Debug
       # Unit tests first: they answer in seconds and cover the branches a walk
       # cannot reach, so a red one should not cost five minutes to discover.
-      targets: [SilkTests, SilkUITests]
+      #
+      # `parallelizable: false` on BOTH, stated rather than inherited. It is
+      # XcodeGen's default and the generated scheme has always carried
+      # `parallelizable = "NO"`, so this line changes no output — which is
+      # exactly why it is worth writing down. Both targets depend on it, and
+      # neither says so anywhere a reader would look:
+      #
+      #   SilkTests is hosted by the app and every suite starts from
+      #   `SharedStore.wipeAll()` against the real App Group. That state is
+      #   global to the process, so `.serialized` — which only orders a suite
+      #   against ITSELF — is not what keeps a sibling suite's wipe out of the
+      #   middle of `WaitTransactionTests`' sleeps. This is.
+      #
+      #   SilkUITests drives one simulator through one SpringBoard. Two walks
+      #   at once fight over the consent alert and the foreground app.
+      #
+      # A default that is load-bearing and undeclared is a default that gets
+      # changed by somebody who has no way to know.
+      targets:
+        - name: SilkTests
+          parallelizable: false
+        - name: SilkUITests
+          parallelizable: false

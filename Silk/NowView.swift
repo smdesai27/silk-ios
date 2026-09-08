@@ -19,30 +19,21 @@ struct NowView: View {
     var body: some View {
         // Six doors at the specified spacing overflow a small screen, so the
         // column scales uniformly rather than clipping rows off the bottom
-        // where nothing says they exist. Silk has nothing to scroll.
-        GeometryReader { geo in
-            // The chrome is measured from the glass; this page is not — the pager
-            // only ignores the top inset, so the reader's region already stops at
-            // the bottom safe-area edge. Reserving the full 96 here would count
-            // that inset twice and scale every token down to dodge a collision
-            // that isn't there.
-            let reserve = max(0, Self.chromeReserve - geo.safeAreaInsets.bottom)
-            let usable = geo.size.height - reserve
-            let scale = min(1, usable / max(1, columnHeight))
-            column
-                .scaleEffect(scale, anchor: .top)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .animation(Silk.motion(0.45), value: pendingSummary)
-                .animation(Silk.motion(0.45), value: model.wallDown)
-        }
+        // where nothing says they exist. Silk has nothing to scroll. The
+        // scaffold — the reserve, the scale, the wordmark's held-empty seat —
+        // is the one Settings mounts, and lives with the chrome it measures.
+        //
+        // The curves stay here, outside the modifier: they are this page's, and
+        // they have to wrap the scale as well as the rows.
+        column
+            .silkFittedColumn(height: columnHeight)
+            .animation(Silk.motion(0.45), value: pendingSummary)
+            .animation(Silk.motion(0.45), value: model.wallDown)
         // The re-arm picker (docs/market/gaps.md #5) used to be presented
         // here; it moved to the root when Settings' door editor arrived —
         // the onboarded tree carries exactly one .familyActivityPicker,
         // serving both requests through the model's ActivityPickerRequest.
     }
-
-    /// Bar bottom 44 + bar height 52.
-    private static let chromeReserve: CGFloat = 96
 
     /// What the pending row will actually say, or nil when it will draw nothing.
     /// The reservation below, the animation above and the row itself all ask
@@ -61,6 +52,8 @@ struct NowView: View {
     }
 
     /// 62 + wordmark 13 + 32 + greeting 25 + 22 + hero 232 + 40, then 52 a door.
+    /// The first two are the scaffold's seat, mounted by `silkFittedColumn` and
+    /// counted here because they are part of the height being fitted.
     private var columnHeight: CGFloat {
         let fixed: CGFloat = 62 + 13 + 32 + 25 + 22 + 232 + 40
         let pending: CGFloat = pendingSummary == nil ? 0 : 62
@@ -70,12 +63,6 @@ struct NowView: View {
 
     private var column: some View {
         VStack(spacing: 0) {
-            // The wordmark's seat, held empty: the mark itself lives on the
-            // root's own layer now — the one thing that never yields to the
-            // conversation (handoff README.md:203-205) — and the column keeps
-            // its 13pt so nothing below it moves.
-            Color.clear.frame(height: 13)
-                .padding(.top, 62)
             greeting
                 .padding(.top, 32)
             hero
@@ -133,6 +120,15 @@ struct NowView: View {
                     // today". The unit rides as the value so the numeral keeps
                     // its own label, which the UI tests match by.
                     .accessibilityValue(Text(SilkStrings.minLeftToday))
+                    // The walks used to find the hero by matching the bare
+                    // string "30" anywhere in the tree, which is a query for
+                    // "some element whose whole label is that number" and not a
+                    // query for the ensō — a door row, a wheel seat or a
+                    // Settings value carrying the same digits satisfies it just
+                    // as well. The identifier makes the match name the element
+                    // it means; the numeral stays the label, so a walk still
+                    // fails on the number when the number is wrong.
+                    .accessibilityIdentifier("silk.enso.value")
                 Text(SilkStrings.minLeftToday)
                     .font(Silk.sans(12.5))
                     .tracking(Silk.track(0.015, 12.5))

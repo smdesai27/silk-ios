@@ -27,21 +27,7 @@ import Testing
 // one to be checked against — and two of the three arms below had nothing
 // checking at all.
 
-private let instagram = Door(name: "Instagram")
-private let tiktok = Door(name: "TikTok")
-private let reddit = Door(name: "Reddit")
-
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
-
-/// 2026-07-29, 15:00 local — clear of the 22:00–07:00 window, so nothing below
-/// is answered by the night instead of by the guard under test.
-private let afternoon = cal.date(from: DateComponents(year: 2026, month: 7, day: 29, hour: 15))!
-
-private func makeState(budget: Int = 90) -> PolicyState {
+private func widenerState(budget: Int = 90) -> PolicyState {
     PolicyState(budgetMinutes: budget,
                 downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
                 doors: [instagram, tiktok, reddit])
@@ -49,9 +35,9 @@ private func makeState(budget: Int = 90) -> PolicyState {
 
 /// The widener's output, delivered the way `AppModel.handle` delivers it.
 private func widened(_ command: Command, saying utterance: String,
-                     state: PolicyState = makeState()) -> Verdict {
+                     state: PolicyState = widenerState()) -> Verdict {
     Validator.validate(.command(command), utterance: utterance, state: state,
-                       ledger: GrantLedger(), now: afternoon, calendar: cal)
+                       ledger: GrantLedger(), now: afternoon(), calendar: cal)
 }
 
 @Suite struct AnInventedBudgetIsRefused {
@@ -95,10 +81,10 @@ private func widened(_ command: Command, saying utterance: String,
         ("an hour a day", 60),
     ])
     func aStatedNumberStillMovesThePool(_ row: (utterance: String, minutes: Int)) {
-        let state = makeState()
+        let state = widenerState()
         let verdict = Validator.validate(DeterministicParser.parse(row.utterance, state: state),
                                          utterance: row.utterance, state: state,
-                                         ledger: GrantLedger(), now: afternoon, calendar: cal)
+                                         ledger: GrantLedger(), now: afternoon(), calendar: cal)
         guard case .ruleChange(let proposed, _) = verdict else {
             Issue.record("\"\(row.utterance)\" no longer moves the pool: \(verdict)")
             return
@@ -157,10 +143,10 @@ private func widened(_ command: Command, saying utterance: String,
         ("down hours till 7", false, 7),
     ])
     func aStatedHourStillMovesTheWindow(_ row: (utterance: String, isStart: Bool, hour: Int)) {
-        let state = makeState()
+        let state = widenerState()
         let verdict = Validator.validate(DeterministicParser.parse(row.utterance, state: state),
                                          utterance: row.utterance, state: state,
-                                         ledger: GrantLedger(), now: afternoon, calendar: cal)
+                                         ledger: GrantLedger(), now: afternoon(), calendar: cal)
         guard case .ruleChange(let proposed, _) = verdict else {
             Issue.record("\"\(row.utterance)\" no longer moves the window: \(verdict)")
             return

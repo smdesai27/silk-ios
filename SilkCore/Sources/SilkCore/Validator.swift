@@ -403,7 +403,8 @@ public enum Validator {
                 guard m > 0 else { return .silence }
                 // P3 — provenance, exactly as the spend arm applies it. It is
                 // dead code on the grammar path (the number can only have come
-                // from `NumberParser.singleNumber`), and it is not dead on the
+                // through `parse`'s `number` binding, which is nil unless the
+                // utterance carried exactly one), and it is not dead on the
                 // premise this file is built on: "every command from any
                 // parser". setDoorCap is the first door-scoped rule change, so a
                 // hallucinated (door, minutes) pair writes into a keyed map with

@@ -184,9 +184,6 @@ public enum NumberParser {
     /// The word every entry in `durationIdioms` contains, as bytes.
     private static let hourBytes: [UInt8] = Array("hour".utf8)
 
-    /// The character both dotted meridiem spellings need.
-    private static let dotBytes: [UInt8] = Array(".".utf8)
-
     /// The sentence cut at punctuation, keeping whitespace inside a piece.
     ///
     /// `tokenize` cannot answer this — it erases a comma and a space alike —
@@ -424,13 +421,6 @@ public enum NumberParser {
         return secondUnits.contains(word)
     }
 
-    /// The single number an utterance carries, or nil when there are zero or
-    /// several. Two numbers is ambiguity, and compilers don't guess.
-    static func singleNumber(in utterance: String) -> Int? {
-        let all = allNumbers(in: utterance)
-        return all.count == 1 ? all.first : nil
-    }
-
     /// A stated clock time, and whether the sentence said which half of the day
     /// it meant.
     ///
@@ -514,7 +504,7 @@ public enum NumberParser {
         // no full stop cannot carry "p.m."; the two Foundation rewrites were
         // allocating two strings per word to find nothing.
         var text = lowered(utterance)
-        if utf8Contains(text, dotBytes) {
+        if text.utf8.contains(UInt8(ascii: ".")) {
             text = text.replacingOccurrences(of: "p.m.", with: "pm")
                 .replacingOccurrences(of: "a.m.", with: "am")
         }

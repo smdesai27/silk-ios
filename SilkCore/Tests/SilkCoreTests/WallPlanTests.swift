@@ -10,11 +10,6 @@ import Testing
 // the whole reason the decision was lifted out of the process that holds the
 // real ones.
 
-private let instagram = Door(name: "Instagram")
-private let youtube = Door(name: "YouTube")
-
-private let night = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7))
-
 private func policy(wallEnabled: Bool = true) -> PolicyState {
     PolicyState(budgetMinutes: 30, downHours: night, doors: [instagram, youtube],
                 wallEnabled: wallEnabled)
@@ -123,6 +118,37 @@ private final class ExceptionProbe: @unchecked Sendable {
                                  extras: Decoded<Set<Int>>.corrupt,
                                  doors: .value(doorTokens),
                                  standing: [7, 8, 1, 2],
+                                 openDoors: nothingOpen)
+        #expect(plan == .shield([7, 8, 1, 2, 3, 4]))
+    }
+
+    /// The one rule that may skip the fail-closed write, pinned where the
+    /// other three plans are: equal means nothing to write, unreadable means
+    /// write, a restatement means write regardless.
+    @Test func aStoreAlreadyHoldingTheWallIsNotWrittenAgain() {
+        let plan = WallPlan.plan(policy: .value(policy()),
+                                 extras: .value([7, 8]),
+                                 doors: .value(doorTokens),
+                                 standing: [7, 8, 1, 2, 3, 4],
+                                 openDoors: nothingOpen)
+        #expect(plan == .alreadyShielded([7, 8, 1, 2, 3, 4]))
+    }
+
+    @Test func anUnreadableStoreIsAlwaysWritten() {
+        let plan = WallPlan.plan(policy: .value(policy()),
+                                 extras: .value([]),
+                                 doors: .value(doorTokens),
+                                 standing: nil,
+                                 openDoors: nothingOpen)
+        #expect(plan == .shield([1, 2, 3, 4]))
+    }
+
+    @Test func aRestatementWritesAnEqualWall() {
+        let plan = WallPlan.plan(policy: .value(policy()),
+                                 extras: .value([7, 8]),
+                                 doors: .value(doorTokens),
+                                 standing: [7, 8, 1, 2, 3, 4],
+                                 restating: true,
                                  openDoors: nothingOpen)
         #expect(plan == .shield([7, 8, 1, 2, 3, 4]))
     }

@@ -4,21 +4,6 @@ import Testing
 
 // MARK: - Fixtures
 
-private let instagram = Door(name: "Instagram")
-private let tiktok = Door(name: "TikTok")
-
-private let night = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7))
-
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
-
-private func at(_ month: Int, _ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
-    cal.date(from: DateComponents(year: 2026, month: month, day: day, hour: hour, minute: minute))!
-}
-
 private func grant(_ door: Door, from: Date, minutes: Int) -> Grant {
     Grant(id: UUID(), door: door, minutes: minutes,
           issuedAt: from, expiresAt: from.addingTimeInterval(Double(minutes) * 60))

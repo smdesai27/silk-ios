@@ -39,32 +39,26 @@ struct SettingsView: View {
     var onAddDoor: () -> Void
 
     var body: some View {
-        // The same defence NowView mounts: rows are model-driven, and a long
-        // door list on a small screen must scale the column uniformly rather
-        // than clip rows off the bottom where nothing says they exist. Silk
-        // has nothing to scroll.
-        GeometryReader { geo in
-            let reserve = max(0, Self.chromeReserve - geo.safeAreaInsets.bottom)
-            let usable = geo.size.height - reserve
-            let scale = min(1, usable / max(1, columnHeight))
-            column
-                .scaleEffect(scale, anchor: .top)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                // A door joining or leaving moves rows and the scale together;
-                // both ride the one curve so nothing jumps. Keyed on ids only,
-                // deliberately: a door's cap changing moves no row and resizes
-                // nothing, so there is no layout to carry — the new value simply
-                // stands where the old one did, which is how a row that states a
-                // rule should take a new rule.
-                .animation(Silk.motion(0.4), value: doors.map(\.id))
-                .animation(Silk.motion(0.35), value: showsAddRow)
-        }
+        // The same defence NowView mounts, and now literally the same code:
+        // rows are model-driven, and a long door list on a small screen must
+        // scale the column uniformly rather than clip rows off the bottom where
+        // nothing says they exist. Silk has nothing to scroll.
+        column
+            .silkFittedColumn(height: columnHeight)
+            // A door joining or leaving moves rows and the scale together; both
+            // ride the one curve so nothing jumps — which is why the curve sits
+            // outside the scaffold rather than inside it. Keyed on ids only,
+            // deliberately: a door's cap changing moves no row and resizes
+            // nothing, so there is no layout to carry — the new value simply
+            // stands where the old one did, which is how a row that states a
+            // rule should take a new rule.
+            .animation(Silk.motion(0.4), value: doors.map(\.id))
+            .animation(Silk.motion(0.35), value: showsAddRow)
     }
 
-    /// Bar bottom 44 + bar height 52 — the chrome the root pins to the glass.
-    private static let chromeReserve: CGFloat = 96
-
     /// 62 + wordmark 13 + 64, then 52 a row, then the title block 44 + 15 + 14.
+    /// The first two are the scaffold's seat, mounted by `silkFittedColumn` and
+    /// counted here because they are part of the height being fitted.
     /// The add row is a row like any other: 52 when it shows.
     private var columnHeight: CGFloat {
         62 + 13 + 64 + 3 * 52 + 44 + 15 + 14
@@ -73,14 +67,11 @@ struct SettingsView: View {
 
     private var column: some View {
         VStack(spacing: 0) {
-            // The wordmark's seat, held empty — the mockup mounts one mark
-            // above both pages (Silk Mockup.dc.html:77, margin-top 62), and in
-            // the app that one mark is the root's, on its own undimmed layer.
-            // Mounting a second here would double it; the column keeps the
-            // 13pt so the group's 64 still measures from the same place.
-            Color.clear.frame(height: 13)
-                .padding(.top, 62)
-
+            // The wordmark's seat — the mockup mounts one mark above both pages
+            // (Silk Mockup.dc.html:77, margin-top 62) — is held empty by
+            // `silkFittedColumn`, so the group's 64 below still measures from
+            // the same place it always did.
+            //
             // First group at 64, not the doors' usual 26: with no greeting and
             // no hero above it, the group takes a longer breath off the
             // wordmark. (Silk Mockup.dc.html:150)

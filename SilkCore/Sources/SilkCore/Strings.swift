@@ -78,8 +78,21 @@ public enum SilkStrings {
         let clock = time.minute == 0 ? "\(h)" : "\(h):\(String(format: "%02d", time.minute))"
         return "\(clock)am or \(clock)pm?"
     }
-    public static let downHoursRun = "Down hours run" // "…run 10:00 PM to 7:00 AM."
-    public static let to = "to"
+    /// The night window read out as one sentence: "Down hours run 10:00 PM to
+    /// 7:00 AM." Both ends arrive already formatted, because the clock is
+    /// `TimeOfDay`'s to render and not this file's.
+    ///
+    /// ONE RENDERER AND NOT TWO CONSTANTS. "Down hours run" and a bare "to"
+    /// stood here as separate strings, and they only ever met on one line, in
+    /// one order, with a full stop the caller had to remember to add. Split
+    /// that way the SENTENCE belonged to no file: the two halves could be
+    /// changed apart, the word between the times was a two-letter constant that
+    /// reads as nothing on its own, and the punctuation was the caller's to
+    /// forget. A renderer is what "nothing outside this file may speak" means
+    /// when a string has moving parts.
+    public static func downHoursRun(from start: String, to end: String) -> String {
+        "Down hours run \(start) to \(end)."
+    }
     public static let downHoursOpens = "Down hours. Opens"
     public static let ok = "OK"
 
@@ -119,7 +132,12 @@ public enum SilkStrings {
 
     // Rule changes
     public static let tomorrow = "Tomorrow:"          // composes: "Tomorrow: 60"
-    public static let appliesTomorrow = "Applies tomorrow."
+    /// `private`: the app never says this one directly any more. Every surface
+    /// goes through `parked(_:)`, which reaches for it only when a loosening is
+    /// one no surface can summarise — so the constant is an implementation
+    /// detail of that fallback, and a caller reaching past `parked` would be
+    /// choosing the nameless sentence over the named one.
+    private static let appliesTomorrow = "Applies tomorrow."
     public static let applyNow = "Apply now."
 
     /// The receipt a parked loosening leaves — "Tomorrow: Reddit no cap",
@@ -159,10 +177,17 @@ public enum SilkStrings {
     public static let today = "Today"
     /// Mirror's footnote, spoken rather than drawn. On the page it is a key
     /// glyph and a numeral, which VoiceOver reads as "key, 2" — true of the
-    /// pixels and useless as a sentence. Two forms because "1 unlocks today"
-    /// is wrong and the line is read aloud far more often on a quiet day.
-    public static let unlockToday = "unlock today"    // composes: "1 unlock today"
-    public static let unlocksToday = "unlocks today"  // composes: "2 unlocks today"
+    /// pixels and useless as a sentence.
+    ///
+    /// The plural is the RENDERER'S and not the caller's. Two constants stood
+    /// here — "unlock today" and "unlocks today" — because "1 unlocks today" is
+    /// wrong and a quiet day is the common one; but that left the count and the
+    /// choice of form in the view, so the one rule that makes two strings
+    /// necessary lived somewhere other than the strings. A caller that has the
+    /// number has said everything it knows.
+    public static func unlocksToday(_ n: Int) -> String {
+        "\(n) \(n == 1 ? "unlock today" : "unlocks today")"
+    }
 
     // Settings
     public static let downHours = "Down hours"

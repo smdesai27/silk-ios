@@ -4,20 +4,6 @@ import Testing
 
 // MARK: - Fixtures
 
-private let instagram = Door(name: "Instagram")
-private let tiktok = Door(name: "TikTok")
-private let reddit = Door(name: "Reddit")
-private let youtube = Door(name: "YouTube")
-
-private func makeState(budget: Int = 40, caps: [UUID: Int] = [:]) -> PolicyState {
-    PolicyState(
-        budgetMinutes: budget,
-        downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
-        doors: [instagram, tiktok, reddit, youtube],
-        doorCaps: caps
-    )
-}
-
 /// The day boundary the fixtures run against: down hours end at 7:00, so the
 /// Silk day that holds `afternoon()` ends at 7:00 the next morning. Every
 /// unqualified refusal states this instant.
@@ -33,17 +19,6 @@ private func spentEarlier(_ door: Door, _ minutes: Int) -> Grant {
                  issuedAt: end.addingTimeInterval(Double(-minutes) * 60), expiresAt: end)
 }
 
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
-
-/// A fixed afternoon: 2026-07-29 15:00 local.
-private func afternoon() -> Date {
-    cal.date(from: DateComponents(year: 2026, month: 7, day: 29, hour: 15))!
-}
-
 private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
                               ledger: GrantLedger = GrantLedger(), at now: Date = afternoon()) -> Verdict {
     let outcome = DeterministicParser.parse(text, state: state)
@@ -52,31 +27,41 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
 
 // MARK: - NumberParser: the 2005 bug must never ship
 
+// Asked of `allNumbers`, which is the reader the whole grammar uses. A
+// `singleNumber` wrapper — `allNumbers` plus `count == 1` — stood beside it and
+// was read by nothing but this suite, so the assertions here were pinning a
+// helper that no sentence ever walked through. The "exactly one number" rule
+// lives in `DeterministicParser.parse`, on the `number` binding.
+//
+// Asserting the WHOLE list is stronger than asserting the one value the wrapper
+// would have handed back: "twenty five" reading as [20, 5] and as [25] are the
+// 2005 bug and its fix, and only the list can tell them apart.
 @Suite struct NumberParserTests {
     @Test func spacedCompounds() {
         // NumberFormatter(.spellOut) parses these as 2005 / 4005. Ours must not.
-        #expect(NumberParser.singleNumber(in: "twenty five") == 25)
-        #expect(NumberParser.singleNumber(in: "forty five") == 45)
-        #expect(NumberParser.singleNumber(in: "twenty-five") == 25)
+        #expect(NumberParser.allNumbers(in: "twenty five") == [25])
+        #expect(NumberParser.allNumbers(in: "forty five") == [45])
+        #expect(NumberParser.allNumbers(in: "twenty-five") == [25])
     }
 
     @Test func idioms() {
-        #expect(NumberParser.singleNumber(in: "half an hour of tiktok") == 30)
-        #expect(NumberParser.singleNumber(in: "a quarter of an hour") == 15)
-        #expect(NumberParser.singleNumber(in: "an hour of youtube") == 60)
-        #expect(NumberParser.singleNumber(in: "an hour and a half") == 90)
+        #expect(NumberParser.allNumbers(in: "half an hour of tiktok") == [30])
+        #expect(NumberParser.allNumbers(in: "a quarter of an hour") == [15])
+        #expect(NumberParser.allNumbers(in: "an hour of youtube") == [60])
+        #expect(NumberParser.allNumbers(in: "an hour and a half") == [90])
     }
 
     @Test func digitsAndWords() {
-        #expect(NumberParser.singleNumber(in: "instagram 25") == 25)
-        #expect(NumberParser.singleNumber(in: "ten on ig") == 10)
-        #expect(NumberParser.singleNumber(in: "give me fifteen minutes") == 15)
+        #expect(NumberParser.allNumbers(in: "instagram 25") == [25])
+        #expect(NumberParser.allNumbers(in: "ten on ig") == [10])
+        #expect(NumberParser.allNumbers(in: "give me fifteen minutes") == [15])
     }
 
     @Test func ambiguityIsNil() {
-        // Two numbers = ambiguity = no parse. Compilers don't guess.
-        #expect(NumberParser.singleNumber(in: "ten or twenty minutes") == nil)
-        #expect(NumberParser.singleNumber(in: "no numbers here") == nil)
+        // Two numbers = ambiguity = no parse. Compilers don't guess — and the
+        // reader hands both up so the rule above it can see there are two.
+        #expect(NumberParser.allNumbers(in: "ten or twenty minutes") == [10, 20])
+        #expect(NumberParser.allNumbers(in: "no numbers here").isEmpty)
     }
 
     @Test func eveningTimes() {
@@ -588,15 +573,40 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
     /// deferred by down hours — and both are structurally unreachable there:
     /// the down-hours guard is the first line of the spend arm. The exemption
     /// they would need is dead code, and this is the test that says so.
+    ///
+    /// RUN, not constructed. Two of the three lines here used to be
+    /// `Verdict.refuseDoorClosed(…).deferredByDownHours` on a case built by
+    /// hand, which is a property of the enum and cannot fail while the case
+    /// exists — the sentence, the state and the hour were all in the doc and
+    /// none of them in the body. Each verdict is now produced by the pipeline
+    /// on the same state at the two hours that matter: it IS what the
+    /// afternoon answers, it carries the flag, and at eleven at night the
+    /// down-hours guard has already answered instead.
     @Test func theNewRefusalsAreUnreachableAtNight() {
         let night = cal.date(from: DateComponents(year: 2026, month: 7, day: 29, hour: 23))!
-        var ledger = GrantLedger()
-        ledger.record(spentEarlier(tiktok, 20))
         let state = makeState(budget: 50, caps: [tiktok.id: 20])
-        #expect(parseAndValidate("give me ten minutes of tiktok", state: state, ledger: ledger, at: night)
+        let ask = "give me ten minutes of tiktok"
+
+        // CASE ONE: the ceiling is spent, so the door is shut for the day.
+        var exhausted = GrantLedger()
+        exhausted.record(spentEarlier(tiktok, 20))
+        let closed = parseAndValidate(ask, state: state, ledger: exhausted)
+        #expect(closed == .refuseDoorClosed(door: tiktok, until: dayBoundary()))
+        #expect(closed.deferredByDownHours)
+        #expect(parseAndValidate(ask, state: state, ledger: exhausted, at: night)
                 == .refuseDownHours(until: TimeOfDay(hour: 7)))
-        #expect(Verdict.refuseDoorClosed(door: tiktok, until: afternoon()).deferredByDownHours)
-        #expect(Verdict.restated(door: tiktok, until: afternoon()).deferredByDownHours)
+
+        // CASE TWO: a grant is still running, so the ask is restated rather
+        // than debited twice.
+        var live = GrantLedger()
+        let issued = afternoon().addingTimeInterval(-300)
+        live.record(Grant(door: tiktok, minutes: 20, issuedAt: issued,
+                          expiresAt: issued.addingTimeInterval(20 * 60)))
+        let restated = parseAndValidate(ask, state: state, ledger: live)
+        #expect(restated == .restated(door: tiktok, until: issued.addingTimeInterval(20 * 60)))
+        #expect(restated.deferredByDownHours)
+        #expect(parseAndValidate(ask, state: state, ledger: live, at: night)
+                == .refuseDownHours(until: TimeOfDay(hour: 7)))
     }
 
     /// Tightening is instant from anywhere, down hours included — a lowered

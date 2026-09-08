@@ -8,21 +8,6 @@ import Testing
 // Mar 8 (a 23-hour Silk day) and fall back Nov 1 (a 25-hour one). The day
 // boundary is when down hours END — 7:00 here, not midnight.
 
-private let instagram = Door(name: "Instagram")
-private let tiktok = Door(name: "TikTok")
-
-private let night = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7))
-
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
-
-private func at(_ month: Int, _ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
-    cal.date(from: DateComponents(year: 2026, month: month, day: day, hour: hour, minute: minute))!
-}
-
 private func grant(_ door: Door, from: Date, minutes: Int) -> Grant {
     Grant(id: UUID(), door: door, minutes: minutes,
           issuedAt: from, expiresAt: from.addingTimeInterval(Double(minutes) * 60))
@@ -69,12 +54,29 @@ private func summarise(grants: [Grant] = [],
         #expect(resist.fraction > giveIn.fraction)
     }
 
+    /// It falls out of charging a granted minute one point and a reach one
+    /// point — not out of any constant chosen to make the test pass.
+    ///
+    /// Read off the RECORDS, through `fraction` and the one allowance every
+    /// day is measured against. What stood here was `(15.0 + 1.0) / 4.0 == 4.0`
+    /// — three literals and a division, which is a fact about arithmetic and
+    /// would have stayed green through any change to the scorer, including one
+    /// that stopped charging for reaches altogether.
     @Test func theMagnitudeIsFourToOneAndNotADial() {
-        // It falls out of charging a granted minute one point and a reach one
-        // point — not out of any constant chosen to make the test pass.
-        let resistCost = 4.0
-        let giveInCost = 15.0 + 1.0
-        #expect(giveInCost / resistCost == 4.0)
+        let resist = summarise(attempts: [at(6, 10, 15), at(6, 10, 15, 5),
+                                          at(6, 10, 15, 20), at(6, 10, 15, 40)])
+        let giveIn = summarise(grants: [grant(instagram, from: at(6, 10, 15), minutes: 15)],
+                               attempts: [at(6, 10, 15)])
+
+        // Four bounces cost 4; a deliberate 15-minute spend costs 15 + 1.
+        #expect(resist.fraction == 1 - 4 / DayLog.allowance)
+        #expect(giveIn.fraction == 1 - 16 / DayLog.allowance)
+
+        // And the magnitude those two costs stand in, taken back out of the
+        // fractions rather than restated.
+        let resistCost = (1 - resist.fraction) * DayLog.allowance
+        let giveInCost = (1 - giveIn.fraction) * DayLog.allowance
+        #expect(abs(giveInCost / resistCost - 4.0) < 1e-9)
     }
 
     @Test func aReachInDownHoursCostsTwo() {
@@ -489,11 +491,18 @@ private func summarise(grants: [Grant] = [],
         #expect(missing == [at(6, 21, 7), at(6, 22, 7)])
     }
 
+    /// The invariant itself, over a moved boundary in both directions.
+    ///
+    /// The expected COUNT is stated first, and it is not decoration: every
+    /// assertion below lives inside `for owed in missing`, so a walk that
+    /// returned nothing at all satisfied this test perfectly while destroying
+    /// the very days it exists to recover. An earlier boundary loses the last
+    /// day (three owed); a boundary at or past the true end keeps it (four).
     @Test func everyOwedDayEndsAtOrBeforeTheSweepInstant() {
-        // The invariant itself, over a moved boundary in both directions.
-        for upTo in [at(6, 23, 5), at(6, 23, 9), at(6, 23, 7)] {
+        for (upTo, expected) in [(at(6, 23, 5), 3), (at(6, 23, 9), 4), (at(6, 23, 7), 4)] {
             let missing = DayLog.missingBoundaries(recorded: [at(6, 18, 7)],
                                                    upTo: upTo, calendar: cal)
+            #expect(missing.count == expected, "the walk stopped owing days at \(upTo)")
             for owed in missing {
                 #expect(DayBoundary.nextDayStart(after: owed, calendar: cal) <= upTo)
             }
@@ -528,12 +537,19 @@ private func summarise(grants: [Grant] = [],
         #expect(missing == [at(6, 9, 7)])
     }
 
+    /// "Refuse to write records whose dayStart is not strictly in the past" —
+    /// enforced at the walk, where every written record is born.
+    ///
+    /// The counts are stated because the `owed < day` assertion is inside the
+    /// loop and an empty walk would pass it vacuously — which is the exact
+    /// failure this suite is about: an empty walk green-lights compaction.
+    /// No record and a future-only record both bootstrap to the single day
+    /// behind the sweep; a real anchor eight days back owes all eight.
     @Test func theWalkNeverEmitsAFutureBoundary() {
-        // "Refuse to write records whose dayStart is not strictly in the
-        // past" — enforced at the walk, where every written record is born.
-        for recorded in [Set<Date>(), [at(6, 1, 7)], [at(6, 25, 7)]] {
-            for owed in DayLog.missingBoundaries(recorded: recorded, upTo: day,
-                                                 calendar: cal) {
+        for (recorded, expected) in [(Set<Date>(), 1), ([at(6, 1, 7)], 8), ([at(6, 25, 7)], 1)] {
+            let missing = DayLog.missingBoundaries(recorded: recorded, upTo: day, calendar: cal)
+            #expect(missing.count == expected, "the walk owed \(missing.count) for \(recorded)")
+            for owed in missing {
                 #expect(owed < day)
             }
         }
@@ -805,7 +821,13 @@ private final class ScriptedDayStore: DayRecordStore, @unchecked Sendable {
         #expect(ok == true)
     }
 
-    @Test func theFrontierIsTheNewestClosedDaysOwnEnd() {
+    /// Named for both halves. `theFrontierIsTheNewestClosedDaysOwnEnd` states
+    /// only the first two rows; the last two assert the frontier is
+    /// `.distantPast` — nothing may be dropped at all — when nothing is
+    /// summarised and when the only record is future-dated. Those are the rows
+    /// that stand between a clock-manipulated store and a compaction that
+    /// destroys a day's grants with no record of them, and the name hid them.
+    @Test func theFrontierIsTheNewestClosedDaysOwnEndAndNothingWhenNoneIsClosed() {
         // Newest record Jun 20 07:00 → its day ended Jun 21 07:00, and that
         // is as far as any compaction may reach, however far ahead the live
         // boundary sits.

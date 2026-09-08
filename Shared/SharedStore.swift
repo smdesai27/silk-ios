@@ -641,7 +641,13 @@ public enum SharedStore {
     /// standing. The other side of the same race — two processes folding the
     /// same entries — is closed in `DayLog.foldedAttempts`, which is
     /// idempotent.
-    public static func foldAttemptsTail() {
+    /// Folded by the SHIELD, at the cap, and by nothing else. Two folders in
+    /// two processes was a lost-update race with no compare-and-swap to close
+    /// it: the app reads the tail, the shield's 64th append folds and clears
+    /// it, the app writes its own fold over the shield's and one reach is
+    /// gone. One writer per key is the property the attempts blob always had,
+    /// and the app only ever READS the pair merged (`attemptsMerged`).
+    static func foldAttemptsTail() {
         let tail = decode([Date].self, key: Key.attemptsTail) ?? []
         guard !tail.isEmpty else { return }
         encode(DayLog.foldedAttempts(blob: attemptsBlob(), tail: tail), key: Key.attempts)
@@ -778,7 +784,20 @@ public enum Wall {
     /// shield extensions on every render/tap. Fail-closed: if state can't be
     /// read, the wall goes up whole.
     @discardableResult
-    public static func reconcile(now: Date = Date()) -> Reconciled {
+    ///
+    /// `restating` is the difference between a RENDER and a RESTATEMENT. The
+    /// shield asks for the wall on every render, dozens of times a day, and
+    /// there the store is written only when what should stand differs from
+    /// what does — four cross-process writes per render was the battery cost
+    /// of this app. The app's foreground and the monitor's wakes are the
+    /// restatements: a handful a day, and each one writes the wall whether or
+    /// not the store reads back equal, because README rule 4's wall is
+    /// restated on the assumption that the daemon may not be enforcing what
+    /// its store reports (a revoked-and-regranted authorization, a restore).
+    /// The category clears ride the same switch: guarded once-per-install on
+    /// the render path, unconditional on a restatement, so a migration flag
+    /// restored ahead of the settings it describes can never wedge them.
+    public static func reconcile(now: Date = Date(), restating: Bool = false) -> Reconciled {
         // Three reads in, one write out. Everything between them — which of
         // the three states each blob is in, and what the wall should therefore
         // be — is `WallPlan.plan`, in Core, where it can be run against every
@@ -825,6 +844,7 @@ public enum Wall {
             // nil — a stand-in that cannot be read is no stand-in, and
             // the plan refuses rather than write the doors alone.
             standing: standing,
+            restating: restating,
             openDoors: { policyValue, doorTokens in
                 // The ledger read the plan cannot do — and does not ask for on
                 // any path that refuses to write.
@@ -864,28 +884,19 @@ public enum Wall {
             if extras.isCorrupt {
                 log.error("reconcile: the wall selection would not decode; the standing shield stood in for it")
             }
-            // **Written only when it differs, and this is the one place in the
-            // file where an equality guard is allowed to stand in front of a
-            // fail-closed write.** It is safe here for one reason: the guard
-            // is over the value the daemon already holds, so a skipped write
-            // and a performed write leave the store in the same state. Every
-            // way the comparison can be wrong falls toward writing —
-            // `standing` is `nil` when the read failed or the store was never
-            // written, and `nil != blocked` for every `blocked` there is,
-            // including the empty set.
-            //
-            // Why bother. A `ManagedSettingsStore` write is a cross-process
-            // call into the Screen Time daemon that re-evaluates enforcement,
-            // and this paragraph made four of them — applications, two
-            // categories, web domains — on EVERY shield render, tap, monitor
-            // callback and foreground. At ~40 wall hits a day that is ~160
-            // daemon writes to say what the daemon already knew, and they sit
-            // on the critical path of the wall appearing. The steady state is
-            // that nothing has changed: a render reconciles because the wake
-            // is the point, not because the answer has moved.
-            if standing != blocked {
-                store.shield.applications = blocked
-            }
+            store.shield.applications = blocked
+        case .alreadyShielded:
+            // The plan compared what should stand with what does and found
+            // them equal (`WallPlan.Plan.alreadyShielded`, where the rule and
+            // its pins live: a `nil` standing never matches, a restatement
+            // never takes this arm). Why the comparison exists at all: a
+            // `ManagedSettingsStore` write is a cross-process call into the
+            // Screen Time daemon that re-evaluates enforcement, and this
+            // paragraph made four of them on EVERY shield render — ~160 a day
+            // at 40 wall hits, on the critical path of the wall appearing, to
+            // say what the daemon already knew. The categories and the web
+            // domains below are still owed their own comparison.
+            break
         }
 
         // Categories are gone from the model. Nil-ing them here clears stale
@@ -914,7 +925,7 @@ public enum Wall {
         // A flag that fails to persist costs a repeated clear, which is
         // idempotent; the fail-closed direction is "clear again", and that is
         // the direction every failure here takes.
-        if !SharedStore.categoryShieldsMigrated {
+        if restating || !SharedStore.categoryShieldsMigrated {
             store.shield.applicationCategories = nil
             store.shield.webDomainCategories = nil
             SharedStore.markCategoryShieldsMigrated()
@@ -938,8 +949,8 @@ public enum Wall {
         if let extraSelection = extras.orEmpty(FamilyActivitySelection()) {
             let webDomains = extraSelection.webDomainTokens
             if webDomains.isEmpty {
-                if store.shield.webDomains != nil { store.shield.webDomains = nil }
-            } else if store.shield.webDomains != webDomains {
+                if restating || store.shield.webDomains != nil { store.shield.webDomains = nil }
+            } else if restating || store.shield.webDomains != webDomains {
                 store.shield.webDomains = webDomains
             }
         }

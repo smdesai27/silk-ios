@@ -470,7 +470,15 @@ private func clauseStrings(_ text: String) -> [[String]] {
         // The harvest does not shrink. Not a pin on WHICH strings — the set
         // comparison above is that — but on the harvest not being quietly
         // emptied out to make something else green.
-        #expect(ParserCorpus.harvested.count >= 331)
+        //
+        // The floor was 331 and stood while the harvest went stale: the suite
+        // grew to over three thousand distinct literals and the corpus stayed
+        // at 399, nine times under a guard that was reporting green. A floor
+        // set an order of magnitude below what it guards is not a guard. It is
+        // 3,000 now — under today's 3,013 by enough that ordinary churn in the
+        // tests does not trip it, and close enough that a re-harvest which
+        // silently dropped a file would.
+        #expect(ParserCorpus.harvested.count >= 3_000)
     }
 
     /// The tokenizer itself did not move. This PR promises zero behaviour
@@ -568,7 +576,14 @@ private func clauseStrings(_ text: String) -> [[String]] {
     /// an index. It belongs to the PR that does. Note what the ratio does *not*
     /// say: that 27 µs could become 270 µs without moving it at all. A ratio pins
     /// the slope; only the person who reads these figures pins the intercept.
-    @Test func aHugeInputStaysLinear() {
+    /// The name is the measurement now. `aHugeInputStaysLinear` was the tell
+    /// this doc opens with — a stopwatch over ONE input size, which cannot see
+    /// a slope — and although the body has since become a real ratio, the name
+    /// still described a property rather than the comparison that establishes
+    /// it. Ten thousand words in one breath against ten thousand words in ten
+    /// is what is actually run, and what a reader has to know to judge the
+    /// bound.
+    @Test func tenThousandWordsInOneBreathCostWhatTheyCostInTen() {
         // Six words and two separators per repeat, so the two arms are the same
         // words, the same punctuation and the same clauses-per-word. The only
         // difference is where the string ends.

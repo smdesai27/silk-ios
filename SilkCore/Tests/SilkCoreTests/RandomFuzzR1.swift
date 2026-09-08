@@ -12,39 +12,6 @@ import Testing
 
 // MARK: - Fixtures
 
-private let instagram = Door(name: "Instagram")
-private let tiktok = Door(name: "TikTok")
-private let reddit = Door(name: "Reddit")
-private let youtube = Door(name: "YouTube")
-
-private func makeState(budget: Int = 40, caps: [UUID: Int] = [:]) -> PolicyState {
-    PolicyState(budgetMinutes: budget,
-                downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
-                doors: [instagram, tiktok, reddit, youtube],
-                doorCaps: caps)
-}
-
-private let confusingDoors = [
-    Door(name: "Instagram"),
-    Door(name: "Insta"),
-    Door(name: "TikTok"),
-    Door(name: "X"),
-]
-
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
-
-private func afternoon() -> Date {
-    cal.date(from: DateComponents(year: 2026, month: 7, day: 29, hour: 15))!
-}
-
-private func at(_ hour: Int, _ minute: Int = 0, day: Int = 29) -> Date {
-    cal.date(from: DateComponents(year: 2026, month: 7, day: day, hour: hour, minute: minute))!
-}
-
 private func spentEarlier(_ door: Door, _ minutes: Int) -> Grant {
     let end = afternoon().addingTimeInterval(-600)
     return Grant(door: door, minutes: minutes,
@@ -57,7 +24,7 @@ private func fuzzFixtures() -> [(PolicyState, GrantLedger, Date)] {
     spentLedger.record(spentEarlier(tiktok, 10))
 
     var liveLedger = GrantLedger()
-    let issued = at(14, 50)
+    let issued = julyAt(14, 50)
     liveLedger.record(Grant(door: instagram, minutes: 25, issuedAt: issued,
                             expiresAt: issued.addingTimeInterval(25 * 60)))
 
@@ -75,8 +42,8 @@ private func fuzzFixtures() -> [(PolicyState, GrantLedger, Date)] {
         (capped, spentLedger, afternoon()),
         (makeState(), liveLedger, afternoon()),
         (makeState(), closedLedger, afternoon()),
-        (makeState(), GrantLedger(), at(23, 0)),   // inside down hours
-        (makeState(), GrantLedger(), at(21, 50)),  // 10 min before the night edge
+        (makeState(), GrantLedger(), julyAt(23, 0)),   // inside down hours
+        (makeState(), GrantLedger(), julyAt(21, 50)),  // 10 min before the night edge
         (makeState(budget: 0), GrantLedger(), afternoon()),
         (confusing, GrantLedger(), afternoon()),
     ]
@@ -197,13 +164,6 @@ private func makeInput(_ rng: inout SplitMix64, _ i: Int) -> String {
 }
 
 // MARK: - Invariant
-
-private func sanitize(_ s: String, limit: Int = 90) -> String {
-    let printable = s.unicodeScalars.prefix(limit).map { sc -> String in
-        (0x20...0x7E).contains(Int(sc.value)) ? String(Character(sc)) : "\\u{\(String(sc.value, radix: 16))}"
-    }.joined()
-    return s.unicodeScalars.count > limit ? printable + "…(\(s.count) chars)" : printable
-}
 
 /// Runs one input through the pipeline and checks the invariants. Returns a
 /// reason string on violation, nil when everything held.

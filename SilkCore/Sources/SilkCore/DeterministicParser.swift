@@ -147,7 +147,7 @@ public enum DeterministicParser {
         }
         if says(text, downHour) { return .command(.downHoursQuery) }
         // Bare "night" terminates — see the mention rule above — but not over a
-        // sentence that names a door and closes it: "block insta at night" is
+        // sentence that names a door and closes it: "block instagram at night" is
         // the tightest thing in the product with a window word riding along,
         // and the hoisted CLOSE below is never wrong in direction. The window
         // word still poisons SPEND through `windowMention`, so nothing on the
@@ -448,12 +448,14 @@ public enum DeterministicParser {
         //
         //    AND THE NUMBER'S CLAUSE MUST FUND THE DOOR BEING GRANTED. Three
         //    readings of one invariant, every one asked of door ids with the
-        //    same test the cap rules use, so "give me 20 of the gram,
-        //    instagram i mean" is still one door named twice and still spends.
+        //    same test the cap rules use, so "give me 20 of instagrams,
+        //    instagram i mean" is still one door named twice — once inflected,
+        //    once bare — and still spends.
         //    SEVERAL doors in the clause — "instagram tiktok ten" — is two
         //    names competing for one quantity, and granting whichever was
-        //    spelled first is the guess `singleNumber` has refused for numbers
-        //    since the parser shipped.
+        //    spelled first is the guess `parse`'s `number` binding has refused
+        //    for numbers since the parser shipped: several is not one, and one
+        //    is the only count that compiles.
         //    ONE door in the clause must BE the door in hand. "tiktok is my
         //    weakness, give me 15 of reddit" funds reddit while `firstDoor`
         //    holds tiktok; a guard that only counted answered yes and the
@@ -493,7 +495,7 @@ public enum DeterministicParser {
             // side cannot state a deadline, so it stays silent rather than
             // misread one.
             guard !theNumberIsADeadline(clauses()) else { return .silence }
-            // SECONDS ARE NOT MINUTES. "give me 30 seconds of insta" granted
+            // SECONDS ARE NOT MINUTES. "give me 30 seconds of instagram" granted
             // thirty MINUTES — sixty times the stated ask, the mirror of the
             // "2 hours -> 2 minutes" class the number reader exists to kill.
             // The domain cannot hold a fraction of a minute, so the path
@@ -720,9 +722,59 @@ public enum DeterministicParser {
     /// worth one.
     private static let ordinaryWords: Set<String> = ["hinges"]
 
-    /// How many doors a clause names, and which. One door named twice — once by
-    /// name and once by alias, "cap instagram at 20, ig is eating my day" — is
-    /// still one door: the test is on the id, not on the count of matches.
+    /// The door whose name BEGINS at `i`, and the index of the token its name
+    /// ENDS on. One token, or the bigram `t[i] + " " + t[i + 1]` when a second
+    /// token is still inside `bound`.
+    ///
+    /// **Every "is there a door here" scan in this file goes through here.**
+    /// They were six copies of the same three lines, and they have to agree to
+    /// the token: `doorIndex` exists only to say where `doors` matched,
+    /// `clauseNames` asks the same question about one id, and `capSet` reads
+    /// the END of the name to know which tokens ARE the door — a scan that
+    /// disagreed with its neighbour by one token would let the door's own
+    /// determiner read as a fresh phrase and kill the shape.
+    ///
+    /// `bound` and not `t.count` because most callers ask WITHIN A CLAUSE: a
+    /// bigram straddling a boundary is two breaths, not a name. Callers reading
+    /// the whole utterance pass `t.count` and get the same rule.
+    ///
+    /// ONE TOKEN WINS over the bigram, which is how `doors(in:of:state:)`
+    /// always resolved it. The two can only disagree in a state where one
+    /// door's name is another door's name plus a word, and no catalogue entry
+    /// is shaped like that.
+    ///
+    /// THE INVARIANT THE TWO-TOKEN PATH RESTS ON: every door name today is a
+    /// single catalogue display token, so in any shipping state the bigram
+    /// matches nothing at all. The path stays because the catalogue may one day
+    /// carry a two-word entry, and it is exercised by the tests that build a
+    /// door with a two-word name — a dead branch nothing tests is a branch that
+    /// will be wrong when it wakes.
+    ///
+    /// That invariant is also the fast path. Building the bigram costs a
+    /// concatenation plus the `lowercased()` inside `door(named:)`, on every
+    /// token of arbitrary prose — the paste path's whole budget — to ask a
+    /// question whose answer is already known from the roster. So the roster is
+    /// asked instead: no space in any door's key, no bigram.
+    private static func doorAt(_ t: [String], _ i: Int, within bound: Int,
+                               state: PolicyState) -> (door: Door, end: Int)? {
+        guard i < bound else { return nil }
+        if let d = door(t[i], in: state) { return (d, i) }
+        guard i + 1 < bound, anyDoorNameIsTwoTokens(state),
+              let d = door(t[i] + " " + t[i + 1], in: state)
+        else { return nil }
+        return (d, i + 1)
+    }
+
+    /// Whether any door's name is more than one token — the roster question
+    /// `doorAt` asks before it will pay for a bigram. A scan of at most six
+    /// short keys, against a string built and lowercased per token otherwise.
+    private static func anyDoorNameIsTwoTokens(_ state: PolicyState) -> Bool {
+        state.doors.contains { $0.key.utf8.contains(UInt8(ascii: " ")) }
+    }
+
+    /// How many doors a clause names, and which. One door named twice — once
+    /// bare and once inflected, "cap instagram at 20, instagrams eating my day"
+    /// — is still one door: the test is on the id, not on the count of matches.
     private enum ClauseDoors {
         case none
         case one(Door)
@@ -734,11 +786,8 @@ public enum DeterministicParser {
         let t = index.tokens
         var found: Door?
         for i in clause {
-            var match = door(t[i], in: state)
-            if match == nil, i + 1 < clause.upperBound {
-                match = door(t[i] + " " + t[i + 1], in: state)
-            }
-            guard let d = match else { continue }
+            guard let d = doorAt(t, i, within: clause.upperBound, state: state)?.door
+            else { continue }
             if let already = found, already.id != d.id { return .several }
             found = d
         }
@@ -751,10 +800,7 @@ public enum DeterministicParser {
     private static func doorIndex(in clause: Range<Int>, of index: NumberParser.ClauseIndex,
                                   state: PolicyState) -> Int? {
         let t = index.tokens
-        return clause.first { i in
-            door(t[i], in: state) != nil
-                || (i + 1 < clause.upperBound && door(t[i] + " " + t[i + 1], in: state) != nil)
-        }
+        return clause.first { doorAt(t, $0, within: clause.upperBound, state: state) != nil }
     }
 
     // MARK: - The cap lexicon
@@ -1776,8 +1822,9 @@ public enum DeterministicParser {
             // never removed Instagram at all.
             //
             // Two clauses naming two different doors with two different intents
-            // is the ambiguity `singleNumber` and `capOutcome`'s own `.several`
-            // arm already refuse for numbers and for doors inside one clause.
+            // is the ambiguity `parse`'s `number` binding and `capOutcome`'s own
+            // `.several` arm already refuse — for numbers and for doors inside
+            // one clause respectively.
             // Applied across clauses, and only backwards: an EARLIER clause
             // states the sentence's first intent, and this rule may not
             // overrule it.
@@ -1824,10 +1871,10 @@ public enum DeterministicParser {
     /// something, not the first token of the string.
     ///
     /// NOT SCOPED TO A DIFFERENT DOOR, which was the first cut and left the
-    /// same defect behind an alias: "give me 20 of the gram, uncap instagram"
-    /// names one door twice, and the clearing still swallowed the ask for twenty
-    /// minutes. Whether the second breath happens to spell the same app is not
-    /// what decides whether the first breath was heard.
+    /// same defect behind a repeated name: "give me 20 of instagram, uncap
+    /// instagram" names one door twice, and the clearing still swallowed the
+    /// ask for twenty minutes. Whether the second breath happens to spell the
+    /// same app is not what decides whether the first breath was heard.
     ///
     /// A cap outcome with no door — the `.silence` `capCleared` returns for two
     /// doors in one clause — is never suppressed: that silence is a refusal, and
@@ -1972,8 +2019,9 @@ public enum DeterministicParser {
         case .none:
             return nil
         case .several:
-            // Two doors and one clearing is the ambiguity `singleNumber` has
-            // refused for numbers since the parser shipped. Silence, never a
+            // Two doors and one clearing is the ambiguity `parse`'s `number`
+            // binding has refused for numbers since the parser shipped — two
+            // readings, no answer. Silence, never a
             // fall-through: "no limit on tiktok or instagram" must not remove
             // whichever ceiling was spelled first.
             return .silence
@@ -2255,9 +2303,8 @@ public enum DeterministicParser {
                                     of index: NumberParser.ClauseIndex,
                                     state: PolicyState) -> Bool {
         let t = index.tokens
-        return clause.contains { i in
-            if door(t[i], in: state)?.id == d.id { return true }
-            return i + 1 < clause.upperBound && door(t[i] + " " + t[i + 1], in: state)?.id == d.id
+        return clause.contains {
+            doorAt(t, $0, within: clause.upperBound, state: state)?.door.id == d.id
         }
     }
 
@@ -2297,7 +2344,24 @@ public enum DeterministicParser {
     private static func capSet(_ index: NumberParser.ClauseIndex, clause: Range<Int>,
                                state: PolicyState, text: String) -> ParseOutcome? {
         let t = index.tokens
-        guard let doorAt = doorIndex(in: clause, of: index, state: state) else { return nil }
+        // WHERE THE DOOR'S NAME BEGINS AND WHERE IT ENDS, from ONE match. The
+        // scans below must know which tokens ARE the door, because the door's
+        // own name is never evidence about the words around it — a determiner
+        // inside a matched two-token name is part of the name, not a determiner
+        // opening a fresh phrase. Asking `doorIndex` for the start and then
+        // asking `door(_:in:)` again for whether the match had been a bigram
+        // made two answers out of one question, and the second one could only
+        // ever be a re-derivation of the first.
+        var span: (start: Int, end: Int)?
+        for i in clause {
+            if let m = doorAt(t, i, within: clause.upperBound, state: state) {
+                span = (i, m.end)
+                break
+            }
+        }
+        guard let span else { return nil }
+        let doorStart = span.start
+        let doorEnd = span.end
 
         // The clause reads its OWN numbers. Asking the whole utterance would put
         // "im at 9. cap tiktok at 20" — two numbers, two breaths — beyond every
@@ -2309,12 +2373,6 @@ public enum DeterministicParser {
         // would be guessing.
         let numberAt = clause.first { NumberParser.readsAsNumber(t[$0]) }
         let lexeme = capLexemeIndex(t, in: clause)
-        // Where the door's own matched name ENDS. `doorIndex` matches one token
-        // or two ("the gram"), and the scans below must know which tokens ARE
-        // the door, because the door's own name is never evidence about the
-        // words around it: "the" inside a matched alias is the alias, not a
-        // determiner opening a fresh phrase.
-        let doorEnd = door(t[doorAt], in: state) != nil ? doorAt : doorAt + 1
 
         // Shape one: the clause states a ceiling word, and that word LEADS what
         // it bounds.
@@ -2357,7 +2415,7 @@ public enum DeterministicParser {
         // why the test is on `numbers` and not on `numberAt`: "cap tiktok at an
         // hour" has a quantity and no token holding it.
         let leadsTheDoor = lexeme.map { l in
-            l < doorAt && !numbers.isEmpty && capNouns.contains(t[l])
+            l < doorStart && !numbers.isEmpty && capNouns.contains(t[l])
         } ?? false
         if let lexeme, leadsTheNumber || leadsTheDoor {
             // A REMOVER STANDING BETWEEN THE CEILING WORD AND ITS DOOR MARKS
@@ -2376,8 +2434,8 @@ public enum DeterministicParser {
             // this rule ever runs, so the only sentences that reach this
             // test are the clearing family's own declined moods — and a
             // decline here walks into SPEND.
-            if lexeme < doorAt,
-               (lexeme + 1..<doorAt).contains(where: { capRemovers.contains(t[$0]) }) {
+            if lexeme < doorStart,
+               (lexeme + 1..<doorStart).contains(where: { capRemovers.contains(t[$0]) }) {
                 return .silence
             }
             // AND NOTHING STARTS A NEW PREDICATE BETWEEN THEM. Leading is not
@@ -2407,18 +2465,22 @@ public enum DeterministicParser {
             // ceiling word to lead one of the two, so the pair never coincides,
             // which matters because a user may name a door "Max" or "Limit" and
             // an inverted range traps.
-            let reach = numberAt ?? doorAt
+            let reach = numberAt ?? doorStart
             let intervenes = (min(lexeme, reach) + 1..<max(lexeme, reach)).contains { i in
                 // THE DOOR'S OWN NOUN PHRASE IS NOT A BOUNDARY. The scan asks
                 // whether a fresh predicate or phrase stands between the
                 // ceiling word and what it bounds — and the door standing
                 // there is the setter's own OBJECT, not an interruption. Two
-                // holes, one cause: "cap the gram at 20" carries a determiner
-                // INSIDE the two-token alias the door matched by, and "cap my
-                // tiktok at 20" hangs a possessive directly on the door's
-                // name. Both counted as boundaries, the shape died, and the
+                // holes, one cause: "cap my tiktok at 20" hangs a possessive
+                // directly on the door's name, and a two-token door name would
+                // carry its own determiner INSIDE the tokens the door matched
+                // by. Both counted as boundaries, the shape died, and the
                 // ladder answered a restriction by taking the wall down
-                // (FINDINGS 1-2). The door's matched tokens are skipped, and
+                // (FINDINGS 1-2). Only the possessive half is live today — no
+                // catalogue name is two tokens, the invariant `doorAt` writes
+                // down — and the second half is the reason the span is read
+                // from the match rather than assumed to be one token. The
+                // door's matched tokens are skipped, and
                 // so is a determiner standing IMMEDIATELY on the door's first
                 // token — that determiner opens the door's phrase, which is
                 // the phrase being capped. A determiner anywhere else keeps
@@ -2426,8 +2488,8 @@ public enum DeterministicParser {
                 // determiner ahead of the LEXEME) and the commentary shapes
                 // ("ive hit my limit give me 20 of tiktok", where an ask verb
                 // intervenes) are exactly as they were.
-                if (doorAt...doorEnd).contains(i) { return false }
-                if determiners.contains(t[i]), i + 1 == doorAt { return false }
+                if (doorStart...doorEnd).contains(i) { return false }
+                if determiners.contains(t[i]), i + 1 == doorStart { return false }
                 // AND NEITHER IS THE NUMBER'S OWN PHRASE. "cap tiktok at A
                 // strict 20" and "cap tiktok at AN even 20" hang a determiner
                 // (and at most one adjective) on the NUMBER the lexeme aims
@@ -2487,7 +2549,7 @@ public enum DeterministicParser {
         }
         // A CAP NOUN COMMANDING A DOOR WITH NO NUMBER OF ITS OWN IS A CEILING
         // THIS GRAMMAR CANNOT RESOLVE, and the answer is the terminating
-        // silence, not a decline. "put a limit on insta, 25 max" and "cap
+        // silence, not a decline. "put a limit on instagram, 25 max" and "cap
         // tiktok. at 20" split the proposal across a boundary, so the clause
         // that names the ceiling and the door fails the number test above —
         // and a decline walks the ladder into SPEND, which answers a request
@@ -2500,7 +2562,7 @@ public enum DeterministicParser {
         // instead — "remove instagram, no cap on tiktok" already had its
         // clearing suppressed by the earlier removal, and this arm may not
         // overrule the same first breath from one rule over.
-        if let lexeme, capNouns.contains(t[lexeme]), lexeme < doorAt, numbers.isEmpty,
+        if let lexeme, capNouns.contains(t[lexeme]), lexeme < doorStart, numbers.isEmpty,
            !(clause.lowerBound..<lexeme).contains(where: { negators.contains(t[$0]) }),
            !statesAVolition(t, clause: clause) {
             // A POLITE QUESTION IS STILL A CAP PROPOSAL, and it terminates
@@ -2568,7 +2630,7 @@ public enum DeterministicParser {
         // door, asked with the noun-phrase whitelist every other rule here uses,
         // so an unrecognised word declines.
         if periodPhrase(t, in: clause), numbers.count == 1, !t.contains("budget"),
-           doorIsATopic(t, clause: clause, doorAt: doorAt, state: state) {
+           doorIsATopic(t, clause: clause, doorAt: doorStart, state: state) {
             // A PARTICIPLE HEADING THE CLAUSE IS A HABIT REPORT WITH ITS
             // SUBJECT ELIDED, NOT A RULE. `doorIsATopic` answers yes
             // unconditionally when the door does not lead, and the mood gate
@@ -2582,7 +2644,7 @@ public enum DeterministicParser {
             // silence, not a decline, for the family's usual reason — a
             // decline walks onward, and the sentence still names a door and a
             // number.
-            if doorAt != clause.lowerBound,
+            if doorStart != clause.lowerBound,
                isHabitParticiple(t[clause.lowerBound])
                 || phrasePrepositions.contains(t[clause.lowerBound]) {
                 // A phrase preposition heads the same report — "ON tiktok 90
@@ -2648,15 +2710,25 @@ public enum DeterministicParser {
         // rules of its own ("the tiktok cap should be 15 a day" keeps its
         // subject-is-the-rule set, the questions keep their gates, and a
         // remover-led clause is `capCleared`'s to decline).
+        //
+        // AND THE DOOR MAY WEAR ITS OWN DETERMINER. "give THE tiktok a 20
+        // minute ceiling", "give MY tiktok a 20 minute limit" are the same
+        // dative with an article on the recipient, and the frame read only
+        // the bare "give tiktok …" — so the determiner form walked past the
+        // termination into rule 7 and was GRANTED the twenty minutes it asked
+        // to be held to. The rows that should have caught it spelled the
+        // door "the gram", which named no door, and passed on the lookup.
         let lead = clause.lowerBound
-        let leadingVerbTakesTheDoor = doorAt == lead + 1
+        let recipientOnTheVerb = doorStart == lead + 1
+            || (doorStart == lead + 2 && determiners.contains(t[lead + 1]))
+        let leadingVerbTakesTheDoor = recipientOnTheVerb
             && !determiners.contains(t[lead]) && !subjects.contains(t[lead])
             && !auxiliaries.contains(t[lead]) && !whWords.contains(t[lead])
             && !negators.contains(t[lead]) && !capRemovers.contains(t[lead])
             && !isNounPhraseWord(t, lead, state: state)
         if !shaped, let lexeme, capNouns.contains(t[lexeme]), lexeme > doorEnd,
-           doorAt > clause.lowerBound,
-           askVerbs.contains(t[doorAt - 1]) || leadingVerbTakesTheDoor,
+           doorStart > clause.lowerBound,
+           askVerbs.contains(t[doorStart - 1]) || leadingVerbTakesTheDoor,
            !statesAVolition(t, clause: clause),
            !(doorEnd + 1..<lexeme).contains(where: {
                askVerbs.contains(t[$0])
@@ -2695,7 +2767,7 @@ public enum DeterministicParser {
         //
         // `.silence` rather than a decline, because declining walks into SPEND
         // and buys the app the sentence was trying to restrict.
-        let phraseStart = lexeme ?? numberAt ?? doorAt
+        let phraseStart = lexeme ?? numberAt ?? doorStart
         var refused = (clause.lowerBound..<phraseStart).contains { i in
             guard negators.contains(t[i]) else { return false }
             return !(t[i] == "no" && i + 2 < clause.upperBound
@@ -2742,7 +2814,7 @@ public enum DeterministicParser {
         // doctrinally right one: silence reaches the widener, which per §5.7 can
         // produce neither a cap nor a deletion, and a grant out of a report
         // cannot be taken back. Zero of the 498 become grants.
-        if reportsRatherThanSets(t, clause: clause, phraseStart: numberAt ?? doorAt,
+        if reportsRatherThanSets(t, clause: clause, phraseStart: numberAt ?? doorStart,
                                  state: state) {
             return .silence
         }
@@ -2894,12 +2966,12 @@ public enum DeterministicParser {
 
     /// The irregular pasts of consuming — the verbs a report of screen time
     /// conjugates without the "ed" the suffix test reads: "spent 45 minutes on
-    /// tiktok", "lost 2 hours to insta", "took 45 minutes of my day". A list,
+    /// tiktok", "lost 2 hours to instagram", "took 45 minutes of my day". A list,
     /// and safe as one for the family's usual reason: each entry can only
     /// SUBTRACT a grant or a ceiling, and a subtraction is a silence that
     /// reaches the widener.
     ///
-    /// EXTENDED WITH THE CONSUMING CLASS after "insta stole 25 minutes from
+    /// EXTENDED WITH THE CONSUMING CLASS after "instagram stole 25 minutes from
     /// me" spent 25 real minutes: the door stood as SUBJECT of a finite past
     /// verb, and this list was the only thing that could know "stole" was
     /// one. The regular "ed" spellings (wasted, drained, killed…) ride along
@@ -3099,10 +3171,10 @@ public enum DeterministicParser {
     private static func aRefusalNamesTheDoor(_ d: Door, _ index: NumberParser.ClauseIndex,
                                              state: PolicyState) -> Bool {
         let t = index.tokens
-        for doorAt in t.indices where door(t[doorAt], in: state)?.id == d.id
-            || (doorAt + 1 < t.count && door(t[doorAt] + " " + t[doorAt + 1], in: state)?.id == d.id) {
-            guard let clause = index.clauseRange(containing: doorAt) else { continue }
-            var head = doorAt
+        for at in t.indices {
+            guard doorAt(t, at, within: t.count, state: state)?.door.id == d.id,
+                  let clause = index.clauseRange(containing: at) else { continue }
+            var head = at
             while head > clause.lowerBound, determiners.contains(t[head - 1]) { head -= 1 }
             guard head > clause.lowerBound else { continue }
             if nounNegators.contains(t[head - 1]) { return true }
@@ -3183,7 +3255,7 @@ public enum DeterministicParser {
                !clause.contains(where: { NumberParser.readsAsNumber(t[$0]) }) { continue }
             // The bounded-ask carve is scoped to the immediate "dont": "dont
             // give me more than 10 of tiktok" negates the exceeding. "NEVER
-            // open insta for more than 20 minutes" is a standing rule, and
+            // open instagram for more than 20 minutes" is a standing rule, and
             // granting its 20 is the wrong answer twice over — so the durative
             // negators keep the refusal and the sentence goes to the widener.
             let immediate = t[i] == "dont" || t[i] == "don't"
@@ -3324,7 +3396,7 @@ public enum DeterministicParser {
         }) { return true }
         // A PARTICIPLE ahead of the quantity with no ask verb ahead is a
         // habit report with its subject elided: "spent 45 minutes on tiktok
-        // ugh", "wasted an hour on insta again". An ask verb ahead re-marks
+        // ugh", "wasted an hour on instagram again". An ask verb ahead re-marks
         // the mood ("just finished homework give me 20 of tiktok" grants).
         if !ahead.contains(where: { askVerbs.contains(t[$0]) }),
            ahead.contains(where: { isHabitParticiple(t[$0]) }) {
@@ -3333,7 +3405,7 @@ public enum DeterministicParser {
         // A DOOR AS SUBJECT with its consuming verb standing directly on it
         // is the app reporting what it did with her day — and that shape can
         // reach here with an EMPTY `ahead`, because when the quantity lives
-        // in no token ("insta stole AN HOUR from me": the article idiom
+        // in no token ("instagram stole AN HOUR from me": the article idiom
         // carries the 60), no number anchors and the door itself is the
         // anchor, so the participle scan above has nothing to walk. The
         // structural rule — a door as subject followed by a finite non-ask
@@ -3343,7 +3415,10 @@ public enum DeterministicParser {
         // nothing and still grants.
         if !asks, numberAt == nil, anchor == clause.lowerBound {
             var predicateAt = anchor + 1
-            // A two-token door ("the gram") keeps its second word.
+            // A two-token door name keeps its second word: the predicate
+            // stands after the whole name, not after its first token. Dead
+            // against any shipping roster — see the invariant at `doorAt` —
+            // and here for the day the catalogue carries a two-word entry.
             if predicateAt < clause.upperBound,
                door(t[anchor] + " " + t[predicateAt], in: state) != nil {
                 predicateAt += 1
@@ -3357,7 +3432,7 @@ public enum DeterministicParser {
         // A finite verb ahead of the quantity with no ask verb ahead of it is
         // a description: "tiktok premium IS like 9 dollars", "the youtube ad
         // WAS 30 seconds long". An ask verb ahead re-marks the mood — "its
-        // been a rough day GIMME fifteen minutes of insta" grants.
+        // been a rough day GIMME fifteen minutes of instagram" grants.
         if ahead.contains(where: { auxiliaries.contains(t[$0]) && !modals.contains(t[$0]) }),
            !ahead.contains(where: { askVerbs.contains(t[$0]) }) {
             return true
@@ -3523,9 +3598,13 @@ public enum DeterministicParser {
               let prev = index.clauseRange(containing: clause.lowerBound - 1)
         else { return false }
         let prevDoors = doors(in: prev, of: index, state: state)
+        // A door's name STARTING here — the file's one door primitive — or a
+        // two-token name ENDING here, which is a different question and the
+        // reason this closure is not just `doorAt`: the test is whether every
+        // token of the breath belongs to the door's name, so the second token
+        // of a two-token name has to answer yes on its own account.
         func doorToken(_ i: Int) -> Bool {
-            door(t[i], in: state) != nil
-                || (i + 1 < prev.upperBound && door(t[i] + " " + t[i + 1], in: state) != nil)
+            doorAt(t, i, within: prev.upperBound, state: state) != nil
                 || (i > prev.lowerBound && door(t[i - 1] + " " + t[i], in: state) != nil)
         }
         if case .one = prevDoors, prev.allSatisfy(doorToken) { return true }
@@ -3623,8 +3702,8 @@ public enum DeterministicParser {
                                                        state: PolicyState) -> Bool {
         let t = index.tokens
         return clauseRanges(index).contains { clause in
-            guard let doorAt = doorIndex(in: clause, of: index, state: state),
-                  let lexeme = capLexemeIndex(t, in: clause), lexeme < doorAt,
+            guard let doorStart = doorIndex(in: clause, of: index, state: state),
+                  let lexeme = capLexemeIndex(t, in: clause), lexeme < doorStart,
                   lexeme == clause.lowerBound
             else { return false }
             return NumberParser.allNumbers(in: t[clause].joined(separator: " ")).isEmpty
@@ -3844,11 +3923,18 @@ public enum DeterministicParser {
     private static func asksForLess(_ tokens: [String]) -> Bool {
         tokens.contains { lessWords.contains($0) }
     }
-    private static let lessWords: Set<String> = [
+
+    /// EVERY CLOSING VERB IS ONE OF THESE, by meaning and not by coincidence: a
+    /// verb that shuts the door is a request for less of the app, so the list
+    /// is written as `closerTokens` plus the words that ask for less without
+    /// closing anything. Spelled out twice it was two literals that happened to
+    /// overlap on four words, and a closing verb added to one and forgotten in
+    /// the other would leave a refusal reading as an ask.
+    private static let lessWords: Set<String> = closerTokens.union([
         "less", "fewer", "cut", "reduce", "reduced", "limit", "limited", "lower", "stop", "quit",
-        "block", "blocked", "lock", "locked", "close", "closed", "shut", "off", "away", "without",
+        "blocked", "locked", "closed", "off", "away", "without",
         "capped", "restricted", "removed", "gone", "deleted", "cap", "ceiling",
-    ]
+    ])
 
     /// `openingVerbs`, cut into tokens once. The lookup below walks the
     /// sentence a single time, so a ten-thousand-word paste pays one set
@@ -3911,25 +3997,51 @@ public enum DeterministicParser {
     /// second reading exists.
     private static let ambiguousOpeningVerbs: Set<String> = ["open", "use", "spend"]
 
-    /// The `-ing` of the opening verbs, for the one frame that spells them
-    /// that way: the user's own commitment. "im USING instagram for 5
-    /// minutes", "i'm GOING ON instagram for 10", "i'm SPENDING 10 on
-    /// instagram" are asks — she is telling Silk what she is about to do — and
-    /// the mood gate silenced every one of them as a habit report.
+    /// The opening verbs the user's own COMMITMENT conjugates, one row per
+    /// verb: the progressive spelling, the base spelling, and whether the verb
+    /// is phrasal. "im USING instagram for 5 minutes", "i'm GOING ON instagram
+    /// for 10", "i'm SPENDING 10 on instagram", "i'll USE instagram for 10" are
+    /// asks — she is telling Silk what she is about to do — and the mood gate
+    /// silenced every one of them as a habit report.
     ///
-    /// Spelled out rather than derived, because English drops and doubles
-    /// letters on the way to a gerund (use → using, get → getting) and a
-    /// derivation that gets one of those wrong is a grant that does not land.
+    /// ONE TABLE AND NOT FOUR SETS. The gerunds, the stems, and the two
+    /// particled subsets are four views of one six-row fact, and as four
+    /// literals they could disagree: a verb added to the gerunds and forgotten
+    /// in the stems reads the progressive sentence and drops the intention one,
+    /// and a verb marked phrasal on one side and not the other loses its
+    /// particle guard in exactly one mood. The rows state the fact once; the
+    /// sets below are derived from it, and stay sets so the lookups inside the
+    /// scan stay O(1).
+    ///
+    /// The gerunds are SPELLED OUT rather than derived from the stems, because
+    /// English drops and doubles letters on the way to one (use → using, get →
+    /// getting) and a derivation that gets one of those wrong is a grant that
+    /// does not land.
+    ///
+    /// `particled` marks the verbs that mean the app only with their particle
+    /// — "go on", "get on". "im going to bed" and "im getting instagram off my
+    /// phone" are not asks.
+    ///
     /// Read ONLY inside `statesACommitment`, whose frame is narrow enough that
-    /// an entry here cannot widen anything else.
-    private static let commitmentGerunds: Set<String> = [
-        "using", "spending", "going", "getting", "opening", "unlocking",
+    /// a row here cannot widen anything else.
+    private static let commitmentVerbs: [(stem: String, gerund: String, particled: Bool)] = [
+        (stem: "use",    gerund: "using",     particled: false),
+        (stem: "spend",  gerund: "spending",  particled: false),
+        (stem: "open",   gerund: "opening",   particled: false),
+        (stem: "unlock", gerund: "unlocking", particled: false),
+        (stem: "go",     gerund: "going",     particled: true),
+        (stem: "get",    gerund: "getting",   particled: true),
     ]
 
-    /// The two commitment gerunds whose verb is a phrasal one: "go on" and
-    /// "get on" mean the app only with their particle. "im going to bed" and
-    /// "im getting instagram off my phone" are not asks.
-    private static let particledGerunds: Set<String> = ["going", "getting"]
+    /// The four views `statesACommitment` actually asks, as sets: the scan runs
+    /// once per token of the utterance, and a linear walk of the table there
+    /// would put the paste path's cost back.
+    private static let commitmentGerunds: Set<String> = Set(commitmentVerbs.map(\.gerund))
+    private static let commitmentStems: Set<String> = Set(commitmentVerbs.map(\.stem))
+    private static let particledGerunds: Set<String> =
+        Set(commitmentVerbs.filter(\.particled).map(\.gerund))
+    private static let particledStems: Set<String> =
+        Set(commitmentVerbs.filter(\.particled).map(\.stem))
 
     /// THE USER'S OWN COMMITMENT — a first-person present-progressive sentence
     /// whose verb is an opening verb, carrying exactly one number and no
@@ -3973,9 +4085,9 @@ public enum DeterministicParser {
     ///    consulted, and it catches "she said i AM using…" — its proof is a
     ///    non-modal auxiliary in the clause, and the contraction's "m" is not
     ///    one, so the ordinary spelling walked straight through it.
-    ///  - EXACTLY ONE NUMBER. Two numbers is the ambiguity `singleNumber` has
-    ///    refused since the parser shipped, asked here so the exemption cannot
-    ///    launder it.
+    ///  - EXACTLY ONE NUMBER. Two numbers is the ambiguity `parse`'s `number`
+    ///    binding has refused since the parser shipped (`numbers.count == 1`,
+    ///    else nil), asked here so the exemption cannot launder it.
     ///
     /// The exactly-one-number guard is the CALLER'S: rule 7 binds `number`
     /// before it asks, and this is read from nowhere else, so the sentence's
@@ -4007,19 +4119,20 @@ public enum DeterministicParser {
                   !(clause.lowerBound..<j).contains(where: { speechVerbs.contains(t[$0]) })
             else { continue }
             if particledGerunds.contains(t[j]) || particledStems.contains(t[j]) {
+                // The particle has to govern the DOOR. The question here is not
+                // "does the sentence name a door" — rule 7 already holds one —
+                // but "is the door what this 'on' points at", so the door's
+                // name must begin on the token right after it. The whole
+                // utterance is the bound: a commitment's particle and its
+                // object are one breath by construction, and `t.count` is what
+                // `doorAt` needs to know the token exists at all.
                 guard j + 1 < t.count, t[j + 1] == "on",
-                      namesTheDoor(t, at: j + 2, state: state) else { continue }
+                      doorAt(t, j + 2, within: t.count, state: state) != nil else { continue }
             }
             return true
         }
         return false
     }
-
-    /// The base opening verbs an intention frame conjugates: "i'll USE",
-    /// "i will SPEND", "i'm going to OPEN". `go`/`get` need their particle,
-    /// exactly as their gerunds do.
-    private static let commitmentStems: Set<String> = ["use", "spend", "open", "unlock", "go", "get"]
-    private static let particledStems: Set<String> = ["go", "get"]
 
     /// The first-person intention frame standing directly on `j`: "i'll" /
     /// "ill" / "i will" / "i'm going to" / "im going to" / "i am going to" /
@@ -4033,26 +4146,23 @@ public enum DeterministicParser {
         if j > 1, t[j - 2] == "i", t[j - 1] == "ll" || t[j - 1] == "will" { return true }
         if j > 1, t[j - 2] == "im", t[j - 1] == "gonna" { return true }
         if j > 2, t[j - 3] == "i", t[j - 2] == "m", t[j - 1] == "gonna" { return true }
+        // "going to" is the present progressive of "go" with an infinitive
+        // hanging off it, so the frame in front of it is the ordinary
+        // first-person present — the same three spellings `firstPersonPresent`
+        // already reads, asked at the "going". Spelling them out a second time
+        // here is how "i am going to" and "i'm going to" came to be answered by
+        // two pieces of code that could drift apart.
+        //
+        // The "gonna" arms above stay separate on purpose: they admit "im
+        // gonna" and "i'm gonna" and NOT "i am gonna", which is not English
+        // anyone types, and folding them into this call would newly claim it.
         guard j > 2, t[j - 2] == "going", t[j - 1] == "to" else { return false }
-        if t[j - 3] == "im" { return true }
-        return j > 3 && t[j - 4] == "i" && (t[j - 3] == "m" || t[j - 3] == "am")
+        return firstPersonPresent(t, before: j - 2)
     }
 
     /// "i'd" as the tokenizer spells it: the clitic "d" standing on "i".
     private static func contractedWould(_ t: [String], at i: Int) -> Bool {
         t[i] == "id" || (t[i] == "d" && i > 0 && t[i - 1] == "i")
-    }
-
-    /// Whether a door's name begins at `i` — one token or two, matched through
-    /// `door(_:in:)` like every other door in this file. Read only by the
-    /// particle guard above, where the question is not "does the sentence name
-    /// a door" (rule 7 already holds one) but "is the door what this particle
-    /// governs".
-    private static func namesTheDoor(_ t: [String], at i: Int, state: PolicyState) -> Bool {
-        guard i < t.count else { return false }
-        if door(t[i], in: state) != nil { return true }
-        guard i + 1 < t.count else { return false }
-        return door(t[i] + " " + t[i + 1], in: state) != nil
     }
 
     /// The words that place a clause somewhere other than now. Read ONLY to

@@ -10,8 +10,6 @@ import Testing
 // a scheme nor a link, one name claimed by two entries — compiled and shipped.
 // The data is in the spine now, and these are the three seconds that catch it.
 
-private let catalogueNames = LaunchCatalog.entries.flatMap(\.names)
-
 // MARK: - The shape of an entry
 
 @Suite struct LaunchCatalogShape {
@@ -91,17 +89,23 @@ private let catalogueNames = LaunchCatalog.entries.flatMap(\.names)
         }
     }
 
-    /// `knows` is what setup asks before it will let a name become a door, and
-    /// it must answer for every spelling the catalogue itself carries.
-    @Test func knowsEverythingItCarriesAndNothingElse() {
+    /// **THE LOOKUP ANSWERS FOR EVERY SPELLING THE CATALOGUE CARRIES**, and
+    /// case-insensitively, because setup hands it a display ("Instagram") and
+    /// `open` hands it a door name the user may have typed in any casing.
+    /// Asked as `entry(named:) != nil`, which is the whole of the question —
+    /// a `knows(_:)` wrapper stood for it and nothing outside this test read it.
+    @Test func theLookupAnswersForEverythingItCarriesAndNothingElse() {
         for e in LaunchCatalog.entries {
-            for n in e.names { #expect(LaunchCatalog.knows(n), "knows(\(n))") }
-            #expect(LaunchCatalog.knows(e.display), "knows(\(e.display))")
-            #expect(LaunchCatalog.knows(e.display.uppercased()), "knows(\(e.display.uppercased()))")
+            for n in e.names {
+                #expect(LaunchCatalog.entry(named: n) != nil, "entry(named: \(n))")
+            }
+            #expect(LaunchCatalog.entry(named: e.display) != nil, "entry(named: \(e.display))")
+            #expect(LaunchCatalog.entry(named: e.display.uppercased()) != nil,
+                    "entry(named: \(e.display.uppercased()))")
             #expect(LaunchCatalog.entry(named: e.display)?.display == e.display)
         }
-        #expect(!LaunchCatalog.knows("mastodon"))
-        #expect(!LaunchCatalog.knows(""))
+        #expect(LaunchCatalog.entry(named: "mastodon") == nil)
+        #expect(LaunchCatalog.entry(named: "") == nil)
     }
 
     /// The owner's five, pinned by name. The list is a product decision, and a
@@ -164,7 +168,13 @@ private let catalogueNames = LaunchCatalog.entries.flatMap(\.names)
     /// every other catalogue nickname names no door in a sentence, and reaches
     /// silence rather than a restated copy of the lexicon this test would
     /// otherwise have to track.
-    @Test func everyNameSpendsOnItsOwnDoor() {
+    ///
+    /// NAMED FOR WHAT IT PROVES. It was `everyNameSpendsOnItsOwnDoor`, and half
+    /// its rows assert the opposite: only the display name spends, and every
+    /// other catalogue spelling must reach SILENCE. A name that says "every
+    /// name" over a body that excludes most of them is a name a reader trusts
+    /// instead of the body.
+    @Test func onlyTheDisplayNameSpendsOnItsOwnDoor() {
         for e in LaunchCatalog.entries {
             let s = state(for: e)
             for n in e.names {
@@ -189,7 +199,11 @@ private let catalogueNames = LaunchCatalog.entries.flatMap(\.names)
     /// must reach "Write it out" rather than silence — but only when the
     /// sentence spelled the door's actual name. A nickname names no door, so
     /// the ask never opens on one.
-    @Test func everyNameReachesTheElipticalAsk() {
+    ///
+    /// Renamed twice over: "every name" was false for the same reason as above,
+    /// and "Eliptical" was a typo that had been in the suite long enough to be
+    /// grepped for.
+    @Test func onlyTheDisplayNameReachesTheEllipticalAsk() {
         for e in LaunchCatalog.entries {
             let s = state(for: e)
             for n in e.names {
@@ -337,7 +351,10 @@ private let catalogueNames = LaunchCatalog.entries.flatMap(\.names)
     /// longer reads that list at all, because `Door.spokenForms` never carried
     /// a catalogue nickname to begin with now — so every nickname is excluded,
     /// not merely the three the old list named.
-    @Test func everyCatalogueNameSpendsOnADoorBuiltFromItsDisplayNameAlone() {
+    ///
+    /// "Every catalogue name" was the claim; the body asserts silence for all
+    /// of them but one.
+    @Test func onlyTheDisplayNameSpendsOnADoorBuiltFromItAlone() {
         for e in LaunchCatalog.entries {
             let s = appState(for: e)
             for n in e.names {
@@ -359,8 +376,8 @@ private let catalogueNames = LaunchCatalog.entries.flatMap(\.names)
 
     /// The tightest sentence in the product is no more reachable by a nickname
     /// than the grant is: a close that names no door closes no door, exactly
-    /// as the spend above.
-    @Test func everyCatalogueNameClosesItsOwnDoor() {
+    /// as the spend above, and the name says so.
+    @Test func onlyTheDisplayNameClosesItsOwnDoor() {
         for e in LaunchCatalog.entries {
             let s = appState(for: e)
             for n in e.names {

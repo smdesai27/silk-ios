@@ -37,15 +37,9 @@ import Foundation
 /// A fixed clock, well clear of the down-hours window. A Validator test run at
 /// the wall clock's whim is a test that goes red between ten at night and seven
 /// in the morning, which is exactly when this suite gets written.
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
+private let durationAfternoon = cal.date(from: DateComponents(year: 2026, month: 8, day: 4, hour: 14))!
 
-private let afternoon = cal.date(from: DateComponents(year: 2026, month: 8, day: 4, hour: 14))!
-
-private func makeState(budget: Int = 240) -> PolicyState {
+private func durationState(budget: Int = 240) -> PolicyState {
     PolicyState(
         budgetMinutes: budget,
         downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
@@ -56,7 +50,14 @@ private func makeState(budget: Int = 240) -> PolicyState {
     )
 }
 
-private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (String, Int)? {
+/// The four shapes an absurd magnitude can end in, so
+/// `anAbsurdMagnitudeSaturatesRatherThanTrapping` can STATE which one each row
+/// takes instead of accepting any of them. Named rather than inlined because a
+/// `ParseOutcome` literal would need the door, and every `durationState()` mints
+/// fresh `Door` ids.
+fileprivate enum Shape: Sendable { case spendsIntMax, budgetsIntMax, hint, silence }
+
+private func spend(_ utterance: String, _ state: PolicyState = durationState()) -> (String, Int)? {
     guard case .command(.spend(let door, let minutes)) =
             DeterministicParser.parse(utterance, state: state) else { return nil }
     return (door.name, minutes)
@@ -106,7 +107,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     ])
     func thePoolReadsHoursToo(_ row: (utterance: String, minutes: Int)) {
         guard case .command(.setBudget(let m)) =
-                DeterministicParser.parse(row.utterance, state: makeState()) else {
+                DeterministicParser.parse(row.utterance, state: durationState()) else {
             Issue.record("\"\(row.utterance)\" did not set the budget")
             return
         }
@@ -118,11 +119,11 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// question the grammar did. Both sides had to move together or every hours
     /// sentence would parse and then be refused as invented.
     @Test func theValidatorTracesTheScaledNumber() {
-        let state = makeState(budget: 240)
+        let state = durationState(budget: 240)
         let utterance = "give me 2 hours of tiktok"
         let verdict = Validator.validate(DeterministicParser.parse(utterance, state: state),
                                          utterance: utterance, state: state,
-                                         ledger: GrantLedger(), now: afternoon, calendar: cal)
+                                         ledger: GrantLedger(), now: durationAfternoon, calendar: cal)
         guard case .grant(let door, let minutes, _) = verdict else {
             Issue.record("expected a grant, got \(verdict)")
             return
@@ -135,12 +136,12 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// And the clamp still binds it. Two hours against a forty-minute pool is
     /// forty minutes, not a refusal and not a hundred and twenty.
     @Test func anHoursAskClampsToThePool() {
-        let state = makeState(budget: 40)
+        let state = durationState(budget: 40)
         let utterance = "give me 2 hours of tiktok"
         guard case .grant(_, let minutes, _) =
                 Validator.validate(DeterministicParser.parse(utterance, state: state),
                                    utterance: utterance, state: state,
-                                   ledger: GrantLedger(), now: afternoon, calendar: cal)
+                                   ledger: GrantLedger(), now: durationAfternoon, calendar: cal)
         else {
             Issue.record("expected a clamped grant")
             return
@@ -180,7 +181,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         "give me 20 of tiktok, its 2h until dinner",
     ])
     func anAsideWithAGluedDurationIsTwoNumbers(_ utterance: String) {
-        #expect(DeterministicParser.parse(utterance, state: makeState()) == .silence, "\"\(utterance)\"")
+        #expect(DeterministicParser.parse(utterance, state: durationState()) == .silence, "\"\(utterance)\"")
     }
 
     /// The spaced spellings carry the same meaning and are read.
@@ -203,35 +204,51 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// (so "cap tiktok at two hundred hours" wrote one), and
     /// `numberClauseNamesADoor`. See `NumberParser.hundredPoisons`.
     ///
-    /// So the word poisons its phrase: the sentence carries no number, reaches
-    /// the elliptical ask, and is answered "How long?" — a question, where the
-    /// old reading granted a minute and the read version granted a hundred out
-    /// of "a hundred percent".
+    /// So the word poisons its phrase: the sentence carries no number, and no
+    /// rule that needs one can claim it. When this suite was written that left
+    /// the elliptical ask, which ANSWERED "How long?"; the spend-shape
+    /// tightening replaced that question with the hint ("Write it out: unlock
+    /// Reddit for 10 min."), and these rows are pinned to what the grammar
+    /// does now. Either way the point is unchanged: a question, where the old
+    /// reading granted a minute and the read version granted a hundred out of
+    /// "a hundred percent".
+    ///
+    /// THE OUTCOME IS STATED, not merely un-refused. What stood here was a
+    /// switch that recorded an issue for three command shapes and let every
+    /// other outcome through on `default: break` — so a rule that started
+    /// silencing "give me a hundred minutes of reddit" outright, losing the
+    /// door and the question with it, passed this test. `door` names the door
+    /// the hint must carry; nil means the sentence reaches no rule at all.
     @Test(arguments: [
-        "give me a hundred minutes of reddit",
-        "give me one hundred minutes of reddit",
-        "give me two hundred minutes of reddit",
-        "give me tiktok a hundred percent",
-        "ive told you a hundred times, open reddit",
-        "keep tiktok under a hundred minutes",
-        "tiktok at most a hundred minutes",
-        "cap tiktok at two hundred hours",
-        "tiktok no more than a hundred minutes a day",
+        ("give me a hundred minutes of reddit", "Reddit"),
+        ("give me one hundred minutes of reddit", "Reddit"),
+        ("give me two hundred minutes of reddit", "Reddit"),
+        ("give me tiktok a hundred percent", "TikTok"),
+        ("ive told you a hundred times, open reddit", "Reddit"),
+        // The RESTRICTION phrasings reach no rule: the ceiling clauses need a
+        // number and the poisoned phrase carries none, so there is nothing for
+        // the fragment rules to hand back either.
+        ("keep tiktok under a hundred minutes", nil),
+        ("tiktok at most a hundred minutes", nil),
+        ("cap tiktok at two hundred hours", nil),
+        ("tiktok no more than a hundred minutes a day", nil),
     ])
-    func aHundredCarriesNoNumber(_ utterance: String) {
-        var state = makeState()
+    func aHundredCarriesNoNumber(_ row: (utterance: String, door: String?)) {
+        var state = durationState()
         let tiktok = state.doors.first { $0.name == "TikTok" }!
         state.doorCaps[tiktok.id] = 20
-        switch DeterministicParser.parse(utterance, state: state) {
-        case .command(.spend(_, let m)):
-            Issue.record("\"\(utterance)\" granted \(m) from a hundred")
-        case .command(.setDoorCap(_, let m)):
-            Issue.record("\"\(utterance)\" wrote a ceiling of \(m.map(String.init) ?? "none")")
-        case .command(.setBudget(let m)):
-            Issue.record("\"\(utterance)\" moved the pool to \(m)")
-        default:
-            break
+        let outcome = DeterministicParser.parse(row.utterance, state: state)
+        guard let name = row.door else {
+            #expect(outcome == .silence, "\"\(row.utterance)\" was \(outcome)")
+            return
         }
+        guard case .writeItOut(let door, let minutes) = outcome else {
+            Issue.record("\"\(row.utterance)\" was \(outcome), not the hint")
+            return
+        }
+        #expect(door.name == name)
+        // nil minutes is the whole claim: the hundred was not read as one.
+        #expect(minutes == nil, "\"\(row.utterance)\" carried \(minutes.map(String.init) ?? "nil")")
     }
 
     /// And the digit spelling — the one people actually type — is untouched.
@@ -239,7 +256,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         #expect(spend("give me 100 minutes of reddit")?.1 == 100)
         #expect(spend("give me 200 minutes of reddit")?.1 == 200)
         guard case .command(.setDoorCap(_, let cap)) =
-                DeterministicParser.parse("keep tiktok under 100 minutes", state: makeState()) else {
+                DeterministicParser.parse("keep tiktok under 100 minutes", state: durationState()) else {
             Issue.record("the digit ceiling stopped landing")
             return
         }
@@ -268,7 +285,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         "i can\u{2019}t do 20 minutes a day on tiktok",
     ])
     func aRefusedCeilingIsNeverWritten(_ utterance: String) {
-        var state = makeState()
+        var state = durationState()
         let tiktok = state.doors.first { $0.name == "TikTok" }!
         state.doorCaps[tiktok.id] = 10
         let outcome = DeterministicParser.parse(utterance, state: state)
@@ -297,7 +314,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// its own and the orphaned "s" matches nothing, which is the harmless
     /// direction.
     @Test func aPossessiveDoorStillNamesItsDoor() {
-        var state = makeState()
+        var state = durationState()
         let tiktok = state.doors.first { $0.name == "TikTok" }!
         state.doorCaps[tiktok.id] = 10
         guard case .command(.setDoorCap(let door, let minutes)) =
@@ -316,7 +333,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// swallowed. Each of these carries a number and an hour word or a clock
     /// word, and each must answer exactly what it answered before.
     @Test func statedClocksAreUnmoved() {
-        let state = makeState()
+        let state = durationState()
         func parse(_ s: String) -> ParseOutcome { DeterministicParser.parse(s, state: state) }
 
         // A close's stated lift is a clock, not a length.
@@ -380,7 +397,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         "no tiktok until 2h", "no tiktok for the next 2 hours",
     ])
     func aDoorWithANegatorOnItIsNeverSpent(_ utterance: String) {
-        #expect(DeterministicParser.parse(utterance, state: makeState()) == .silence,
+        #expect(DeterministicParser.parse(utterance, state: durationState()) == .silence,
                 "\"\(utterance)\" opened the door it refuses")
     }
 
@@ -388,7 +405,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// sentence is still an ask, and a clause-wide scan — the first thing tried
     /// here — read four pinned sentences wrong in exactly this way.
     @Test func aNegatorGoverningAVerbLeavesTheAskAlone() {
-        let state = makeState()
+        let state = durationState()
         #expect(spend("dont give me more than 10 of tiktok", state)?.1 == 10)
         #expect(spend("dont close instagram, just give me 10", state)?.1 == 10)
         #expect(spend("give me no more than 20 of tiktok", state)?.1 == 20)
@@ -397,7 +414,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// And a close is still a close. "no more tiktok" is the canonical closing
     /// phrase and it is decided above SPEND, so nothing here can reach it.
     @Test func theCloseIsUnmoved() {
-        let state = makeState()
+        let state = durationState()
         guard case .command(.closeDoorToday(let d, _)) =
                 DeterministicParser.parse("no more tiktok for 1h", state: state) else {
             Issue.record("the canonical close stopped closing")
@@ -417,31 +434,62 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// It saturates instead: an absurd number of minutes has always parsed and
     /// then been clamped to the balance, and an absurd number of hours is the
     /// same sentence with a unit on it.
+    /// THE SATURATED VALUE IS THE ASSERTION, not the absence of a crash.
+    ///
+    /// "Reaching this line is the assertion" used to stand at the foot of this
+    /// body, and a no-crash test is the weakest thing a suite can hold: it
+    /// stays green for a reader that starts returning nothing, for one that
+    /// truncates to a plausible-looking small number, and for a grammar that
+    /// quietly stops claiming these sentences at all. The claim in the doc
+    /// above is SATURATION — the multiplier tops out rather than trapping —
+    /// and saturation has a value, `Int.max`, which is written down here.
+    ///
+    /// The rows fall into four shapes, and which shape a row takes is itself
+    /// part of the record: an hours multiplier saturates and the sentence goes
+    /// on to mean what it says; a "hundred" phrase carries no number at all
+    /// (`NumberParser.hundredPoisons`, and the suite above), so the reader
+    /// returns nothing and the fragment rules answer with the hint.
     @Test(arguments: [
-        "give me 999999999999999999 hours of tiktok",
-        "give me 153722867280912931 hours of tiktok",
-        "give me 92233720368547759 hundred minutes of tiktok",
-        "give me 9999999999999999 hundred hours of tiktok",
-        "999999999999999999h",
-        "set my budget to 200000000000000000 hours",
-        "cap tiktok at 1111111111111111111h a day",
-        "9223372036854775807 hours",
-        "9223372036854775807 hundred hundred hours",
+        ("give me 999999999999999999 hours of tiktok", [Int.max], Shape.spendsIntMax),
+        ("give me 153722867280912931 hours of tiktok", [Int.max], Shape.spendsIntMax),
+        ("give me 92233720368547759 hundred minutes of tiktok", [], Shape.hint),
+        ("give me 9999999999999999 hundred hours of tiktok", [], Shape.hint),
+        ("999999999999999999h", [Int.max], Shape.silence),
+        ("set my budget to 200000000000000000 hours", [Int.max], Shape.budgetsIntMax),
+        ("cap tiktok at 1111111111111111111h a day", [Int.max], Shape.silence),
+        ("9223372036854775807 hours", [Int.max], Shape.silence),
+        ("9223372036854775807 hundred hundred hours", [], Shape.silence),
     ])
-    func anAbsurdMagnitudeSaturatesRatherThanTrapping(_ utterance: String) {
-        _ = NumberParser.allNumbers(in: utterance)
-        _ = DeterministicParser.parse(utterance, state: makeState())
-        // Reaching this line is the assertion.
+    fileprivate func anAbsurdMagnitudeSaturatesRatherThanTrapping(_ row: (utterance: String,
+                                                             numbers: [Int],
+                                                             shape: Shape)) {
+        #expect(NumberParser.allNumbers(in: row.utterance) == row.numbers,
+                "\"\(row.utterance)\" read \(NumberParser.allNumbers(in: row.utterance))")
+        let outcome = DeterministicParser.parse(row.utterance, state: durationState())
+        switch (row.shape, outcome) {
+        case (.spendsIntMax, .command(.spend(let door, let minutes))):
+            #expect(door.name == "TikTok")
+            #expect(minutes == Int.max)
+        case (.budgetsIntMax, .command(.setBudget(let minutes))):
+            #expect(minutes == Int.max)
+        case (.hint, .writeItOut(let door, let minutes)):
+            #expect(door.name == "TikTok")
+            #expect(minutes == nil)
+        case (.silence, .silence):
+            break
+        default:
+            Issue.record("\"\(row.utterance)\" was \(outcome), not \(row.shape)")
+        }
     }
 
     /// And it is still clamped to what the pool actually holds.
     @Test func anAbsurdAskIsStillJustTheBalance() {
-        let state = makeState(budget: 40)
+        let state = durationState(budget: 40)
         let utterance = "give me 999999999999999999 hours of tiktok"
         guard case .grant(_, let minutes, _) =
                 Validator.validate(DeterministicParser.parse(utterance, state: state),
                                    utterance: utterance, state: state,
-                                   ledger: GrantLedger(), now: afternoon, calendar: cal)
+                                   ledger: GrantLedger(), now: durationAfternoon, calendar: cal)
         else {
             Issue.record("expected a clamped grant")
             return
@@ -464,7 +512,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         "i want a limit of 2h on tiktok",
     ])
     func noSpellingOfAnHourWritesACeiling(_ utterance: String) {
-        var state = makeState()
+        var state = durationState()
         let tiktok = state.doors.first { $0.name == "TikTok" }!
         state.doorCaps[tiktok.id] = 10
         if case .command(.setDoorCap(_, let minutes)) =
@@ -475,7 +523,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
 
     /// A ceiling stated in minutes still lands, in every spelling.
     @Test func aMinuteCeilingStillLands() {
-        let state = makeState()
+        let state = durationState()
         for utterance in ["cap tiktok at 20 a day", "limit tiktok to 20 a day", "tiktok 20 a day"] {
             guard case .command(.setDoorCap(_, let m)) =
                     DeterministicParser.parse(utterance, state: state) else {
@@ -506,7 +554,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// utterance, so a unit that reaches across a comma makes them disagree and
     /// a cap the grammar just set fails its own provenance check.
     @Test func theGrammarAndTheValidatorAgree() {
-        let state = makeState()
+        let state = durationState()
         let utterance = "cap tiktok at 20, hours disappear on that thing"
         let outcome = DeterministicParser.parse(utterance, state: state)
         guard case .command(.setDoorCap(_, let minutes)) = outcome else {
@@ -522,7 +570,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// five minutes of tiktok" is still 25. That is the tokenizer's pinned
     /// contract and the fuzz campaign declined to change it on purpose.
     @Test func compoundingStillCrossesAComma() {
-        #expect(NumberParser.singleNumber(in: "twenty, five minutes of tiktok") == 25)
+        #expect(NumberParser.allNumbers(in: "twenty, five minutes of tiktok") == [25])
     }
 }
 
@@ -540,7 +588,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         for utterance in ["last week i budgeted 60 for youtube",
                           "budgeting 60 for youtube",
                           "my budgets blown, 15 of instagram today"] {
-            switch DeterministicParser.parse(utterance, state: makeState()) {
+            switch DeterministicParser.parse(utterance, state: durationState()) {
             case .command(.removeDoor(let d)):
                 Issue.record("\"\(utterance)\" DELETED the door \(d.name)")
             case .command(.spend(let d, let m)):
@@ -555,7 +603,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// allowance is not answered by shutting every door in the product.
     @Test func aSentenceStatingAnAllowanceIsNotACloseOverEverything() {
         let outcome = DeterministicParser.parse("block everything, my budget is 30",
-                                                state: makeState())
+                                                state: durationState())
         if case .command(.closeAllToday) = outcome {
             Issue.record("a budget sentence closed every door")
         }
@@ -565,8 +613,8 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// And the pool still moves only when it owns the number.
     @Test func onlyTheOwnedNumberMovesThePool() {
         #expect(DeterministicParser.parse("give me 20 of instagram, im on a budget",
-                                          state: makeState()) == .silence)
-        #expect(DeterministicParser.parse("budget of 20", state: makeState())
+                                          state: durationState()) == .silence)
+        #expect(DeterministicParser.parse("budget of 20", state: durationState())
                 == .command(.setBudget(minutes: 20)))
     }
 }
@@ -579,14 +627,14 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// reading of it — asking only for the first silenced every two-ended window
     /// sentence the widener can read.
     @Test func aSecondStatedClockIsStillTheUsersOwnWord() {
-        let state = makeState()
+        let state = durationState()
         let utterance = "lock me out from 10pm to 7am"
         #expect(NumberParser.statedTimes(in: utterance, assumeEvening: false)
                 .contains(TimeOfDay(hour: 7)))
         guard case .ruleChange(let proposed, _) =
                 Validator.validate(.command(.setDownHoursEnd(TimeOfDay(hour: 7))),
                                    utterance: utterance, state: state,
-                                   ledger: GrantLedger(), now: afternoon, calendar: cal) else {
+                                   ledger: GrantLedger(), now: durationAfternoon, calendar: cal) else {
             Issue.record("a stated second hour was refused as invented")
             return
         }
@@ -595,13 +643,13 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
 
     /// An hour nobody said is still refused, which is the whole point.
     @Test func anUnsaidHourIsStillRefused() {
-        let state = makeState()
+        let state = durationState()
         #expect(Validator.validate(.command(.setDownHoursEnd(TimeOfDay(hour: 10))),
                                    utterance: "do something about my mornings", state: state,
-                                   ledger: GrantLedger(), now: afternoon, calendar: cal) == .silence)
+                                   ledger: GrantLedger(), now: durationAfternoon, calendar: cal) == .silence)
         #expect(Validator.validate(.command(.setDownHoursStart(TimeOfDay(hour: 19))),
                                    utterance: "lock me out from 10pm to 7am", state: state,
-                                   ledger: GrantLedger(), now: afternoon, calendar: cal) == .silence)
+                                   ledger: GrantLedger(), now: durationAfternoon, calendar: cal) == .silence)
     }
 }
 
@@ -631,7 +679,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// does not wait.
     @Test func aHyphenatedBudgetIsNotSixtyTimesTooTight() {
         guard case .command(.setBudget(let m)) =
-                DeterministicParser.parse("set my budget to 2-hours", state: makeState()) else {
+                DeterministicParser.parse("set my budget to 2-hours", state: durationState()) else {
             Issue.record("the hyphenated budget sentence stopped landing")
             return
         }
@@ -654,12 +702,12 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// And the Validator traces the hyphenated grant, or every one of these
     /// sentences would parse and then be refused as invented.
     @Test func theValidatorTracesTheHyphenatedNumber() {
-        let state = makeState()
+        let state = durationState()
         let utterance = "give me a 2-hour break from tiktok"
         guard case .grant(_, let minutes, _) =
                 Validator.validate(DeterministicParser.parse(utterance, state: state),
                                    utterance: utterance, state: state,
-                                   ledger: GrantLedger(), now: afternoon, calendar: cal) else {
+                                   ledger: GrantLedger(), now: durationAfternoon, calendar: cal) else {
             Issue.record("the hyphenated grant failed its own provenance")
             return
         }
@@ -683,7 +731,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         "im on a budget, tiktok for 20",
     ])
     func aBudgetExcuseBeforeASpendAskNeverMovesThePool(_ utterance: String) {
-        #expect(DeterministicParser.parse(utterance, state: makeState()) == .silence,
+        #expect(DeterministicParser.parse(utterance, state: durationState()) == .silence,
                 "\"\(utterance)\" moved the pool")
     }
 
@@ -697,7 +745,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     ])
     func thePoolsOwnSentenceStillLands(_ row: (utterance: String, minutes: Int)) {
         guard case .command(.setBudget(let m)) =
-                DeterministicParser.parse(row.utterance, state: makeState()) else {
+                DeterministicParser.parse(row.utterance, state: durationState()) else {
             Issue.record("\"\(row.utterance)\" stopped setting the budget")
             return
         }
@@ -718,7 +766,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         "im on a budget, give me an hour of tiktok",
     ])
     func anIdiomSpendWithABudgetMentionNeverMovesThePool(_ utterance: String) {
-        let outcome = DeterministicParser.parse(utterance, state: makeState())
+        let outcome = DeterministicParser.parse(utterance, state: durationState())
         if case .command(.setBudget(let m)) = outcome {
             Issue.record("\"\(utterance)\" set the budget to \(m)")
         }
@@ -729,7 +777,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// quantity, one breath — and the plain idiom spend still spends.
     @Test func anOwnedIdiomStillSetsAndAPlainIdiomStillSpends() {
         guard case .command(.setBudget(let m)) =
-                DeterministicParser.parse("my budget is an hour", state: makeState()) else {
+                DeterministicParser.parse("my budget is an hour", state: durationState()) else {
             Issue.record("\"my budget is an hour\" stopped setting the budget")
             return
         }
@@ -754,14 +802,14 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         "i keep opening tiktok, absolutely no tiktok for 20 minutes",
     ])
     func anEarlierMentionDoesNotShadowTheRefusal(_ utterance: String) {
-        #expect(DeterministicParser.parse(utterance, state: makeState()) == .silence,
+        #expect(DeterministicParser.parse(utterance, state: durationState()) == .silence,
                 "\"\(utterance)\" opened the door it refuses")
     }
 
     /// The verb-governing negators still leave the ask alone — the scan is
     /// wider across occurrences, not wider across words.
     @Test func aNegatorGoverningAVerbStillLeavesTheAskAlone() {
-        let state = makeState()
+        let state = durationState()
         #expect(spend("i love tiktok, dont give me more than 10 of tiktok", state)?.1 == 10)
         #expect(spend("tiktok tiktok tiktok, give me 20 of tiktok", state)?.1 == 20)
     }
@@ -793,7 +841,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
         "limit tiktok to 2 entire hours a day",
     ])
     func anIntensifiedHourNeverWritesACeiling(_ utterance: String) {
-        var state = makeState()
+        var state = durationState()
         let tiktok = state.doors.first { $0.name == "TikTok" }!
         state.doorCaps[tiktok.id] = 10
         if case .command(.setDoorCap(_, let minutes)) =
@@ -807,7 +855,7 @@ private func spend(_ utterance: String, _ state: PolicyState = makeState()) -> (
     /// nothing, and the group boundary still bounds the walk.
     @Test func theIntensifierInventsNothing() {
         guard case .command(.setDoorCap(_, let m)) =
-                DeterministicParser.parse("cap tiktok at 20 whole minutes", state: makeState()) else {
+                DeterministicParser.parse("cap tiktok at 20 whole minutes", state: durationState()) else {
             Issue.record("a minutes ceiling with an intensifier stopped landing")
             return
         }

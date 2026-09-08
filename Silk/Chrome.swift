@@ -597,6 +597,71 @@ extension View {
     func silkKeyboardHeight(_ height: Binding<CGFloat>) -> some View {
         modifier(KeyboardHeightReader(height: height))
     }
+
+    /// A page column laid out to FIT the glass rather than clip against it.
+    ///
+    /// Both pages that use this are model-driven — six doors at the specified
+    /// spacing overflow a small screen — so the column scales uniformly instead
+    /// of losing rows off the bottom. Silk has nothing to scroll, so a row that
+    /// falls off the paper is a row the user cannot know about.
+    ///
+    /// `height` is the column's own unscaled height, and it is the ONLY thing
+    /// the two pages do not share: it is a sum over that page's rows. Everything
+    /// else here stood twice, including the 96 — a bare literal on each page
+    /// with its derivation written out beside it, which is two places to fix
+    /// when the bar moves and one of them to forget.
+    ///
+    /// THE CHROME IS MEASURED FROM THE GLASS AND THIS COLUMN IS NOT. The pager
+    /// only ignores the TOP inset, so the reader's region already stops at the
+    /// bottom safe-area edge; reserving the full 96 would count that inset twice
+    /// and scale every token down to dodge a collision that isn't there.
+    ///
+    /// THE WORDMARK'S SEAT IS PART OF THE SCAFFOLD, held empty. The mark itself
+    /// lives on the root's own undimmed layer — the one thing that never yields
+    /// to the conversation (handoff README.md:203-205) — so a page that mounted
+    /// its own would double it. The seat keeps the 13pt (and the 62 above it)
+    /// so nothing below moves, which is why both pages' `columnHeight` still
+    /// opens by counting them.
+    ///
+    /// ANIMATIONS STAY AT THE CALL SITE, above this modifier. What each page
+    /// animates differs, and the curve has to wrap the scale as well as the
+    /// rows: a door joining moves rows and the scale together, and both have to
+    /// ride the one curve or the page jumps.
+    func silkFittedColumn(height: CGFloat) -> some View {
+        modifier(SilkFittedColumn(columnHeight: height))
+    }
+}
+
+/// The scaffold behind `silkFittedColumn(height:)`. A `ViewModifier` and not a
+/// wrapper view because the pages read as `column.silkFittedColumn(…)`, which
+/// is the order the scale and the frame are actually applied in.
+private struct SilkFittedColumn: ViewModifier {
+    let columnHeight: CGFloat
+
+    /// Bar bottom 44 (`SilkApp`'s `.padding(.bottom, 44)`) + bar height 52
+    /// (`ComposerBar`, _ds_bundle.css:271). The one place this sum is stated.
+    private static let chromeReserve: CGFloat = 96
+
+    /// The wordmark's seat: 62 above it, 13 of it. Both pages count these two
+    /// numbers into their own `columnHeight`, so they are stated here as the
+    /// thing being counted rather than re-derived in each page's VStack.
+    private static let wordmarkTop: CGFloat = 62
+    private static let wordmarkSeat: CGFloat = 13
+
+    func body(content: Content) -> some View {
+        GeometryReader { geo in
+            let reserve = max(0, Self.chromeReserve - geo.safeAreaInsets.bottom)
+            let usable = geo.size.height - reserve
+            let scale = min(1, usable / max(1, columnHeight))
+            VStack(spacing: 0) {
+                Color.clear.frame(height: Self.wordmarkSeat)
+                    .padding(.top, Self.wordmarkTop)
+                content
+            }
+            .scaleEffect(scale, anchor: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+    }
 }
 
 // ============================================================

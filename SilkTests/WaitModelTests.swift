@@ -15,25 +15,20 @@ import Foundation
 // makes state global to the process, which is why every test starts from
 // `freshModel()`.
 
-@MainActor
-private func freshModel(budget: Int = 40) -> (AppModel, Door) {
-    SharedStore.wipeAll()
-    let model = AppModel()
-    let door = Door(name: "Instagram")
-    model.completeSetup(doors: [door],
-                        doorSelections: [:],
-                        wallSelection: .init(),
-                        budget: budget,
-                        downHours: DownHours(start: TimeOfDay(hour: 22),
-                                             end: TimeOfDay(hour: 7)))
-    return (model, door)
-}
-
 @Suite(.serialized) @MainActor struct WaitModelSmoke {
 
     /// The target itself: if this fails, nothing below means anything.
+    ///
+    /// The window is `nightWellClearOfNow()` and not the 10 PM–7 AM the product
+    /// ships, which is what this fixture used to pin against the real wall
+    /// clock. A suite that ran between ten and seven built a model already
+    /// inside its own night — `isDownHours` true, the day boundary somewhere
+    /// else than every sibling suite assumes — and the only reason nothing here
+    /// failed is that nothing here says anything. It is the same trap
+    /// `OnboardingUITests.launchArguments` documents, and it does not become
+    /// safe by sitting in a smoke test.
     @Test func theAppTargetCanBeBuiltAndItsModelConstructed() {
-        let (model, door) = freshModel()
+        let (model, door) = freshModel(downHours: nightWellClearOfNow())
 
         #expect(model.onboarded)
         #expect(model.policy.doors.count == 1)
@@ -44,22 +39,22 @@ private func freshModel(budget: Int = 40) -> (AppModel, Door) {
 
     /// The price seam the walks drive through `-silkWait`, read directly.
     @Test func theDebugSeamOverridesTheCurveAndTheCurveIsTheDefault() {
-        UserDefaults.standard.removeObject(forKey: "silkWait")
+        defer { unpinTheSeams() }
+        unpinTheSeams()
         #expect(AppModel.waitLength(forMinutes: 20) == Wait.length(forMinutes: 20))
 
         UserDefaults.standard.set("3.5", forKey: "silkWait")
         #expect(AppModel.waitLength(forMinutes: 20) == 3.5)
         UserDefaults.standard.set("0", forKey: "silkWait")
         #expect(AppModel.waitLength(forMinutes: 20) == 0)
-        UserDefaults.standard.removeObject(forKey: "silkWait")
     }
 
     @Test func theStalenessSeamOverridesTheWindowAndTheWindowIsTheDefault() {
-        UserDefaults.standard.removeObject(forKey: "silkStale")
+        defer { unpinTheSeams() }
+        unpinTheSeams()
         #expect(AppModel.waitStaleAfter == Wait.staleAfter)
 
         UserDefaults.standard.set("4", forKey: "silkStale")
         #expect(AppModel.waitStaleAfter == 4)
-        UserDefaults.standard.removeObject(forKey: "silkStale")
     }
 }

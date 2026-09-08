@@ -21,8 +21,6 @@ import Testing
 // any test below — so the suite is hermetic: it fails unless the INJECTED
 // calendar governs the far edge.
 
-private let tiktok = Door(name: "TikTok")
-
 private var newYork: Calendar {
     var c = Calendar(identifier: .gregorian)
     c.timeZone = TimeZone(identifier: "America/New_York")!

@@ -76,8 +76,9 @@ struct MirrorView: View {
         //
         // `closedWeekScores` walks the seven buckets against the day records on
         // every call, and this body used to ask for it four times — once for the
-        // band, three through `lastClosedScore`, which is nothing but its last
-        // element. The caches under it (`dayRecordsCache`, `weekAttemptsCache`)
+        // band, and three more through an accessor on the model that returned
+        // nothing but its last element (deleted since, with its last reader).
+        // The caches under it (`dayRecordsCache`, `weekAttemptsCache`)
         // make each call cheap; they do not make four of them one, and a body
         // that asks the same question four times is a body whose cost moves with
         // whatever the answer is derived from next. So the answer is taken here
@@ -262,6 +263,6 @@ struct MirrorView: View {
             .font(Silk.serif(12.5))
             .tracking(Silk.track(0.02, 12.5))
             .foregroundStyle(night ? Silk.paperAlpha(0.56) : Silk.inkAlpha(0.67))
-            .accessibilityLabel(Text("\(n) \(n == 1 ? SilkStrings.unlockToday : SilkStrings.unlocksToday)"))
+            .accessibilityLabel(Text(SilkStrings.unlocksToday(n)))
     }
 }

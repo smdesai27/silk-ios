@@ -10,24 +10,10 @@ import Testing
 // ABSOLUTE instants; down hours are LOCAL WALL-CLOCK. Every test here is one of
 // those two rules meeting a night that is not 24 hours long.
 
-private let instagram = Door(name: "Instagram")
-
-private let night = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7))
-
 /// The same window ending 7:00, but starting 4:00 AM — the straddle tests need
 /// an ask that is legal at 1:50 AM while the night edge still lies across the
 /// transition. The stock 22:00 start would refuse before the clamp could run.
 private let smallHours = DownHours(start: TimeOfDay(hour: 4), end: TimeOfDay(hour: 7))
-
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
-
-private func at(_ month: Int, _ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
-    cal.date(from: DateComponents(year: 2026, month: month, day: day, hour: hour, minute: minute))!
-}
 
 /// Wall clocks inside the transition hours are skipped (spring) or repeated
 /// (fall), so `at` cannot name those instants unambiguously. The fixtures
@@ -37,7 +23,7 @@ private func seconds(after anchor: Date, _ s: TimeInterval) -> Date {
     anchor.addingTimeInterval(s)
 }
 
-private func makeState(budget: Int = 40, downHours: DownHours = night) -> PolicyState {
+private func dstState(budget: Int = 40, downHours: DownHours = night) -> PolicyState {
     PolicyState(budgetMinutes: budget, downHours: downHours, doors: [instagram])
 }
 
@@ -93,7 +79,7 @@ private func spend(_ minutes: Int, state: PolicyState, at now: Date) -> Verdict 
         // Mar 7, 21:50, ask 30: re-lock at wall-clock 22:00, ten real minutes
         // debited. The 23-hour night ahead changes neither number.
         let now = at(3, 7, 21, 50)
-        guard case .grant(_, let minutes, let relock) = spend(30, state: makeState(), at: now) else {
+        guard case .grant(_, let minutes, let relock) = spend(30, state: dstState(), at: now) else {
             Issue.record("expected clamped grant")
             return
         }
@@ -106,7 +92,7 @@ private func spend(_ minutes: Int, state: PolicyState, at now: Date) -> Verdict 
         // Oct 31, 21:50, ask 30: same clamp, same ten minutes, 25-hour night
         // notwithstanding. The debit is what she can actually spend.
         let now = at(10, 31, 21, 50)
-        guard case .grant(_, let minutes, let relock) = spend(30, state: makeState(), at: now) else {
+        guard case .grant(_, let minutes, let relock) = spend(30, state: dstState(), at: now) else {
             Issue.record("expected clamped grant")
             return
         }
@@ -121,7 +107,7 @@ private func spend(_ minutes: Int, state: PolicyState, at now: Date) -> Verdict 
         // Debiting the wall difference would charge her for the missing hour.
         let now = seconds(after: at(3, 8, 1), 50 * 60)   // 1:50 EST
         guard case .grant(_, let minutes, let relock) =
-                spend(200, state: makeState(budget: 240, downHours: smallHours), at: now) else {
+                spend(200, state: dstState(budget: 240, downHours: smallHours), at: now) else {
             Issue.record("expected clamped grant")
             return
         }
@@ -136,7 +122,7 @@ private func spend(_ minutes: Int, state: PolicyState, at now: Date) -> Verdict 
         // — and 190 is what the budget must record as spent.
         let now = seconds(after: at(11, 1, 0), 110 * 60)   // 1:50 EDT, first pass
         guard case .grant(_, let minutes, let relock) =
-                spend(200, state: makeState(budget: 240, downHours: smallHours), at: now) else {
+                spend(200, state: dstState(budget: 240, downHours: smallHours), at: now) else {
             Issue.record("expected clamped grant")
             return
         }
@@ -155,7 +141,7 @@ private func spend(_ minutes: Int, state: PolicyState, at now: Date) -> Verdict 
         // twenty later by the clock face.
         let now = seconds(after: at(3, 8, 1), 50 * 60)   // 1:50 EST
         guard case .grant(_, let minutes, let relock) =
-                spend(20, state: makeState(downHours: smallHours), at: now) else {
+                spend(20, state: dstState(downHours: smallHours), at: now) else {
             Issue.record("expected grant")
             return
         }
@@ -177,7 +163,7 @@ private func spend(_ minutes: Int, state: PolicyState, at now: Date) -> Verdict 
         // — open through minute 19, gone at the instant.
         let now = seconds(after: at(11, 1, 0), 110 * 60)   // 1:50 EDT, first pass
         guard case .grant(_, let minutes, let relock) =
-                spend(20, state: makeState(downHours: smallHours), at: now) else {
+                spend(20, state: dstState(downHours: smallHours), at: now) else {
             Issue.record("expected grant")
             return
         }
@@ -206,8 +192,8 @@ private func spend(_ minutes: Int, state: PolicyState, at now: Date) -> Verdict 
         #expect(Validator.timeOfDay(lastEST, calendar: cal) == TimeOfDay(hour: 1, minute: 59))
         #expect(Validator.timeOfDay(firstEDT, calendar: cal) == TimeOfDay(hour: 3))
         #expect(night.contains(TimeOfDay(hour: 2, minute: 30)))
-        #expect(spend(10, state: makeState(), at: lastEST) == .refuseDownHours(until: TimeOfDay(hour: 7)))
-        #expect(spend(10, state: makeState(), at: firstEDT) == .refuseDownHours(until: TimeOfDay(hour: 7)))
+        #expect(spend(10, state: dstState(), at: lastEST) == .refuseDownHours(until: TimeOfDay(hour: 7)))
+        #expect(spend(10, state: dstState(), at: firstEDT) == .refuseDownHours(until: TimeOfDay(hour: 7)))
     }
 
     @Test func oneThirtyHappensTwiceOnFallBackNightAndIsDownBothTimes() {
@@ -216,11 +202,21 @@ private func spend(_ minutes: Int, state: PolicyState, at now: Date) -> Verdict 
         // night runs 25 absolute hours. That is the decision, not a defect.
         let first = seconds(after: at(11, 1, 0), 90 * 60)   // 1:30 EDT
         let second = seconds(after: first, 3600)            // 1:30 EST
-        #expect(second.timeIntervalSince(first) == 3600)
+        // THE FIXTURE REALLY STRADDLES THE TRANSITION. `second.timeIntervalSince
+        // (first) == 3600` used to stand here and could not fail: `second` is
+        // `first` plus 3600 by construction. What is actually worth pinning is
+        // that the hour between them is the one the zone gives back — the
+        // offset moves by exactly an hour — because that is what makes these
+        // two instants the SAME wall clock rather than two ordinary readings
+        // an hour apart, and it is the only thing that would notice if 2026's
+        // transition date ever moved out from under this file.
+        #expect(cal.timeZone.secondsFromGMT(for: first)
+                - cal.timeZone.secondsFromGMT(for: second) == 3600,
+                "Nov 1 1:30–2:30 is not the repeated hour on this calendar")
         #expect(Validator.timeOfDay(first, calendar: cal) == TimeOfDay(hour: 1, minute: 30))
         #expect(Validator.timeOfDay(second, calendar: cal) == TimeOfDay(hour: 1, minute: 30))
         #expect(night.contains(TimeOfDay(hour: 1, minute: 30)))
-        #expect(spend(10, state: makeState(), at: first) == .refuseDownHours(until: TimeOfDay(hour: 7)))
-        #expect(spend(10, state: makeState(), at: second) == .refuseDownHours(until: TimeOfDay(hour: 7)))
+        #expect(spend(10, state: dstState(), at: first) == .refuseDownHours(until: TimeOfDay(hour: 7)))
+        #expect(spend(10, state: dstState(), at: second) == .refuseDownHours(until: TimeOfDay(hour: 7)))
     }
 }

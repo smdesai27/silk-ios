@@ -62,21 +62,16 @@ private func performSpend(door: String, minutes: Int) async throws {
 }
 
 /// The intent's whole world is the App Group, so the fixture writes a policy and
-/// stops there.
+/// stops there — `TestSupport.freshPolicy`, which is also `SpendIntentTests`'.
 ///
-/// Deliberately no `AppModel`: a model starts its minute clock, and a clock that
-/// syncs the ledger and reconciles the wall on its own schedule is a second
-/// writer standing inside a test whose entire subject is which write happened
-/// when.
-@MainActor
-private func freshPolicy(budget: Int = 40) -> Door {
-    SharedStore.wipeAll()
-    let door = Door(name: "Instagram")
-    SharedStore.save(policy: PolicyState(budgetMinutes: budget,
-                                         downHours: nightWellClearOfNow(),
-                                         doors: [door]))
-    return door
-}
+/// **The copy this file used to hold reset nothing.** `SpendIntent.lastDialog`,
+/// `beforeGrantSave` and `testForceWallUp`, and `WallController.testForceArmed`,
+/// are process-global and are armed by the sibling suite — so whichever of the
+/// two ran second inherited the other's seams. A forced-armed wall makes the
+/// grant leg below stand where the honest simulator path rolls it back, which
+/// is precisely the fork `theWholeTransactionIsFinishedWhenPerformReturns`
+/// exists to walk both sides of: the leak did not fail the test, it silently
+/// chose which half of it ran. The shared fixture clears all four.
 
 @Suite(.serialized) @MainActor struct SpendIntentIsNotGated {
 

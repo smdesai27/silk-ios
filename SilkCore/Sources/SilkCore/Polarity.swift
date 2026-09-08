@@ -102,6 +102,13 @@ public enum PolarityEngine {
         case .setDownHoursEnd(let t):
             s.downHours.end = t
         case .addDoor(let name):
+            // Unreachable from any sentence: the Validator answers `.addDoor`
+            // with `.refuseDoorNeedsApp` before a proposal is ever built, so no
+            // utterance reaches this line. It stays as defence in depth — this
+            // function's contract is "every command, from any parser", and a
+            // switch arm missing for a case the enum still carries is how a
+            // later loosening of that refusal would silently get no polarity at
+            // all.
             s.doors.append(Door(name: name))
         case .removeDoor(let door):
             s.doors.removeAll { $0.id == door.id }

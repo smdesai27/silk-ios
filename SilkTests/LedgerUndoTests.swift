@@ -41,14 +41,10 @@ import UIKit
 /// is turned off and the grant lands on `handle`'s own pass.
 @MainActor
 private func twoDoorModel(budget: Int = 40) -> (AppModel, Door, Door) {
-    SharedStore.wipeAll()
-    UserDefaults.standard.set("0", forKey: "silkWait")
-    let model = AppModel()
     let instagram = Door(name: "Instagram")
     let youtube = Door(name: "YouTube")
-    model.completeSetup(doors: [instagram, youtube], doorSelections: [:],
-                        wallSelection: .init(), budget: budget,
-                        downHours: nightWellClearOfNow())
+    let (model, _) = freshModel(budget: budget, doors: [instagram, youtube],
+                                downHours: nightWellClearOfNow(), silkWait: "0")
     return (model, instagram, youtube)
 }
 
@@ -61,13 +57,13 @@ private func twoDoorModel(budget: Int = 40) -> (AppModel, Door, Door) {
     /// user has already been answered for and already spent minutes on. The
     /// offer expires instead, silently and completely: nothing moves, the pill
     /// goes, and the reply keeps stating what actually happened.
-    @Test func anOlderClosePillCannotUndoANewerGrant() async {
+    @Test func anOlderClosePillCannotUndoANewerGrant() async throws {
         defer { unpinTheSeams() }
         let (model, instagram, youtube) = twoDoorModel(budget: 40)
         let close = "no more instagram today"
         let grant = "give me 10 minutes of youtube"
-        claimed(close, model)
-        claimed(grant, model)
+        try claimed(close, model)
+        try claimed(grant, model)
 
         await model.handle(close)
         let closeTurn = model.conversation.turns.last!
@@ -100,13 +96,13 @@ private func twoDoorModel(budget: Int = 40) -> (AppModel, Door, Door) {
     /// shut Instagram, then tap the GRANT's pill: the grant's snapshot predates
     /// the close, and restoring it would lift a tighten she made a second ago —
     /// which is the one direction canon never allows a mistake in.
-    @Test func anOlderGrantPillCannotUndoANewerClose() async {
+    @Test func anOlderGrantPillCannotUndoANewerClose() async throws {
         defer { unpinTheSeams() }
         let (model, instagram, youtube) = twoDoorModel(budget: 40)
         let grant = "give me 10 minutes of youtube"
         let close = "no more instagram today"
-        claimed(grant, model)
-        claimed(close, model)
+        try claimed(grant, model)
+        try claimed(close, model)
 
         await model.handle(grant)
         let grantTurn = model.conversation.turns.last!
@@ -141,11 +137,11 @@ private func twoDoorModel(budget: Int = 40) -> (AppModel, Door, Door) {
     /// lift, one sentence — and the whole of it comes back on one tap. A
     /// per-door receipt or a per-door pill would be a different product; the
     /// count assertions are what hold that.
-    @Test func blockEverythingShutsEveryDoorAndComesBackWhole() async {
+    @Test func blockEverythingShutsEveryDoorAndComesBackWhole() async throws {
         defer { unpinTheSeams() }
         let (model, instagram, youtube) = twoDoorModel(budget: 40)
         let sentence = "block everything"
-        claimed(sentence, model)
+        try claimed(sentence, model)
 
         await model.handle(sentence)
 

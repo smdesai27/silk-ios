@@ -14,78 +14,12 @@ import XCTest
 /// by a bigger number, so the taps here prove they landed and the app is put
 /// down deliberately rather than left to be killed. Where a number did grow,
 /// the comment beside it names the slow thing it is waiting on.
-final class OnboardingUITests: XCTestCase {
+final class OnboardingUITests: SilkWalk {
 
-    // MARK: - How long the walk waits
-
-    // Four waits with reasons rather than one number repeated. `timeout: 5`
-    // everywhere was generous for a label already on screen and short for a
-    // cold process's first frame, and it read as a considered value in both
-    // places when it was only ever considered in one.
-
-    /// Something the current screen already owns: a row, a label, a chip, a
-    /// state that has just changed. The shortest of the four, because a miss
-    /// here is a real absence and there is nothing slow standing between the
-    /// tap and it — but not as short as it looks, because a single element
-    /// query against a busy runner can itself cost a second or two, and a wait
-    /// has to be able to afford several of them before it calls something gone.
-    private static let appear: TimeInterval = 12
-
-    /// A sheet or an overlay arriving on a gesture. Longer because a sheet's
-    /// own 0.4s curve is the smallest part of what it waits on: a simulator
-    /// xcodebuild has just booted is still serving the app's first launch, the
-    /// accessibility server's first tree, and Screen Time's daemons waking, and
-    /// the presentation queues behind all of it.
-    private static let overlay: TimeInterval = 20
-
-    /// The first thing a freshly launched process draws. A cold launch on a
-    /// loaded runner is the slowest operation in the suite by a wide margin,
-    /// and it is the one place a long wait costs nothing when things are well.
-    ///
-    /// 30 was measured on this hardware and was still too tight on GitHub's:
-    /// the first launch of a run there, against a simulator booted seconds
-    /// earlier on a shared host, missed it and took the suite red on `main`
-    /// with the fix for the swallowed tap already in. Ninety is not a guess at
-    /// how slow a runner can be so much as an admission that we do not know —
-    /// and it is free, because `waitForExistence` returns the instant the
-    /// element appears. A generous ceiling here lengthens only genuine
-    /// failures, which are the runs nobody is waiting on anyway.
-    private static let launch: TimeInterval = 90
-
-    /// A reply in the thread. The bar answers behind a deliberate ~480ms beat
-    /// and the parse that precedes it, so this is the beat plus room.
-    private static let answer: TimeInterval = 15
-
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-    }
-
-    /// XCTest kills every app a test launched when the method returns, and that
-    /// implicit kill is where CI died: "Failed to terminate
-    /// com.silkapp.silk:5985", on a branch carrying no Swift at all. The
-    /// timing is not a mystery. A test ends the instant its last assertion
-    /// passes, which is routinely the instant the app is still finishing what
-    /// the assertion only saw the front of — a grant re-applies the wall and
-    /// arms two DeviceActivity schedules, all of it XPC to Screen Time's
-    /// daemons, and a process waiting on a daemon answers a kill late. On a
-    /// loaded runner, late enough.
-    ///
-    /// Putting the app down here does two things the implicit kill cannot. It
-    /// backgrounds first, so the app is suspended with nothing in flight by the
-    /// time the kill lands, and it waits for the process to actually reach
-    /// notRunning rather than assuming it did. By the time XCTest's own
-    /// teardown runs there is nothing left running for it to fail against.
-    ///
-    /// `assumeIsolated` rather than a `@MainActor` override: XCTest calls
-    /// teardown on the main thread for a synchronous test case, but the base
-    /// declaration is not isolated, so an override cannot claim to be. The two
-    /// helpers it reaches are static for the same reason — a non-Sendable test
-    /// case cannot be handed across the hop, and neither of them wants one.
-    override func tearDown() {
-        MainActor.assumeIsolated {
-            OnboardingUITests.stop(XCUIApplication())
-        }
-    }
+    // The waits, the taps, the typing and the teardown live in `SilkWalk`
+    // (WalkSupport.swift) — this file's originals, moved rather than rewritten,
+    // with the comments that say what each one exists for. They were copied
+    // into two other walk files without those comments; the copies are gone.
 
     /// Launch arguments every walk shares: wiped state, and the night window
     /// parked six hours ahead of the wall clock. A fixed window is a trap that
@@ -106,76 +40,32 @@ final class OnboardingUITests: XCTestCase {
                 // suite.
                 //
                 // How much that actually covers, counted rather than assumed: a
-                // veil rises on a *grant*, and of the nine sentences the walks
-                // above line 1387 type, four are grants (:425, :531, :911,
-                // :1051). So four older walks raise and land a veil incidentally
-                // — worth having, because it means a regression in the rise
-                // breaks tests that are not about the wait. The **pause** is
-                // walked only by the two departure tests below; the sole other
-                // `press(.home)` in this file is in `stop(_:)`'s teardown. An
-                // earlier version of this comment claimed the overlay "rises,
-                // pauses and lands in every walk below", which overstated the
-                // net by five times.
+                // veil rises on a *grant*, and four of the walks that predate
+                // the wait type one —
+                //
+                //   testOnboardingWalkthroughAndFirstGrant
+                //   testOverAskClampsToBalance
+                //   testSettingsCapCommitTightensAndTheRowReadsItBack
+                //   testACapSetOverARunningGrantDoesNotClaimTheDoorIsShut
+                //
+                // — so those four raise and land a veil incidentally, which is
+                // worth having: a regression in the rise breaks tests that are
+                // not about the wait. The **pause** is walked only by the two
+                // departure tests under "The wait" below; the sole other
+                // `press(.home)` in this bundle is in `SilkWalk.stop(_:)`'s
+                // teardown.
+                //
+                // Named rather than cited by line, which is the second
+                // correction here. The list used to read ":425, :531, :911,
+                // :1051" and every one of the four was stale — the file has
+                // been edited a dozen times since and a line number is a
+                // citation that rots silently. (An earlier version also claimed
+                // the overlay "rises, pauses and lands in every walk below",
+                // which overstated the net by five times.)
                 "-silkWait", "0.6"]
     }()
 
-    /// The Screen Time consent alert is SpringBoard's, not ours, and on iOS 26
-    /// the simulator really presents it — left standing it swallows the next
-    /// tap. Continue only leads deeper, to an "Allow with Passcode" sheet no
-    /// passcode-less simulator can finish, so the one deterministic path is to
-    /// decline — which the app deliberately doesn't gate on there (the request
-    /// is fire-and-forget on the simulator).
-    ///
-    /// Tapping decline is not the same as the alert being gone: SpringBoard
-    /// dismisses on its own curve and the app underneath takes no touches until
-    /// it has, so the walk waits the alert out instead of racing its exit. The
-    /// answer is remembered per simulator, so most runs find nothing here and
-    /// the report of that is what the retry path uses to decide it is looking
-    /// at a different problem.
-    @MainActor
-    @discardableResult
-    private static func dismissScreenTimeConsent(timeout: TimeInterval = 4) -> Bool {
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        // "Don't Allow", curly quote and all — matched loosely so the copy
-        // owning the apostrophe stays Apple's problem.
-        let decline = springboard.alerts.buttons.matching(
-            NSPredicate(format: "label BEGINSWITH %@", "Don")).firstMatch
-        guard decline.waitForExistence(timeout: timeout) else { return false }
-        decline.tap()
-        _ = decline.waitForNonExistence(timeout: Self.appear)
-        return true
-    }
-
-    // MARK: - Waiting, and tapping only when a tap can land
-
-    /// The one place a predicate becomes a wait. `waitForExistence` is the only
-    /// wait XCTest hands out and existence is the weakest thing worth knowing
-    /// about an element, so everything below asks a sharper question through
-    /// here.
-    ///
-    /// The loop is not belt and braces. A predicate expectation over an
-    /// XCUIElement answers by running a fresh accessibility query, and on a
-    /// loaded runner that query can fail outright rather than come back false —
-    /// at which point the waiter stops early and reports exactly what it would
-    /// report for an element that was never there. That is how a Done button
-    /// which was on screen and enabled came back as "never became tappable" two
-    /// seconds into an eight-second wait, on a machine where an ordinary
-    /// `waitForExistence(timeout: 8)` was meanwhile taking fifteen minutes. A
-    /// question that went unanswered is not a no, so it is asked again until
-    /// the deadline has genuinely passed.
-    @MainActor
-    private func wait(for element: XCUIElement, _ predicate: String,
-                      _ arguments: [Any] = [], timeout: TimeInterval) -> Bool {
-        let deadline = Date.now.addingTimeInterval(timeout)
-        repeat {
-            let expectation = XCTNSPredicateExpectation(
-                predicate: NSPredicate(format: predicate, argumentArray: arguments),
-                object: element)
-            let left = max(deadline.timeIntervalSinceNow, 1)
-            if XCTWaiter().wait(for: [expectation], timeout: left) == .completed { return true }
-        } while Date.now < deadline
-        return false
-    }
+    // MARK: - Reading a state once it has arrived
 
     /// A state read that waits for the state to arrive. SwiftUI settles a
     /// change and the accessibility server publishes it on a beat of its own,
@@ -185,7 +75,7 @@ final class OnboardingUITests: XCTestCase {
     /// value that never arrives still fails, only later.
     @MainActor
     private func expect(_ element: XCUIElement, _ predicate: String, args: [Any] = [],
-                        _ what: String, timeout: TimeInterval = OnboardingUITests.appear,
+                        _ what: String, timeout: TimeInterval = SilkWalk.appear,
                         file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(wait(for: element, predicate, args, timeout: timeout),
                       what, file: file, line: line)
@@ -203,81 +93,6 @@ final class OnboardingUITests: XCTestCase {
                         file: StaticString = #filePath, line: UInt = #line) {
         expect(element, "label CONTAINS %@", args: [fragment],
                "\(what) — read \"\(element.label)\"", file: file, line: line)
-    }
-
-    /// A tap that waits until it can land. `exists` is answered from a snapshot
-    /// of the accessibility tree and says nothing about whether a touch would
-    /// reach the element: a row still sliding in under a page transition, or a
-    /// chip under SpringBoard's alert, exists and is not hittable. A tap
-    /// delivered then is not an error — it goes somewhere harmless and the walk
-    /// carries on against a screen that never changed, which is how a missed
-    /// tap surfaces five seconds later and two helpers away from where it
-    /// actually happened.
-    @MainActor
-    private func tap(_ element: XCUIElement, _ what: String,
-                     timeout: TimeInterval = OnboardingUITests.appear,
-                     file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertTrue(wait(for: element, "exists == true AND isHittable == true", timeout: timeout),
-                      "\(what) never became tappable", file: file, line: line)
-        element.tap()
-    }
-
-    /// A tap that has to raise something, and proves it did — asking a second
-    /// time when it did not.
-    ///
-    /// The tap that goes missing here is not hypothetical. Setup's permission
-    /// step fires `requestAuthorization` and deliberately does not wait for it,
-    /// so SpringBoard's consent alert arrives whenever its daemon gets to it,
-    /// which on a loaded machine is after the few seconds anyone is willing to
-    /// stand and wait for it — and it lands over the chips and eats the next
-    /// touch. That is the local failure this file was opened for: a chip tap
-    /// swallowed during setup, and then a five-second wait for a sheet nothing
-    /// had asked for.
-    ///
-    /// Asking again is the same request rather than a different one, which is
-    /// what makes it safe. `OnboardingView.toggleDoor` reads a second tap on a
-    /// named-but-unbound chip as another try at binding, not a deselect, and
-    /// every other trigger here — Other apps, a Settings row, Rebind, an add
-    /// chip, a page dot — only sets state it already wanted. The second tap is
-    /// made only when nothing arrived at all and the trigger is still standing
-    /// there to be tapped, so a slow presentation is waited out rather than
-    /// tapped through, and a trigger that has gone means the first tap landed.
-    @MainActor
-    private func tap(_ trigger: XCUIElement, _ what: String,
-                     raising target: XCUIElement, _ raised: String,
-                     timeout: TimeInterval = OnboardingUITests.overlay,
-                     file: StaticString = #filePath, line: UInt = #line) {
-        tap(trigger, what, file: file, line: line)
-        if target.waitForExistence(timeout: timeout) { return }
-        Self.dismissScreenTimeConsent(timeout: 0)
-        if trigger.isHittable { trigger.tap() }
-        XCTAssertTrue(target.waitForExistence(timeout: timeout),
-                      "\(raised) did not rise on \(what)", file: file, line: line)
-    }
-
-    /// Puts the app down and waits until it is actually gone, rather than
-    /// asking and moving on. Used between the relaunches a test makes and again
-    /// in teardown, so the process is never killed while it is busy and never
-    /// assumed dead while it is dying. A consent alert left standing outlives
-    /// the process and would land over whatever launches next, so it goes
-    /// first.
-    @MainActor
-    private static func stop(_ app: XCUIApplication) {
-        guard app.state != .notRunning else { return }
-        dismissScreenTimeConsent(timeout: 0)
-        // Suspension is the ideal moment to kill — a suspended process holds
-        // nothing open — but iOS takes its own time about getting there and
-        // measurably will not inside eight seconds, so this asks and does not
-        // insist. The state that actually matters arrives in the first beat
-        // after the press: out of the foreground, the scene resigned, the UI
-        // stopped, and whatever the last assertion caught mid-write given its
-        // moment to finish.
-        XCUIDevice.shared.press(.home)
-        _ = app.wait(for: .runningBackgroundSuspended, timeout: 2)
-        app.terminate()
-        guard !app.wait(for: .notRunning, timeout: Self.appear) else { return }
-        app.terminate()
-        _ = app.wait(for: .notRunning, timeout: Self.appear)
     }
 
     /// A fresh, deterministic launch: wiped state, parked night window.
@@ -333,52 +148,6 @@ final class OnboardingUITests: XCTestCase {
         tap(done, "Done", file: file, line: line)
         XCTAssertTrue(header.waitForNonExistence(timeout: Self.overlay),
                       "the picker sheet did not come down", file: file, line: line)
-    }
-
-    /// Identifier lookup that does not guess the element's type: a combined
-    /// Settings row reads as a button on some releases and a plain element on
-    /// others, and the picker's layers are bare stacks.
-    @MainActor
-    private func element(_ app: XCUIApplication, _ id: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: id).firstMatch
-    }
-
-    /// Types a sentence at the bar. The tap has to take focus before a
-    /// character can go anywhere, and the bar is the last thing to settle when
-    /// a page or an overlay has just moved, so it waits to be tappable like
-    /// every other tap here.
-    @MainActor
-    private func say(_ bar: XCUIElement, _ sentence: String,
-                     file: StaticString = #filePath, line: UInt = #line) {
-        tap(bar, "the bar", file: file, line: line)
-        // On a cold simulator the session's FIRST focus has been seen to take
-        // and then drop: the stage dims and the bar rises five seconds after
-        // the tap, holds for eight, and snaps back to its dock with no
-        // keyboard just as the typing starts — "neither element nor any
-        // descendant has keyboard focus". Six runs in eleven, first-in-lane
-        // or right after a build, never on a warm simulator, and the app
-        // itself has no path that resigns the field before a sentence
-        // (`SilkApp`'s tap-out catcher and the wait's veil are the only two,
-        // and neither can fire yet). The cause is not found; the recording
-        // and hierarchy are in the 2026-09-02 scout notes. So the walk waits
-        // for focus and, if it went, asks once more — a bar that will not
-        // hold focus twice is still a failure, and every other assertion in
-        // the suite is unchanged.
-        if !waitForFocus(bar, timeout: 4) {
-            tap(bar, "the bar, again", file: file, line: line)
-            _ = waitForFocus(bar, timeout: 4)
-        }
-        bar.typeText(sentence)
-    }
-
-    /// Whether `element` has keyboard focus within `timeout`, polled the way
-    /// XCTest itself checks before it types.
-    @MainActor
-    @discardableResult
-    private func waitForFocus(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
-        let focused = expectation(for: NSPredicate(format: "hasKeyboardFocus == true"),
-                                  evaluatedWith: element)
-        return XCTWaiter().wait(for: [focused], timeout: timeout) == .completed
     }
 
     /// The backdrop is the picker's commit button, but the wheels fold into
@@ -491,11 +260,9 @@ final class OnboardingUITests: XCTestCase {
         // The reply is a sentence now, not a time-statement: the current design
         // gives the bar a conversation, so "Instagram · 10 · till 5:12" became
         // "Instagram is open for 10 min."
-        let readBack = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Instagram is open for 10")
-        ).firstMatch
+        let readBack = reply(app, containing: "Instagram is open for 10")
         XCTAssertTrue(readBack.waitForExistence(timeout: Self.answer), "grant read-back did not appear")
-        XCTAssertTrue(app.staticTexts["30"].waitForExistence(timeout: Self.appear), "ensō did not debit to 30")
+        XCTAssertTrue(enso(app, reading: 30).waitForExistence(timeout: Self.appear), "ensō did not debit to 30")
     }
 
     /// Every chip tap must say what the system picker never does: one app
@@ -594,12 +361,10 @@ final class OnboardingUITests: XCTestCase {
         // a grant sentence, never a refusal. The reply lands in the thread
         // after the deliberate ~480ms beat, so the wait is generous.
         say(bar, "give me sixty minutes of reddit\n")
-        let clamped = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Reddit is open for 40")
-        ).firstMatch
+        let clamped = reply(app, containing: "Reddit is open for 40")
         XCTAssertTrue(clamped.waitForExistence(timeout: Self.answer), "clamped grant read-back did not appear")
         // The clamp is real, not just spoken: the whole balance was debited.
-        XCTAssertTrue(app.staticTexts["0"].waitForExistence(timeout: Self.appear), "ensō did not debit to 0")
+        XCTAssertTrue(enso(app, reading: 0).waitForExistence(timeout: Self.appear), "ensō did not debit to 0")
     }
 
     /// The wall's truth-telling row (docs/market/gaps.md #5). The standing is
@@ -646,20 +411,19 @@ final class OnboardingUITests: XCTestCase {
         // number — so DeterministicParser resolves it without the model and
         // the outcome cannot drift run to run.
         say(bar, "no more reddit today\n")
-        let closed = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Reddit closed until")
-        ).firstMatch
+        let closed = reply(app, containing: "Reddit closed until")
         XCTAssertTrue(closed.waitForExistence(timeout: Self.answer), "close read-back did not appear")
 
         let undoPill = app.buttons["silk.turn.undo"]
         XCTAssertTrue(undoPill.waitForExistence(timeout: Self.appear), "the tighten offered no way back")
-        tap(undoPill, "the thread's Undo", raising: app.staticTexts["Put back."], "the Undo reply")
+        tap(undoPill, "the thread's Undo",
+            raising: reply(app, saying: SilkStringsMirror.putBack), "the Undo reply")
 
         // The restore is real, not just spoken: status names a closed door
         // when there is one, and after Undo it has none to name — the reply
         // is the bare balance, nothing appended.
         say(bar, "status\n")
-        XCTAssertTrue(app.staticTexts["40 min left."].waitForExistence(timeout: Self.answer),
+        XCTAssertTrue(reply(app, saying: "40 min left.").waitForExistence(timeout: Self.answer),
                       "status did not read a clean balance after Undo")
     }
 
@@ -671,10 +435,10 @@ final class OnboardingUITests: XCTestCase {
         let bar = completeSetup(app)
 
         say(bar, "status\n")
-        XCTAssertTrue(app.staticTexts["40 min left."].waitForExistence(timeout: Self.answer),
+        XCTAssertTrue(reply(app, saying: "40 min left.").waitForExistence(timeout: Self.answer),
                       "status did not answer with the balance")
         // Nothing was spent by asking.
-        XCTAssertTrue(app.staticTexts["40"].exists, "the ensō moved on a question")
+        XCTAssertTrue(enso(app, reading: 40).exists, "the ensō moved on a question")
     }
 
     /// The budget row raises the wheel; the backdrop takes it down. Commit and
@@ -728,24 +492,6 @@ final class OnboardingUITests: XCTestCase {
             .matching(identifier: "silk.settings.budget")
             .matching(NSPredicate(format: "label CONTAINS %@", "40 min")).firstMatch
         XCTAssertTrue(restored.waitForExistence(timeout: Self.appear), "Undo did not restore the budget")
-    }
-
-    /// The editor's backdrop is the exit; like the wheel's, its element does
-    /// not surface reliably, so tap through the overlay itself, low, where
-    /// only the backdrop listens. Existence and a usable frame, not
-    /// hittability: the veil is a full-screen button whose centre is covered,
-    /// and querying `isHittable` on that shape can fail the test outright.
-    @MainActor
-    private func tapEditorBackdrop(_ app: XCUIApplication) {
-        let overlay = element(app, "silk.settings.editor")
-        _ = overlay.waitForExistence(timeout: Self.appear)
-        let deadline = Date.now.addingTimeInterval(Self.appear)
-        repeat {
-            let frame = overlay.frame
-            if overlay.exists && frame.width > 100 && frame.height > 100 { break }
-            RunLoop.current.run(until: Date.now.addingTimeInterval(0.05))
-        } while Date.now < deadline
-        overlay.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.94)).tap()
     }
 
     /// A door row raises the door's detail card — Change app and Remove demoted
@@ -981,12 +727,10 @@ final class OnboardingUITests: XCTestCase {
         // tap.
         tap(app.buttons["silk.dot.0"], "the Now dot")
         say(bar, "give me sixty minutes of reddit\n")
-        let capped = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Reddit is open for 20")
-        ).firstMatch
+        let capped = reply(app, containing: "Reddit is open for 20")
         XCTAssertTrue(capped.waitForExistence(timeout: Self.answer),
                       "the grant was not clamped to the door's own ceiling")
-        XCTAssertTrue(app.staticTexts["20"].waitForExistence(timeout: Self.appear),
+        XCTAssertTrue(enso(app, reading: 20).waitForExistence(timeout: Self.appear),
                       "ensō did not debit the pool by the capped grant")
     }
 
@@ -1121,9 +865,7 @@ final class OnboardingUITests: XCTestCase {
         let bar = completeSetup(app)   // one door: Reddit, budget 40
 
         say(bar, "give me thirty minutes of reddit\n")
-        let granted = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Reddit is open for 30")
-        ).firstMatch
+        let granted = reply(app, containing: "Reddit is open for 30")
         XCTAssertTrue(granted.waitForExistence(timeout: Self.answer), "the grant did not land")
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).tap()
 
@@ -1234,7 +976,7 @@ final class OnboardingUITests: XCTestCase {
         // 40 → 35 is a tighten, so it lands instantly and the receipt states the
         // balance it leaves. No wheel can express 35.
         say(bar, "set the budget to 35\n")
-        XCTAssertTrue(app.staticTexts["35 left today."].waitForExistence(timeout: Self.answer),
+        XCTAssertTrue(reply(app, saying: "35 left today.").waitForExistence(timeout: Self.answer),
                       "the off-grid budget did not land")
 
         // The thread's tap-out catcher covers the screen while the bar holds
@@ -1408,8 +1150,7 @@ final class OnboardingUITests: XCTestCase {
 
         // Raising a ceiling from infinity is a tighten, so it lands now.
         say(bar, "cap reddit at 25\n")
-        let landed = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Reddit 25")).firstMatch
+        let landed = reply(app, containing: "Reddit 25")
         XCTAssertTrue(landed.waitForExistence(timeout: Self.answer),
                       "the off-grid ceiling did not land")
 
@@ -1479,17 +1220,15 @@ final class OnboardingUITests: XCTestCase {
         // What it can prove about the veil is that touches do not pass through
         // it and the keyboard is down, which
         // `testASecondAskCannotLandBehindAStandingWait` does.
-        XCTAssertTrue(app.staticTexts["40"].exists,
+        XCTAssertTrue(enso(app, reading: 40).exists,
                       "the balance moved before the wait was paid")
 
         XCTAssertTrue(wait.waitForNonExistence(timeout: Self.answer),
                       "the wait never came down")
-        let readBack = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Reddit is open for 10")
-        ).firstMatch
+        let readBack = reply(app, containing: "Reddit is open for 10")
         XCTAssertTrue(readBack.waitForExistence(timeout: Self.answer),
                       "the wait ended without answering the turn it was holding")
-        XCTAssertTrue(app.staticTexts["30"].waitForExistence(timeout: Self.appear),
+        XCTAssertTrue(enso(app, reading: 30).waitForExistence(timeout: Self.appear),
                       "the grant did not land when the ink did")
     }
 
@@ -1529,7 +1268,7 @@ final class OnboardingUITests: XCTestCase {
         // over: what is left is the balance of eight seconds, not eight more.
         XCTAssertTrue(wait.waitForNonExistence(timeout: Self.answer),
                       "the wait did not resume when she came back")
-        XCTAssertTrue(app.staticTexts["30"].waitForExistence(timeout: Self.answer),
+        XCTAssertTrue(enso(app, reading: 30).waitForExistence(timeout: Self.answer),
                       "the resumed wait never landed its grant")
     }
 
@@ -1543,14 +1282,12 @@ final class OnboardingUITests: XCTestCase {
         let bar = completeSetup(app)
 
         say(bar, "unlock reddit for ten\n")
-        let readBack = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Reddit is open for 10")
-        ).firstMatch
+        let readBack = reply(app, containing: "Reddit is open for 10")
         XCTAssertTrue(readBack.waitForExistence(timeout: Self.answer),
                       "the grant read-back did not appear")
         XCTAssertFalse(element(app, "silk.wait").exists,
                        "a wait too short to draw was drawn anyway")
-        XCTAssertTrue(app.staticTexts["30"].waitForExistence(timeout: Self.appear),
+        XCTAssertTrue(enso(app, reading: 30).waitForExistence(timeout: Self.appear),
                       "the grant did not debit")
     }
 
@@ -1611,13 +1348,12 @@ final class OnboardingUITests: XCTestCase {
         // The veil is gone, and it took the ask with it.
         XCTAssertTrue(wait.waitForNonExistence(timeout: Self.overlay),
                       "a wait abandoned past its window was still standing")
-        XCTAssertTrue(app.staticTexts["40"].waitForExistence(timeout: Self.appear),
+        XCTAssertTrue(enso(app, reading: 40).waitForExistence(timeout: Self.appear),
                       "an abandoned wait spent minutes")
-        XCTAssertFalse(app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Reddit is open")
-        ).firstMatch.exists, "an abandoned wait opened the door anyway")
+        XCTAssertFalse(reply(app, containing: "Reddit is open").exists,
+                       "an abandoned wait opened the door anyway")
         // No orphaned "…" left standing where the answer would have gone.
-        XCTAssertFalse(app.staticTexts["…"].exists,
+        XCTAssertFalse(reply(app, saying: "…").exists,
                        "the dropped ask left the thread still thinking")
 
         // And the model is still running: the clock came back with the veil.
@@ -1630,7 +1366,7 @@ final class OnboardingUITests: XCTestCase {
         // matches the balance answer exactly; this is the same string, for the
         // same reason.
         say(bar, "how many left\n")
-        XCTAssertTrue(app.staticTexts["40 min left."].waitForExistence(timeout: Self.answer),
+        XCTAssertTrue(reply(app, saying: "40 min left.").waitForExistence(timeout: Self.answer),
                       "the bar went dead after a wait was dropped")
     }
 
@@ -1667,9 +1403,8 @@ final class OnboardingUITests: XCTestCase {
         veil.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.92)).tap()
         XCTAssertTrue(element(app, "silk.wait").exists,
                       "a tap through the veil dismissed the wait")
-        XCTAssertFalse(app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Reddit is open")
-        ).firstMatch.exists, "a tap through the veil landed the grant early")
+        XCTAssertFalse(reply(app, containing: "Reddit is open").exists,
+                       "a tap through the veil landed the grant early")
 
         // And the tap did not quietly tear the conversation down behind the
         // veil. This is the falsifiable half: the catcher under the veil sets
@@ -1687,9 +1422,8 @@ final class OnboardingUITests: XCTestCase {
         let restOfTheWait = Self.answer + 20
         XCTAssertTrue(veil.waitForNonExistence(timeout: restOfTheWait),
                       "the wait never came down")
-        XCTAssertTrue(app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Reddit is open for 10")
-        ).firstMatch.waitForExistence(timeout: Self.answer),
+        XCTAssertTrue(reply(app, containing: "Reddit is open for 10")
+            .waitForExistence(timeout: Self.answer),
                       "a tap behind the veil took the thread, and the answer with it")
     }
 
@@ -1719,11 +1453,10 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(veil.waitForNonExistence(timeout: Self.answer),
                       "the wait never came down")
 
-        XCTAssertTrue(app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Reddit is open for 10")
-        ).firstMatch.waitForExistence(timeout: Self.answer),
+        XCTAssertTrue(reply(app, containing: "Reddit is open for 10")
+            .waitForExistence(timeout: Self.answer),
                       "the wait ended without answering the turn it was holding")
-        XCTAssertTrue(app.staticTexts["30"].waitForExistence(timeout: Self.appear),
+        XCTAssertTrue(enso(app, reading: 30).waitForExistence(timeout: Self.appear),
                       "the grant did not land when the ink did")
 
         // The pill, on a turn asked before the veil and answered after it. The
@@ -1733,9 +1466,9 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(undoPill.waitForExistence(timeout: Self.appear),
                       "a grant landed by a wait offered no way back")
         tap(undoPill, "the thread's Undo",
-            raising: app.staticTexts[SilkStringsMirror.putBack], "the Undo reply")
+            raising: reply(app, saying: SilkStringsMirror.putBack), "the Undo reply")
 
-        XCTAssertTrue(app.staticTexts["40"].waitForExistence(timeout: Self.appear),
+        XCTAssertTrue(enso(app, reading: 40).waitForExistence(timeout: Self.appear),
                       "Undo after a wait did not put the minutes back")
     }
 }

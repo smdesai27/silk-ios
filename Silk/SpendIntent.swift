@@ -41,8 +41,18 @@ struct SpendIntent: AppIntent {
     /// returns `.up` unconditionally from `WallController.standing`, so the
     /// half of the `wallStanding` conjunction this intent owes `summarise`
     /// — authorized, but shielding nothing — is unreachable there without
-    /// this. Same shape as `WallController.testForceArmed`.
-    nonisolated(unsafe) static var testForceWallUp: Bool?
+    /// this.
+    ///
+    /// `@MainActor` and not `nonisolated(unsafe)`, which is what
+    /// `WallController.testForceArmed` has been all along (that seam sits on a
+    /// `@MainActor` class and inherits its isolation — the comment here used to
+    /// claim the two were the same shape while they were opposites). Every site
+    /// is already on the main actor and the compiler can now say so: `perform`
+    /// reads this INSIDE its `await MainActor.run`, on the hop that armed, and
+    /// every test that sets it is in a `@MainActor` suite. An unchecked seam is
+    /// a data race the compiler has been told to stop asking about; this one
+    /// never needed the exemption.
+    @MainActor static var testForceWallUp: Bool?
     #endif
 
     /// Idempotency: a repeat invocation inside the same grant window re-reads

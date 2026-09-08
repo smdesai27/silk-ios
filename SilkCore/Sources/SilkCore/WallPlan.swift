@@ -70,6 +70,14 @@ public enum WallPlan {
         case clearAll
         /// Shield exactly these tokens.
         case shield(Set<Token>)
+        /// These tokens, and the store already holds exactly them: nothing to
+        /// write. The shield asks for the wall on every render, and four
+        /// cross-process writes of an unchanged value per render was the
+        /// battery cost of this app. Decided HERE, beside the other three, so
+        /// the one rule that may skip the fail-closed write is pinned by the
+        /// same suite: a `nil` standing — unreadable — never matches, and a
+        /// restatement (`restating`) never takes this arm.
+        case alreadyShielded(Set<Token>)
     }
 
     /// - Parameters:
@@ -83,6 +91,12 @@ public enum WallPlan {
     ///     blob will not decode, so a door's grant can still expire while
     ///     nothing that is shielded now is dropped. Nil with a corrupt extras
     ///     blob is a refusal: there is nothing to stand in.
+    ///   - restating: whether this reconcile is a RESTATEMENT — the app's
+    ///     foreground, the monitor's wakes — rather than a render. A
+    ///     restatement writes the wall whether or not the store reads back
+    ///     equal, because the wall is restated on the assumption that the
+    ///     daemon may not be enforcing what its store reports; a render
+    ///     writes only what differs (`.alreadyShielded`).
     ///   - openDoors: the tokens belonging to doors that should be open now.
     ///     A closure and not a value because answering it needs the ledger and
     ///     the established day, which the caller already holds — and because it
@@ -92,8 +106,15 @@ public enum WallPlan {
         extras: Decoded<Set<Token>>,
         doors: Decoded<[UUID: Set<Token>]>,
         standing: Set<Token>? = nil,
+        restating: Bool = false,
         openDoors: (PolicyState, [UUID: Set<Token>]) -> Set<Token>
     ) -> Plan<Token> {
+        // The one place a write may be skipped. `nil != blocked` for every
+        // `blocked`, the empty set included, so an unreadable store always
+        // writes; every way the comparison can be wrong falls toward writing.
+        func settled(_ blocked: Set<Token>) -> Plan<Token> {
+            restating || standing != blocked ? .shield(blocked) : .alreadyShielded(blocked)
+        }
         // The wall is apps only: every door's tokens plus the extras. An
         // ABSENT selection is an empty one, not an unconfigured wall; the
         // doors alone can carry the whole policy.
@@ -176,7 +197,7 @@ public enum WallPlan {
             // would tear down the whole standing shield: fail-open, on the
             // path this branch exists to keep closed.
             guard let read = readable(), !read.blocked.isEmpty else { return .leaveUntouched }
-            return .shield(read.blocked)
+            return settled(read.blocked)
 
         case .value(let policy):
             guard policy.wallEnabled else {
@@ -210,7 +231,7 @@ public enum WallPlan {
                 return .clearAll
             }
             guard let read = readable() else { return .leaveUntouched }
-            return .shield(read.blocked.subtracting(openDoors(policy, read.doors)))
+            return settled(read.blocked.subtracting(openDoors(policy, read.doors)))
         }
     }
 }

@@ -207,14 +207,14 @@ final class ConversationModel {
 /// the difference cannot be seen. The root wraps the pager and the dots in
 /// this; the wordmark is never wrapped — it is the one thing that never
 /// yields (README.md:203-205).
-private struct SilkStage: ViewModifier {
+struct SilkStage: ViewModifier {
     var dimmed: Bool
     /// Whether the wait's veil stands over this. See `silkStage(dimmed:veiled:)`.
     var veiled: Bool = false
 
     func body(content: Content) -> some View {
         content
-            .blur(radius: dimmed && !veiled ? 7 : 0)
+            .blur(radius: SilkStage.blur(dimmed: dimmed, veiled: veiled))
             // Both radii snap. `dimmed` for the reason above; `veiled` because
             // the veil is already crossing on its own curve over the top of
             // this — a Gaussian tweening underneath it is a full-screen
@@ -230,10 +230,20 @@ private struct SilkStage: ViewModifier {
             // it from the image and from the compositor both, and it goes on
             // the veil's own curve so the ring fades under the rising veil
             // rather than popping out from beneath it.
-            .opacity(veiled ? 0 : dimmed ? 0.05 : 1)
+            .opacity(SilkStage.opacity(dimmed: dimmed, veiled: veiled))
             .allowsHitTesting(!dimmed)
             .animation(Silk.motion(0.45), value: dimmed)
             .animation(Silk.motion(Silk.Motion.overlay), value: veiled)
+    }
+
+    /// The two rules, as functions of two flags — internal so the app's own
+    /// suite can pin the three states without a pixel: at rest 1, dimmed
+    /// 0.05, and under the veil 0.
+    static func opacity(dimmed: Bool, veiled: Bool) -> Double {
+        veiled ? 0 : dimmed ? 0.05 : 1
+    }
+    static func blur(dimmed: Bool, veiled: Bool) -> CGFloat {
+        dimmed && !veiled ? 7 : 0
     }
 }
 

@@ -84,7 +84,7 @@ final class WallController {
     // MARK: - Reconcile (fail-closed; callable from anywhere)
 
     func reconcile() {
-        Wall.reconcile()
+        Wall.reconcile(restating: true)
     }
 
     // MARK: - Granting

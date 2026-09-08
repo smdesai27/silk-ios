@@ -407,15 +407,19 @@ final class AppModel {
     /// read against a decode of up to a week of records. A day sealed by the
     /// Spend intent in another process is the case this exists for; nothing
     /// else can move the counter.
-    private func invalidateDayRecordsIfStale() {
-        if let cache = dayRecordsCache, cache.revision != SharedStore.daysRevision() {
-            dayRecordsCache = nil
-        }
+    /// Whether it did: a dropped cache is invisible to Observation, so the
+    /// caller that drops one owes the screen a write it can see.
+    @discardableResult
+    private func invalidateDayRecordsIfStale() -> Bool {
+        guard let cache = dayRecordsCache, cache.revision != SharedStore.daysRevision() else { return false }
+        dayRecordsCache = nil
+        return true
     }
 
     /// **Days held** — the accumulating hero, over closed observed days only.
     ///
-    /// Not yet on screen. `MirrorView` still draws `lastClosedScore`, and the
+    /// Not yet on screen. `MirrorView` still draws the last closed day's score
+    /// (the last element of `closedWeekScores`), and the
     /// swap is deliberately not made here: growth-metaphor §10 puts the
     /// re-lock device test and the daily heartbeat ahead of every drawing,
     /// and mirror-continuity §9.5 calls `DayLog.allowance` provisional until
@@ -429,19 +433,6 @@ final class AppModel {
     var daysHeld: Int {
         DayLog.daysHeld(dayRecords)
     }
-
-    /// A day is scored once, when it closes, so the hero prefers the last
-    /// closed day and holds it. `nil` before there is a closed day to read:
-    /// on a fresh install the hero showed 100 under a real weekday name, a
-    /// flawless week that never happened — Mirror falls back to `todayScore`
-    /// then, labelled as today, so the screen is never scoreless.
-    ///
-    /// It is the last element of `closedWeekScores` and nothing else, which is
-    /// why `MirrorView` no longer reads it: the page takes the band once and
-    /// takes this off the end of it. Kept because the name is the meaning —
-    /// nothing else in the app should have to know where the hero's number
-    /// lives in that array.
-    var lastClosedScore: Int? { closedWeekScores.last ?? nil }
 
     /// Today's running score. The record's own equation on the live counts —
     /// a granted minute now costs what `DayRecord.fraction` will charge for it
@@ -654,14 +645,16 @@ final class AppModel {
         // attempts blob every minute for a page that mostly is not
         // Mirror. The revision is one integer read, and it moves
         // only when `recordAttempt` actually appended.
+        var cachesMoved = false
         if let cache = weekAttemptsCache,
            cache.revision != SharedStore.attemptsRevision() {
             weekAttemptsCache = nil
+            cachesMoved = true
         }
         // The records blob is the same bargain under its own counter:
         // the Spend intent's sweep can seal a day in another process
         // while Silk sits on Mirror.
-        invalidateDayRecordsIfStale()
+        if invalidateDayRecordsIfStale() { cachesMoved = true }
         let ledgerMoved = syncLedgerIfStale()
         // The wall is re-applied only when something it enforces could
         // actually have moved. `Wall.reconcile` reads the union of the
@@ -706,15 +699,16 @@ final class AppModel {
         // a `nextTransition` or a day boundary — which is exactly the argument
         // the reconcile gate above is built on, applied to the screen instead
         // of to the wall.
-        if passed || ledgerMoved || turned || face(at: fresh) != face(at: now) {
+        //
+        // AND A DROPPED CACHE. Both caches are `@ObservationIgnored`, so
+        // nilling one tells no view anything; a reach recorded by the shield
+        // in the other half of a split screen moved `attemptsRevision` and
+        // nothing else, and Mirror's score would have stood on the old blob
+        // until the next band change. A moved revision IS a visible move.
+        if passed || ledgerMoved || turned || cachesMoved || face(at: fresh) != face(at: now) {
             now = fresh
         }
         guard passed || ledgerMoved || turned else { return }
-        // The render path's tail, folded before anything reads the attempts:
-        // the extension appends there to keep its own encode bounded, and the
-        // app is the process that may pay the whole-array write. No revision
-        // moves, so the caches above are right not to have noticed.
-        SharedStore.foldAttemptsTail()
         // A grant that just expired has to close its door, and a day
         // that turned matures whatever was waiting for it.
         wall.reconcile()
@@ -768,6 +762,13 @@ final class AppModel {
     /// one rule that guesses a door (`DeterministicParser.parse(recentDoor:)`).
     /// `@ObservationIgnored`: nothing draws it.
     @ObservationIgnored private var recentHintDoor: Door?
+    #if DEBUG
+    /// The memory, readable by the app's own suite — the one property of it
+    /// that no reply can show (a partial ask at night is answered with the
+    /// hour the wall opens whether or not a door was remembered), so the test
+    /// that the night gate leaves nothing behind has to read it directly.
+    var recentHintDoorForTests: Door? { recentHintDoor }
+    #endif
 
     /// The compile pipeline: deterministic grammar first; the on-device model
     /// widens rule-change paraphrases only; everything passes the Validator.
@@ -818,9 +819,6 @@ final class AppModel {
         syncLedgerIfStale()
         let verdict = Validator.validate(outcome, utterance: utterance,
                                          state: policy, ledger: ledger, now: .now)
-        // The hint's door, remembered for exactly one turn (see `recentHintDoor`).
-        if case .refuseWriteItOut(let door, _) = verdict { recentHintDoor = door } else { recentHintDoor = nil }
-
         // Down hours answer everything with the hour they end
         // (Silk Mockup.dc.html:317, the first line of `reply`) — with two
         // deliberate departures, both of which `deferredByDownHours` carries. A
@@ -830,11 +828,16 @@ final class AppModel {
         // the bar is refused at seven exactly as it is at eleven, so quoting
         // the hour would send her back in the morning for nothing.
         if isDownHours, verdict.deferredByDownHours {
+            recentHintDoor = nil
             conversation.land(
                 refuse("\(SilkStrings.downHoursOpens) \(policy.downHours.end.displayWithMeridiem)."),
                 for: id)
             return
         }
+        // The hint's door, remembered for exactly one turn (see
+        // `recentHintDoor`) — set only once the night gate above has let the
+        // hint through, so the memory holds a door the bar actually wrote out.
+        if case .refuseWriteItOut(let door, _) = verdict { recentHintDoor = door } else { recentHintDoor = nil }
         // A grant does not land here. Its price is seconds of watching, and
         // nothing is debited, unshielded or armed until they are paid — so the
         // verdict is put down and the wait is raised over it. `raiseWait`
@@ -2289,13 +2292,6 @@ final class AppModel {
     /// same paragraph, unchanged, at the moment it becomes safe to.
     private func reconcileOnReturn() {
         Silk.rereadReduceMotion()
-        // The render path's tail, folded before anything reads the attempts.
-        // The shield extension appends there so its own encode stays bounded by
-        // 64 dates; the app is the process that may pay the whole-array write,
-        // and a return is where it has the frames to. It bumps no revision —
-        // nothing observable changes — so the two gates below are right not to
-        // notice it.
-        SharedStore.foldAttemptsTail()
         // The same revision the clock tick compares, and for the same reason:
         // a suspension is exactly where a shield render can have appended, so
         // the cache cannot be trusted blindly — but it also mostly has not, and
@@ -2306,6 +2302,10 @@ final class AppModel {
             weekAttemptsCache = nil
         }
         invalidateDayRecordsIfStale()
+        // A return is a visible move whatever the caches did: the greeting may
+        // have crossed a band while Silk slept, and the tick that would say so
+        // is a minute away. One write, and the screen is the present.
+        now = .now
         // The suspension is where external writes accumulate — a Shortcuts
         // grant performed against the store while this copy slept — so the
         // return is where the copy has to catch up, before anything on

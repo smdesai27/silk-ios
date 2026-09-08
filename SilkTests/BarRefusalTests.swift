@@ -17,26 +17,21 @@ import UIKit
 // differently depending on which gate caught the sentence.
 //
 // **Every sentence below is one the deterministic grammar claims outright**,
-// and each test says so with a `#require` before it drives `handle`. The
-// simulator carries Apple Intelligence, so a sentence the grammar falls silent
-// on reaches the on-device widener and may come back with a real verdict —
-// which would make any assertion here a property of the machine. The precondition
-// is what keeps these deterministic: if the grammar ever stops claiming one of
-// these, the test fails on the premise rather than quietly measuring the weather.
+// and each test says so before it drives `handle`. The simulator carries Apple
+// Intelligence, so a sentence the grammar falls silent on reaches the on-device
+// widener and may come back with a real verdict — which would make any
+// assertion here a property of the machine. The precondition is what keeps
+// these deterministic: if the grammar ever stops claiming one of these, the
+// test fails on the premise rather than quietly measuring the weather.
+//
+// The premise is a `#require` — `try claimed(_:_:)` — and the word is
+// load-bearing. It used to be an `#expect`, which reports and carries on: a
+// grammar that had stopped claiming "no more instagram today" would have
+// recorded one failure and then gone on to drive `handle` anyway, measuring the
+// widener under every assertion below it. A premise that fails must END the
+// case, or the case goes on to measure something else.
 //
 // Hosted by the app, so `SharedStore` resolves against the real App Group.
-
-// MARK: - Fixtures
-
-@MainActor
-private func freshModel(budget: Int = 40, downHours: DownHours) -> (AppModel, Door) {
-    SharedStore.wipeAll()
-    let model = AppModel()
-    let door = Door(name: "Instagram")
-    model.completeSetup(doors: [door], doorSelections: [:], wallSelection: .init(),
-                        budget: budget, downHours: downHours)
-    return (model, door)
-}
 
 // MARK: -
 
@@ -51,15 +46,13 @@ private func freshModel(budget: Int = 40, downHours: DownHours) -> (AppModel, Do
     /// would land instantly and show up in the balance below. Left at the
     /// curve, the same regression would sit behind a veil and every assertion
     /// here would still be green.
-    @Test func aDoorAskedForInsideTheWindowIsRefusedWithTheOpeningHour() async {
+    @Test func aDoorAskedForInsideTheWindowIsRefusedWithTheOpeningHour() async throws {
         defer { unpinTheSeams() }
-        UserDefaults.standard.set("0", forKey: "silkWait")
         let night = nightContainingNow()
-        let (model, _) = freshModel(budget: 40, downHours: night)
+        let (model, _) = freshModel(budget: 40, downHours: night, silkWait: "0")
         let sentence = "give me 10 minutes of instagram"
-        #expect(DeterministicParser.parse(sentence, state: model.policy) != .silence,
-                "the grammar stopped claiming \"\(sentence)\" — this test now measures the widener")
-        #expect(model.isDownHours, "the fixture window does not contain the current minute")
+        try claimed(sentence, model)
+        try #require(model.isDownHours, "the fixture window does not contain the current minute")
 
         await model.handle(sentence)
 
@@ -77,14 +70,13 @@ private func freshModel(budget: Int = 40, downHours: DownHours) -> (AppModel, Do
     /// **tightening is instant from anywhere.** A close said at two in the
     /// morning lands at two in the morning — refusing it would be the edge
     /// yielding in the wrong direction.
-    @Test func aCloseStillLandsInsideTheWindow() async {
+    @Test func aCloseStillLandsInsideTheWindow() async throws {
         defer { unpinTheSeams() }
         let night = nightContainingNow()
         let (model, door) = freshModel(budget: 40, downHours: night)
         let sentence = "no more instagram today"
-        #expect(DeterministicParser.parse(sentence, state: model.policy) != .silence,
-                "the grammar stopped claiming \"\(sentence)\" — this test now measures the widener")
-        #expect(model.isDownHours, "the fixture window does not contain the current minute")
+        try claimed(sentence, model)
+        try #require(model.isDownHours, "the fixture window does not contain the current minute")
 
         await model.handle(sentence)
 
@@ -117,15 +109,13 @@ private func freshModel(budget: Int = 40, downHours: DownHours) -> (AppModel, Do
         let (model, door) = freshModel(budget: 40, downHours: nightWellClearOfNow())
         let close = "no more instagram today"
         let ask = "how much is left"
-        #expect(DeterministicParser.parse(close, state: model.policy) != .silence,
-                "the grammar stopped claiming \"\(close)\"")
-        #expect(DeterministicParser.parse(ask, state: model.policy) != .silence,
-                "the grammar stopped claiming \"\(ask)\"")
+        try claimed(close, model)
+        try claimed(ask, model)
 
         await model.handle(close)
         let receipt = try #require(model.conversation.turns.last?.reply)
-        #expect(model.ledger.isClosed(door.id, at: .now, dayStart: model.dayStart),
-                "the close did not land, so there is no rule for the status line to name")
+        try #require(model.ledger.isClosed(door.id, at: .now, dayStart: model.dayStart),
+                     "the close did not land, so there is no rule for the status line to name")
 
         await model.handle(ask)
 
@@ -137,12 +127,11 @@ private func freshModel(budget: Int = 40, downHours: DownHours) -> (AppModel, Do
     /// With nothing standing, the balance answer is the balance and nothing
     /// else — so the clause above is a fact about the close, not a suffix the
     /// status line always carries.
-    @Test func theBalanceAnswerIsBareWithNoRuleStanding() async {
+    @Test func theBalanceAnswerIsBareWithNoRuleStanding() async throws {
         defer { unpinTheSeams() }
         let (model, _) = freshModel(budget: 40, downHours: nightWellClearOfNow())
         let ask = "how much is left"
-        #expect(DeterministicParser.parse(ask, state: model.policy) != .silence,
-                "the grammar stopped claiming \"\(ask)\"")
+        try claimed(ask, model)
 
         await model.handle(ask)
 

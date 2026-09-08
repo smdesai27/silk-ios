@@ -354,7 +354,7 @@ actor SilkModelParser {
     /// `PolicyState.door(named:)` is an exact match against the door's spoken
     /// forms, which is the right strictness for a TOKEN taken out of a sentence
     /// the user typed. It is the wrong strictness for a whole field a model
-    /// wrote: "Instagram." and "the gram " are the model getting the door right
+    /// wrote: "Instagram." and " TikTok " are the model getting the door right
     /// and the punctuation wrong, and throwing those away costs a correct
     /// answer and a second sentence. Trimming is all that is added — nothing
     /// here invents a door, because the resolved name still has to hit a spoken

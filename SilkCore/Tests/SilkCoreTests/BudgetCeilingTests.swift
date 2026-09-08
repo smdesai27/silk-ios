@@ -20,18 +20,7 @@ import Testing
 // `Double` multiply behind it — because a policy also arrives from a stored blob
 // that no clamp ever touched. Both halves are pinned below.
 
-private let instagram = Door(name: "Instagram")
-private let tiktok = Door(name: "TikTok")
-
-private let night = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7))
-
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
-
-private func at(_ hour: Int, _ minute: Int = 0) -> Date {
+private func budgetAt(_ hour: Int, _ minute: Int = 0) -> Date {
     cal.date(from: DateComponents(year: 2026, month: 8, day: 4, hour: hour, minute: minute))!
 }
 
@@ -46,7 +35,7 @@ private func policy(budget: Int = 40, caps: [UUID: Int] = [:]) -> PolicyState {
 
 /// The two sentences, through the pipe they are actually said into.
 private func say(_ utterance: String, _ state: PolicyState,
-                 _ ledger: GrantLedger = GrantLedger(), at now: Date = at(12)) -> Verdict {
+                 _ ledger: GrantLedger = GrantLedger(), at now: Date = budgetAt(12)) -> Verdict {
     Validator.validate(DeterministicParser.parse(utterance, state: state),
                        utterance: utterance, state: state, ledger: ledger,
                        now: now, calendar: cal)
@@ -108,7 +97,7 @@ private let absurd = 999_999_999_999_999_999
         #expect(minutes > 0 && minutes <= PolicyState.maxMinutesPerDay)
         // Noon against a 22:00 edge: ten hours, and not one minute of tomorrow.
         #expect(minutes == 600)
-        #expect(relockAt == at(22))
+        #expect(relockAt == budgetAt(22))
     }
 
     // MARK: - A blob the clamp never saw
@@ -125,7 +114,7 @@ private let absurd = 999_999_999_999_999_999
             return
         }
         #expect(minutes == 90, "the ask still binds; the pool is merely enormous")
-        #expect(relockAt == at(13, 30))
+        #expect(relockAt == budgetAt(13, 30))
     }
 
     /// The same blob, asked the absurd number. Both terms of the multiply are
@@ -157,8 +146,8 @@ private let absurd = 999_999_999_999_999_999
     @Test func theWallDoesNotPromiseMoreThanADayEither() {
         let corrupt = policy(budget: .max, caps: [instagram.id: .max])
         let askable = Validator.askableMinutes(door: instagram, state: corrupt,
-                                               ledger: GrantLedger(), now: at(12),
-                                               dayStart: dayStart(at(12)), calendar: cal)
+                                               ledger: GrantLedger(), now: budgetAt(12),
+                                               dayStart: dayStart(budgetAt(12)), calendar: cal)
         #expect(askable == 600)
         guard case .grant(_, let minutes, _) = say("unlock instagram for \(askable) minutes", corrupt) else {
             Issue.record("the wall promised \(askable) and the bar refused")

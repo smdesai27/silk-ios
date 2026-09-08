@@ -32,14 +32,14 @@ final class MonitorExtension: DeviceActivityMonitor {
         if activity.rawValue == Wall.heartbeatActivity {
             SharedStore.recordHeartbeat()
         }
-        Wall.reconcile()
+        Wall.reconcile(restating: true)
     }
 
     override func intervalDidEnd(for activity: DeviceActivityName) {
         super.intervalDidEnd(for: activity)
         // A grant expired (or its staggered backup fired). Re-lock.
         Self.log.notice("intervalDidEnd \(activity.rawValue, privacy: .private) — re-locking")
-        Wall.reconcile()
+        Wall.reconcile(restating: true)
     }
 
     override func eventDidReachThreshold(_ event: DeviceActivityEvent.Name,
@@ -47,6 +47,6 @@ final class MonitorExtension: DeviceActivityMonitor {
         super.eventDidReachThreshold(event, activity: activity)
         // Layer 3: the usage-threshold backstop on a granted door.
         Self.log.notice("eventDidReachThreshold \(event.rawValue, privacy: .private) — re-locking")
-        Wall.reconcile()
+        Wall.reconcile(restating: true)
     }
 }

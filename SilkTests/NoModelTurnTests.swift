@@ -45,17 +45,15 @@ import FoundationModels
 
 // MARK: - Fixture
 
+/// Two doors, because half the table is about which one a fragment names.
+/// `TestSupport.freshModel` underneath — the wipe, the seam reset and the
+/// onboarding are the same ones every other suite gets.
 @MainActor
 private func noModelModel(budget: Int = 40,
                           downHours: DownHours = noWindowTonight()) -> AppModel {
-    SharedStore.wipeAll()
-    let model = AppModel()
-    model.completeSetup(doors: [Door(name: "Instagram"), Door(name: "TikTok")],
-                        doorSelections: [:],
-                        wallSelection: .init(),
-                        budget: budget,
-                        downHours: downHours)
-    return model
+    freshModel(budget: budget,
+               doors: [Door(name: "Instagram"), Door(name: "TikTok")],
+               downHours: downHours).0
 }
 
 /// A duration in milliseconds, rounded to three places, for the printed table.
@@ -236,6 +234,25 @@ private let table: [NoModelRow] = [
     // Inside the night.
     .init(say: "give me 10 minutes of instagram",
           reply: .downHoursRefusal, grammar: true, remaining: 40, clock: .night),
+    // AND THE HALF-SENTENCE HINT IS NO WAY ROUND THE NIGHT. "tiktok" then "10"
+    // is the memory rule two rows above, walked after ten at night: both turns
+    // are answered with the hour the wall opens, and neither writes a sentence
+    // out. The gate is ahead of the hint in `handle` — `recentHintDoor` is set
+    // only once the night has let the reply through — so the second turn here
+    // is refused whether the memory holds TikTok or nothing at all.
+    //
+    // Which is exactly what this row CANNOT tell apart, and it is worth saying
+    // so rather than implying more. Both readings of the memory produce the
+    // same sentence at night: with TikTok remembered the bare number writes out
+    // TikTok and is deferred; with nothing remembered it writes out the first
+    // door and is deferred identically. The memory itself is
+    // `AppModel.recentHintDoor`, `private`, and the only turn that could show
+    // its contents is a DAY turn — which cannot follow a night one inside a
+    // single model, because the window is fixed in the policy the fixture
+    // built. The day half is pinned two rows above; the night half is this,
+    // and the clearing itself is unasserted. See the report note.
+    .init(given: ["open tiktok"], say: "10",
+          reply: .downHoursRefusal, grammar: true, remaining: 40, clock: .night),
     // An app that is not a door. The grammar cannot name it and the widener is
     // silent, so the four words are the whole answer — and nothing moved.
     .init(say: "snapchat 10", reply: .refused, grammar: false, remaining: 40),
@@ -284,10 +301,14 @@ private let table: [NoModelRow] = [
         SilkModelParser.testForceSilent = true
     }
 
+    /// `unpinTheProcessSeams()` and not `unpinTheSeams()`, and the difference is
+    /// not a preference. `deinit` is nonisolated even on a `@MainActor` class,
+    /// so the four main-actor seams the full sweep also clears cannot be reached
+    /// from here — and this suite arms none of them. What it does arm is the
+    /// widener's own seam, and that one must come down even when a case fails,
+    /// which is the whole reason the teardown is a `deinit` and not a `defer`.
     deinit {
-        SilkModelParser.testForceSilent = false
-        UserDefaults.standard.removeObject(forKey: "silkWait")
-        UserDefaults.standard.removeObject(forKey: "silkStale")
+        unpinTheProcessSeams()
     }
 
     /// The record of what machine this ran on. The simulator carries Apple
@@ -432,13 +453,23 @@ private let table: [NoModelRow] = [
         for sentence in sentences {
             let model = noModelModel()
 
-            // The compile step, exactly as `handle` performs it.
-            let compileStart = ContinuousClock.now
-            var outcome = DeterministicParser.parse(sentence, state: model.policy)
-            if outcome == .silence {
-                outcome = await SilkModelParser.shared.parse(sentence, state: model.policy)
+            // The compile step, exactly as `handle` performs it — five times,
+            // and the FASTEST of the five is the reading. A single sample of a
+            // sub-millisecond string walk is mostly a measurement of what else
+            // the machine was doing during it; the minimum is the one number a
+            // ceiling like "under twelve milliseconds" is a claim about. A
+            // change that made the grammar slower raises the floor and still
+            // fails here. A loaded runner raises only the ceiling, and no
+            // longer does.
+            var compiled = Duration.seconds(Int.max)
+            for _ in 0..<5 {
+                let compileStart = ContinuousClock.now
+                var outcome = DeterministicParser.parse(sentence, state: model.policy)
+                if outcome == .silence {
+                    outcome = await SilkModelParser.shared.parse(sentence, state: model.policy)
+                }
+                compiled = min(compiled, compileStart.duration(to: .now))
             }
-            let compiled = compileStart.duration(to: .now)
 
             let turnStart = ContinuousClock.now
             await model.handle(sentence)
@@ -457,20 +488,32 @@ private let table: [NoModelRow] = [
 
         // A frame at 60 Hz is 16.7 ms and at 120 Hz is 8.3 ms. Twelve is a
         // ceiling with room in it for a loaded simulator, not a target: the
-        // measured numbers are printed above and are two orders below it.
+        // measured numbers are printed above and are two orders below it. Each
+        // is the fastest of five, for the reason given at the measurement.
         for (sentence, took) in compiles {
             #expect(took < .milliseconds(12),
                     "\"\(sentence)\" took \(took) to compile with no model behind it")
         }
-        // The beat is 480 ms and it is the whole of the wait. A silent widener
-        // adds nothing; a widener whose deadline were being paid would put
-        // every one of these past two seconds.
-        for (sentence, took) in turns {
-            #expect(took < .milliseconds(1200),
-                    "\"\(sentence)\" took \(took) end to end — the beat is 480 ms")
-            #expect(took < SilkModelParser.deadline,
-                    "\"\(sentence)\" took longer than the widener's own deadline, which a silent widener must never make anyone wait for")
-        }
+        // THE TURN IS PRINTED AND NOT BOUNDED, and that is a correction.
+        //
+        // It used to carry two upper bounds — 1200 ms, and the widener's own
+        // two-second deadline — against ONE un-repeated wall-clock sample per
+        // sentence. Most of each sample is a deliberate 480 ms sleep, so what
+        // the margin above it actually measures is scheduling: a runner that
+        // stalled 800 ms in the wrong place failed a test whose message
+        // accused a silent widener of being a clock. Twenty samples an
+        // afternoon is a coin toss looking for a place to land.
+        //
+        // The property those bounds were reaching for is real and is asserted
+        // properly one test down, in
+        // `theRefusalLandsOnTheBeatAndNothingIsLeftRunning`: the fastest of
+        // five refusals — the sentence that actually reaches the widener — is
+        // bounded there, where a repeated minimum makes the number mean
+        // something. Here the readings stand in the log, which is what the QA
+        // record wanted from them.
+        let slowestTurn = turns.max { $0.1 < $1.1 }
+        print("[no-model] slowest turn of \(turns.count): "
+              + "\(slowestTurn?.0 ?? "—") at \(milliseconds(slowestTurn?.1 ?? .zero)) ms")
     }
 
     /// THE SILENT WIDENER ANSWERS ON THE SPOT, not on its clock.
@@ -481,38 +524,96 @@ private let table: [NoModelRow] = [
     /// return ahead of the `AsyncStream`. This pins that: a regression that
     /// moved either check below the race would show up here as a two-second
     /// answer and nowhere else.
+    /// The reading is the BEST of twenty and not the worst, and the inversion
+    /// is the fix rather than a weakening.
+    ///
+    /// What this bounds is a branch — whether `parse` returns before it builds
+    /// a session or after it has armed a two-second deadline. Those two answers
+    /// are three orders of magnitude apart, so the fastest of twenty separates
+    /// them exactly: a regression that moved either check below the race cannot
+    /// produce a single sub-five-millisecond parse, and the floor rises with it.
+    ///
+    /// The maximum could not separate them, because it was never measuring
+    /// this code. Twenty samples on a shared simulator host will contain a
+    /// scheduling stall sooner or later, and a stall of five milliseconds is an
+    /// ordinary thing for a machine to do — so the assertion failed for the one
+    /// reason it must never fail for, with a message accusing the widener of
+    /// being a clock. Both readings are printed, so a run whose worst sample
+    /// was bad still says so.
     @Test func anUnavailableWidenerIsNotAClock() async {
         let model = noModelModel()
+        var best = Duration.seconds(Int.max)
         var worst = Duration.zero
         for _ in 0..<20 {
             let started = ContinuousClock.now
             let outcome = await SilkModelParser.shared.parse("gimme the gram", state: model.policy)
             let took = started.duration(to: .now)
             #expect(outcome == .silence)
+            best = min(best, took)
             worst = max(worst, took)
         }
-        print("[no-model] worst of 20 silent widener parses: \(worst)")
-        #expect(worst < .milliseconds(5),
-                "the silent widener took \(worst) — it is meant to return before it allocates")
+        print("[no-model] 20 silent widener parses: best \(milliseconds(best)) ms, "
+              + "worst \(milliseconds(worst)) ms")
+        #expect(best < .milliseconds(5),
+                "the silent widener's FASTEST parse took \(best) — it is meant to return before it allocates")
         #expect(SilkModelParser.deadline == .seconds(2),
                 "the deadline moved; the bound this test is contrasted against is stale")
     }
 
     /// And the refusal itself is not behind a timer either: the turn is
     /// answered inside the beat, with nothing in flight afterwards.
+    ///
+    /// FIVE TURNS, and the fastest is what is bounded. This is the one place
+    /// the widener's two-second deadline can actually be caught being paid —
+    /// "gimme the gram" is a sentence the grammar declines, so it reaches the
+    /// widener on every pass — and a single sample could not carry the claim:
+    /// a turn is a 480 ms sleep plus whatever the machine did around it, and a
+    /// runner that stalled 800 ms once failed a test that then said the
+    /// refusal was behind a timer. A silent widener returns before it
+    /// allocates, so ALL FIVE are inside the beat and the fastest cannot be
+    /// past it; a widener paying its deadline puts every one of the five past
+    /// two seconds and the fastest with them. The assertions that matter here
+    /// — the four words, no pending turn, no veil — are made on every pass.
+    /// A partial ask inside down hours is answered with the hour the wall
+    /// opens, and the door it named is NOT remembered: the memory holds only
+    /// a door the bar actually wrote out, and at night it wrote out nothing.
+    /// The reply cannot show this (both states answer the same sentence), so
+    /// the memory is read through its DEBUG accessor.
+    @Test func aPartialAskAtNightLeavesNoDoorRemembered() async {
+        UserDefaults.standard.set("0", forKey: "silkWait")
+        defer { unpinTheSeams() }
+        let model = noModelModel(downHours: nightContainingNow())
+        await model.handle("open tiktok")
+        #expect(model.recentHintDoorForTests == nil)
+        // And by day the same ask does remember, so the test can tell the two apart.
+        let day = noModelModel(downHours: noWindowTonight())
+        await day.handle("open tiktok")
+        #expect(day.recentHintDoorForTests?.name == "TikTok")
+    }
+
     @Test func theRefusalLandsOnTheBeatAndNothingIsLeftRunning() async {
         UserDefaults.standard.set("0", forKey: "silkWait")
         defer { unpinTheSeams() }
-        let model = noModelModel()
 
-        let started = ContinuousClock.now
-        await model.handle("gimme the gram")
-        let took = started.duration(to: .now)
+        var best = Duration.seconds(Int.max)
+        var readings: [Duration] = []
+        for _ in 0..<5 {
+            let model = noModelModel()
+            let started = ContinuousClock.now
+            await model.handle("gimme the gram")
+            let took = started.duration(to: .now)
 
-        #expect(model.conversation.turns.last?.reply == SilkStrings.didntGetThat)
-        #expect(model.conversation.hasPendingTurn == false)
-        #expect(model.waiting == nil, "a veil rose over a sentence nothing could read")
-        #expect(took < .milliseconds(1200), "the refusal landed at \(took)")
-        print("[no-model] refusal landed in \(took)")
+            #expect(model.conversation.turns.last?.reply == SilkStrings.didntGetThat)
+            #expect(model.conversation.hasPendingTurn == false)
+            #expect(model.waiting == nil, "a veil rose over a sentence nothing could read")
+            readings.append(took)
+            best = min(best, took)
+        }
+        print("[no-model] five refusals: "
+              + readings.map { "\(milliseconds($0)) ms" }.joined(separator: ", "))
+        #expect(best < .milliseconds(1200),
+                "the fastest of five refusals landed at \(best) — the beat is 480 ms")
+        #expect(best < SilkModelParser.deadline,
+                "a refusal took longer than the widener's own deadline, which a silent widener must never make anyone wait for")
     }
 }

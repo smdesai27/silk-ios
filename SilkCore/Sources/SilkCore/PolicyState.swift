@@ -29,16 +29,17 @@ public struct TimeOfDay: Hashable, Codable, Sendable, Comparable {
 /// voice vocabulary, the launch mapping, and the web-domain block.
 public struct Door: Hashable, Codable, Sendable, Identifiable {
     public let id: UUID
-    public var name: String {        // display name, user-chosen from the catalogue
-        didSet { key = name.lowercased() }
-    }
+    /// The display name, user-chosen from the catalogue. A `let`: a door is
+    /// never renamed, only replaced (`DoorRoster`, the editor's rebind), and
+    /// a stored `var` with an observer was a write path nothing wrote through.
+    public let name: String
     /// The name lowercased, kept rather than computed. `door(named:)` is
     /// asked once per token and once per bigram of every sentence, and each
     /// ask used to lowercase every door's name again: `String.lowercased()`
     /// was the single largest symbol left in the parser's profile once the
-    /// grammar itself had been made cheap. Derived from `name` at every
-    /// write, never encoded — an older blob without it decodes the same.
-    public private(set) var key: String
+    /// grammar itself had been made cheap. Derived from `name` in both
+    /// initializers, never encoded — an older blob without it decodes the same.
+    public let key: String
 
     public init(id: UUID = UUID(), name: String) {
         self.id = id

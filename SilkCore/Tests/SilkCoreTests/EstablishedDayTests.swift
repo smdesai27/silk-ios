@@ -13,20 +13,10 @@ import Testing
 // that ends it is `GrantLedger.effectiveDayStart` over the `dayBegan` stamp the
 // boundary sweeps maintain; everything below pins it through verdicts.
 
-private let tiktok = Door(name: "TikTok")
-private let instagram = Door(name: "Instagram")
-
-private let night = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7))
 private let tightenedNight = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 9))
 
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
-
 /// August 2026 — deep inside daylight time, so no DST edge rides along.
-private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+private func establishedAt(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
     cal.date(from: DateComponents(year: 2026, month: 8, day: day, hour: hour, minute: minute))!
 }
 
@@ -51,7 +41,7 @@ private func validate(_ text: String, state: PolicyState, ledger: GrantLedger,
     @Test func theMoveItselfLandsInstantlyAsATighten() {
         guard case .ruleChange(let proposed, let polarity) =
                 validate("down hours end at 9am", state: state(night),
-                         ledger: GrantLedger(), at: at(5, 8)) else {
+                         ledger: GrantLedger(), at: establishedAt(5, 8)) else {
             Issue.record("the boundary move must parse and validate")
             return
         }
@@ -64,21 +54,21 @@ private func validate(_ text: String, state: PolicyState, ledger: GrantLedger,
     @Test func capStaysExhaustedWhenTheBoundaryMovesMidDay() {
         let old = state(night, caps: [tiktok.id: 10])
         var ledger = GrantLedger()
-        ledger.establishDay(startingAt: at(5, 7), calendar: cal)
+        ledger.establishDay(startingAt: establishedAt(5, 7), calendar: cal)
         guard case .grant(let door, let minutes, let relock) =
                 validate("give me 10 minutes of tiktok", state: old,
-                         ledger: ledger, at: at(5, 7, 30)) else {
+                         ledger: ledger, at: establishedAt(5, 7, 30)) else {
             Issue.record("the morning ask must grant")
             return
         }
         #expect(minutes == 10)
         ledger.record(Grant(door: door, minutes: minutes,
-                            issuedAt: at(5, 7, 30), expiresAt: relock))
+                            issuedAt: establishedAt(5, 7, 30), expiresAt: relock))
 
         let moved = state(tightenedNight, caps: [tiktok.id: 10])
         #expect(validate("give me 10 minutes of tiktok", state: moved,
-                         ledger: ledger, at: at(5, 9, 30))
-                == .refuseDoorClosed(door: tiktok, until: at(6, 7)),
+                         ledger: ledger, at: establishedAt(5, 9, 30))
+                == .refuseDoorClosed(door: tiktok, until: establishedAt(6, 7)),
                 "a tighten refilled the ceiling it had no business touching")
     }
 
@@ -86,20 +76,20 @@ private func validate(_ text: String, state: PolicyState, ledger: GrantLedger,
     @Test func poolStaysSpentWhenTheBoundaryMovesMidDay() {
         let old = state(night)
         var ledger = GrantLedger()
-        ledger.establishDay(startingAt: at(5, 7), calendar: cal)
+        ledger.establishDay(startingAt: establishedAt(5, 7), calendar: cal)
         guard case .grant(let door, let minutes, let relock) =
                 validate("give me 40 minutes of tiktok", state: old,
-                         ledger: ledger, at: at(5, 7, 30)) else {
+                         ledger: ledger, at: establishedAt(5, 7, 30)) else {
             Issue.record("the morning ask must grant")
             return
         }
         #expect(minutes == 40)
         ledger.record(Grant(door: door, minutes: minutes,
-                            issuedAt: at(5, 7, 30), expiresAt: relock))
+                            issuedAt: establishedAt(5, 7, 30), expiresAt: relock))
 
         let moved = state(tightenedNight)
         #expect(validate("give me 10 minutes of instagram", state: moved,
-                         ledger: ledger, at: at(5, 9, 30))
+                         ledger: ledger, at: establishedAt(5, 9, 30))
                 == .refuseNothingLeft,
                 "a tighten refilled the pool it had no business touching")
     }
@@ -109,20 +99,20 @@ private func validate(_ text: String, state: PolicyState, ledger: GrantLedger,
     @Test func handCloseStaysBindingWhenTheBoundaryMovesMidDay() {
         let old = state(night)
         var ledger = GrantLedger()
-        ledger.establishDay(startingAt: at(5, 7), calendar: cal)
+        ledger.establishDay(startingAt: establishedAt(5, 7), calendar: cal)
         guard case .close(let door, let until) =
                 validate("close instagram", state: old, ledger: ledger,
-                         at: at(5, 7, 45)) else {
+                         at: establishedAt(5, 7, 45)) else {
             Issue.record("the close must land")
             return
         }
-        #expect(until == at(6, 7), "a plain close runs to the established day's end")
-        ledger.closeDoor(door, at: at(5, 7, 45))
+        #expect(until == establishedAt(6, 7), "a plain close runs to the established day's end")
+        ledger.closeDoor(door, at: establishedAt(5, 7, 45))
 
         let moved = state(tightenedNight)
         #expect(validate("give me 10 minutes of instagram", state: moved,
-                         ledger: ledger, at: at(5, 9, 30))
-                == .refuseDoorClosed(door: instagram, until: at(6, 7)),
+                         ledger: ledger, at: establishedAt(5, 9, 30))
+                == .refuseDoorClosed(door: instagram, until: establishedAt(6, 7)),
                 "the boundary move lifted a close made by hand")
     }
 
@@ -132,18 +122,18 @@ private func validate(_ text: String, state: PolicyState, ledger: GrantLedger,
     @Test func theNextRealDayStartsAtTheNewHour() {
         let moved = state(tightenedNight, caps: [tiktok.id: 10])
         var ledger = GrantLedger()
-        ledger.establishDay(startingAt: at(5, 7), calendar: cal)
+        ledger.establishDay(startingAt: establishedAt(5, 7), calendar: cal)
         ledger.record(Grant(door: tiktok, minutes: 10,
-                            issuedAt: at(5, 7, 30),
-                            expiresAt: at(5, 7, 40)))
+                            issuedAt: establishedAt(5, 7, 30),
+                            expiresAt: establishedAt(5, 7, 40)))
 
         #expect(validate("give me 10 minutes of tiktok", state: moved,
-                         ledger: ledger, at: at(6, 8, 30))
+                         ledger: ledger, at: establishedAt(6, 8, 30))
                 == .refuseDownHours(until: TimeOfDay(hour: 9)),
                 "the lengthened night holds its own morning")
         guard case .grant(_, let minutes, _) =
                 validate("give me 10 minutes of tiktok", state: moved,
-                         ledger: ledger, at: at(6, 9, 30)) else {
+                         ledger: ledger, at: establishedAt(6, 9, 30)) else {
             Issue.record("the new day must refill the ceiling")
             return
         }
@@ -156,13 +146,13 @@ private func validate(_ text: String, state: PolicyState, ledger: GrantLedger,
     @Test func anOrdinaryRolloverRefillsWithoutASweep() {
         let old = state(night)
         var ledger = GrantLedger()
-        ledger.establishDay(startingAt: at(5, 7), calendar: cal)
+        ledger.establishDay(startingAt: establishedAt(5, 7), calendar: cal)
         ledger.record(Grant(door: tiktok, minutes: 40,
-                            issuedAt: at(5, 10), expiresAt: at(5, 10, 40)))
+                            issuedAt: establishedAt(5, 10), expiresAt: establishedAt(5, 10, 40)))
 
         guard case .grant(_, let minutes, _) =
                 validate("give me 10 minutes of tiktok", state: old,
-                         ledger: ledger, at: at(6, 7, 30)) else {
+                         ledger: ledger, at: establishedAt(6, 7, 30)) else {
             Issue.record("yesterday's spend must not reach into today")
             return
         }
@@ -174,13 +164,13 @@ private func validate(_ text: String, state: PolicyState, ledger: GrantLedger,
     @Test func aPhantomGrantStillSpendsOnlyTheDayItClaims() {
         let moved = state(tightenedNight, caps: [tiktok.id: 10])
         var ledger = GrantLedger()
-        ledger.establishDay(startingAt: at(5, 7), calendar: cal)
+        ledger.establishDay(startingAt: establishedAt(5, 7), calendar: cal)
         ledger.record(Grant(door: tiktok, minutes: 10,
-                            issuedAt: at(8, 10), expiresAt: at(8, 10, 10)))
+                            issuedAt: establishedAt(8, 10), expiresAt: establishedAt(8, 10, 10)))
 
         guard case .grant(_, let minutes, _) =
                 validate("give me 10 minutes of tiktok", state: moved,
-                         ledger: ledger, at: at(5, 9, 30)) else {
+                         ledger: ledger, at: establishedAt(5, 9, 30)) else {
             Issue.record("a phantom three days out must not spend the standing day")
             return
         }
@@ -194,36 +184,36 @@ private func validate(_ text: String, state: PolicyState, ledger: GrantLedger,
 
     @Test func theStampAdvancesOnlyAcrossARealTurn() {
         var ledger = GrantLedger()
-        ledger.establishDay(startingAt: at(5, 7), calendar: cal)
+        ledger.establishDay(startingAt: establishedAt(5, 7), calendar: cal)
         // A boundary that moved mid-day does not move the stamp…
-        ledger.establishDay(startingAt: at(5, 9), calendar: cal)
-        #expect(ledger.dayBegan == at(5, 7))
+        ledger.establishDay(startingAt: establishedAt(5, 9), calendar: cal)
+        #expect(ledger.dayBegan == establishedAt(5, 7))
         // …and the next real turn does, at the NEW hour.
-        ledger.establishDay(startingAt: at(6, 9), calendar: cal)
-        #expect(ledger.dayBegan == at(6, 9))
+        ledger.establishDay(startingAt: establishedAt(6, 9), calendar: cal)
+        #expect(ledger.dayBegan == establishedAt(6, 9))
     }
 
     @Test func aFabricatedFutureStampHealsItself() {
         var ledger = GrantLedger()
-        ledger.establishDay(startingAt: at(20, 7), calendar: cal)   // clock was forward
-        ledger.establishDay(startingAt: at(5, 7), calendar: cal)    // the corrected sweep
-        #expect(ledger.dayBegan == at(5, 7))
+        ledger.establishDay(startingAt: establishedAt(20, 7), calendar: cal)   // clock was forward
+        ledger.establishDay(startingAt: establishedAt(5, 7), calendar: cal)    // the corrected sweep
+        #expect(ledger.dayBegan == establishedAt(5, 7))
     }
 
     @Test func anUnstampedLedgerReadsTheLiveBoundary() {
         let ledger = GrantLedger()
-        #expect(ledger.effectiveDayStart(now: at(5, 12), downHours: night, calendar: cal)
-                == DayBoundary.dayStart(now: at(5, 12), downHours: night, calendar: cal))
+        #expect(ledger.effectiveDayStart(now: establishedAt(5, 12), downHours: night, calendar: cal)
+                == DayBoundary.dayStart(now: establishedAt(5, 12), downHours: night, calendar: cal))
     }
 
     @Test func theStampHoldsItsOwnDayAndYieldsPastIt() {
         var ledger = GrantLedger()
-        ledger.establishDay(startingAt: at(5, 7), calendar: cal)
-        #expect(ledger.effectiveDayStart(now: at(5, 9, 30), downHours: tightenedNight,
+        ledger.establishDay(startingAt: establishedAt(5, 7), calendar: cal)
+        #expect(ledger.effectiveDayStart(now: establishedAt(5, 9, 30), downHours: tightenedNight,
                                          calendar: cal)
-                == at(5, 7), "the standing day keeps the start it opened with")
-        #expect(ledger.effectiveDayStart(now: at(6, 9, 30), downHours: tightenedNight,
+                == establishedAt(5, 7), "the standing day keeps the start it opened with")
+        #expect(ledger.effectiveDayStart(now: establishedAt(6, 9, 30), downHours: tightenedNight,
                                          calendar: cal)
-                == at(6, 9), "the next real day starts at the new hour")
+                == establishedAt(6, 9), "the next real day starts at the new hour")
     }
 }

@@ -2,10 +2,6 @@ import Testing
 import Foundation
 @testable import SilkCore
 
-private let night = DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7))
-private let tiktok = Door(name: "TikTok")
-private let instagram = Door(name: "Instagram")
-
 private func policy(budget: Int = 60, caps: [UUID: Int] = [:]) -> PolicyState {
     PolicyState(budgetMinutes: budget, downHours: night,
                 doors: [tiktok, instagram], doorCaps: caps)
@@ -103,6 +99,16 @@ private func policy(budget: Int = 60, caps: [UUID: Int] = [:]) -> PolicyState {
     @Test func aRestoredSlotStartsOwingNothing() {
         let slot = PendingSlot(pending: policy(caps: [tiktok.id: 45]), baseline: policy())
         #expect(slot.generation == 0)
-        #expect(slot.pending != nil)
+        // The ASK survives the restore — that is what the App Group is for —
+        // while no OFFER does. `slot.pending != nil` used to stand for the
+        // first half and proved only that the initializer stored its argument;
+        // the cap is the ask, so read it back.
+        #expect(slot.pending?.doorCaps[tiktok.id] == 45)
+        #expect(slot.baseline?.doorCaps.isEmpty == true)
+        // And the second half, which is the point of the test: a generation
+        // from the process that is gone cannot describe this slot. Every
+        // number a previous launch could have handed out is >= 1.
+        #expect(!slot.stands(1), "an offer from a previous launch appeared to stand")
+        #expect(!slot.stands(2))
     }
 }

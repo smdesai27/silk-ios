@@ -9,8 +9,6 @@ import Testing
 
 // MARK: - Fixtures
 
-private let instagram = Door(name: "Instagram")
-
 /// The guidance refusal, asked without naming the door: these loops run one
 /// expectation over sentences that name different doors, so the verdict's
 /// payload varies and only its shape is the thing under test.
@@ -18,48 +16,8 @@ private func writesItOut(_ v: Verdict) -> Bool {
     if case .refuseWriteItOut = v { return true }
     return false
 }
-private let tiktok = Door(name: "TikTok")
-private let reddit = Door(name: "Reddit")
-private let youtube = Door(name: "YouTube")
 
-private func makeState(budget: Int = 40) -> PolicyState {
-    PolicyState(
-        budgetMinutes: budget,
-        downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
-        doors: [instagram, tiktok, reddit, youtube]
-    )
-}
-
-/// The same four doors with two of them already carrying a ceiling. The
-/// invariant needs it, and needs it structurally: against an UNCAPPED state
-/// every `setDoorCap` raises a ceiling from infinity, which is a tighten, so the
-/// loosening half of `hostileStringsNeverLoosen` is inert for the whole cap
-/// feature and would report green for any cap rule whatsoever — including one
-/// that read "unlimited tiktok" as an instruction to remove a ceiling.
-private func makeCappedState(budget: Int = 40) -> PolicyState {
-    PolicyState(
-        budgetMinutes: budget,
-        downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
-        doors: [instagram, tiktok, reddit, youtube],
-        doorCaps: [tiktok.id: 10, instagram.id: 10]
-    )
-}
-
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
-
-/// A fixed afternoon: 2026-07-29 15:00 local.
-private func afternoon() -> Date {
-    cal.date(from: DateComponents(year: 2026, month: 7, day: 29, hour: 15))!
-}
-
-private func at(_ hour: Int, _ minute: Int = 0, day: Int = 29) -> Date {
-    cal.date(from: DateComponents(year: 2026, month: 7, day: day, hour: hour, minute: minute))!
-}
-
+/// One sentence, parsed and validated, on this file's own clock and calendar.
 private func verdict(_ text: String, state: PolicyState = makeState(),
                      ledger: GrantLedger = GrantLedger(), at now: Date = afternoon()) -> Verdict {
     let outcome = DeterministicParser.parse(text, state: state)
@@ -149,7 +107,13 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         expectSpend("give me 20 of instagram while im at the gym", door: "Instagram", minutes: 20)
     }
 
-    @Test func ambiguityIsSilence() {
+    /// AMBIGUITY IS SILENCE; A FRAGMENT IS THE HINT. Two names, because the
+    /// body has always held two rules and `ambiguityIsSilence` named only one
+    /// of them — four of its seven rows assert `.writeItOut`, which is the
+    /// opposite of silence and the whole point of the spend-shape tightening.
+    /// A reader who trusted the name would have read the file as proving that
+    /// a bare door says nothing.
+    @Test func ambiguityIsSilenceAndAFragmentIsTheHint() {
         let s = makeState()
         // Two numbers → no guess.
         #expect(DeterministicParser.parse("instagram 10 or 20", state: s) == .silence)
@@ -275,15 +239,28 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         }
     }
 
+    /// A tighten is the standing exception to down hours: at eleven at night it
+    /// LANDS rather than being answered with the hour the wall opens.
+    ///
+    /// The guards are that assertion — `.refuseDownHours` fails them. What used
+    /// to follow, `#expect(v.isTighten)` after a `guard case .close`, restated
+    /// `Verdict.isTighten`'s own `case .close, .closeAll: return true` and could
+    /// not be made to fail by any change to the Validator. In its place: what
+    /// each verdict actually carries out of the night, which is the door and
+    /// the whole roster.
     @Test func closesAreTightensAndLandAtNight() {
-        let night = at(23)
-        let v = verdict("block instagram", at: night)
-        guard case .close = v else {
-            Issue.record("expected close at night")
+        let night = julyAt(23)
+        guard case .close(let door, _) = verdict("block instagram", at: night) else {
+            Issue.record("expected close at night, got \(verdict("block instagram", at: night))")
             return
         }
-        #expect(v.isTighten)
-        #expect(verdict("close everything", at: night).isTighten)
+        #expect(door == instagram)
+        guard case .closeAll(let doors, _) = verdict("close everything", at: night) else {
+            Issue.record("expected closeAll at night")
+            return
+        }
+        #expect(doors.map(\.name) == ["Instagram", "TikTok", "Reddit", "YouTube"],
+                "the whole-roster close did not carry the roster")
     }
 
     @Test func closedDoorRefusesSpendUntilLift() {
@@ -335,7 +312,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         }
         #expect(down.budgetMinutes == 20 && downPol == .tighten)
         // A tighten lands even during down hours; the loosen would be gated.
-        #expect(verdict("make it twenty a day", at: at(23)).isTighten)
+        #expect(verdict("make it twenty a day", at: julyAt(23)).isTighten)
     }
 
     @Test func downHoursSetters() {
@@ -420,9 +397,9 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     /// is refused at seven exactly as it is at eleven, so the night must not
     /// hold it — everything else that is not a tighten still waits.
     @Test func aDoorAskedForAtNightIsNotHeldBehindTheClock() {
-        #expect(verdict("add snapchat", at: at(23)) == .refuseDoorNeedsApp)
-        #expect(!verdict("add snapchat", at: at(23)).deferredByDownHours)
-        #expect(verdict("make it sixty a day", at: at(23)).deferredByDownHours)
+        #expect(verdict("add snapchat", at: julyAt(23)) == .refuseDoorNeedsApp)
+        #expect(!verdict("add snapchat", at: julyAt(23)).deferredByDownHours)
+        #expect(verdict("make it sixty a day", at: julyAt(23)).deferredByDownHours)
     }
 }
 
@@ -662,7 +639,11 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     /// one pair ("dont want") and let every other combination through. Five of
     /// these shipped as loosenings: sentences PLEADING for the ceiling to stay,
     /// answered by removing it and parking the removal until tomorrow.
-    @Test func aNegatorBeforeARemoverAlwaysDeclines() {
+    /// Named for the exception it carries. "Always declines" is false in the
+    /// last three lines of its own body: a negated VOLITION ("i dont want a cap
+    /// on tiktok") is a request for the ceiling's absence and still clears it,
+    /// deliberately — which is the one pair the original list existed for.
+    @Test func aNegatorBeforeARemoverDeclinesUnlessItNegatesTheWanting() {
         // THE SECOND HALF OF EACH LIST IS SPELLINGS THE LEXICON DOES NOT KNOW,
         // and that is the whole repair to this test. Drawn from the same six
         // words the implementation carried, it could only ever prove that the
@@ -1632,7 +1613,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // every sentence about the rest of today — and "give me instagram 20
         // for the day" keeps its grant, because a bare "day" token is not a
         // period phrase either.
-        let boundary = at(7, 0, day: 30)
+        let boundary = julyAt(7, 0, day: 30)
         #expect(verdict("no more tiktok today") == .close(door: tiktok, until: boundary))
         #expect(verdict("im done with instagram for the day") == .close(door: instagram, until: boundary))
         expectSpend("give me instagram 20 for the day", door: "Instagram", minutes: 20)
@@ -1958,7 +1939,8 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         row("there is no limit on tiktok", .silence),
         row("tiktok is not capped", .silence),
         // The mood gate declines, and the sentence keeps whatever the rest of
-        // the ladder owes it — rule 8's "How long?" here.
+        // the ladder owes it — rule 8, which ASKED "How long?" when this row
+        // was written and hands back the written-out sentence now.
         row("can i uncap tiktok", .writeItOut(door: tiktok, minutes: nil)),
         // A REMOVAL PREDICATED OF THE CEILING is what the negation landed on.
         row("i dont want the tiktok cap removed", .silence),
@@ -1985,8 +1967,9 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         row("remove tiktok im past the limit", .silence),
         // A CEILING WORD WITH NO NUMBER HAS PROPOSED NOTHING. The clause was
         // declared shaped, failed on zero numbers, and returned a silence that
-        // vetoed the whole utterance — 158 spends in one sweep, and rule 8's
-        // "How long?" with them.
+        // vetoed the whole utterance — 158 spends in one sweep, and every
+        // sentence rule 8 owed an answer to with them. (Rule 8 ASKED "How
+        // long?" then; it writes the sentence out now.)
         row("im at my limit on tiktok, give me 20 minutes",
             .command(.spend(door: tiktok, minutes: 20))),
         row("i respect the limit on tiktok, give me 20 minutes",
@@ -2225,17 +2208,24 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         #expect(verdict("status", ledger: ledger) == .status(remaining: 15))
         ledger.record(Grant(door: instagram, minutes: 25, issuedAt: now.addingTimeInterval(-900),
                             expiresAt: now.addingTimeInterval(600)))
-        // Over-spent days floor at zero, never negative.
+        // Over-spent days floor at zero, never negative — and the floor is the
+        // assertion, so it is `== 0` and not `>= 0`. Fifty minutes were drawn
+        // from a pool of forty; a `max(0, …)` that had been dropped reports
+        // −10, and so does every other arithmetic slip, but so would any
+        // healthy number under `>= 0`.
         guard case .status(let r) = verdict("status", ledger: ledger) else {
             Issue.record("expected status"); return
         }
-        #expect(r >= 0)
+        #expect(r == 0)
     }
-}
 
-// MARK: - PLACE-BOUND
+    // MARK: - allBindingsGetTheSentenceWrittenOut
+    //
+    // PLACE-BOUND, and a one-test suite of its own until now. It sits here
+    // because a place binding is an ask with no number in it, which is the same
+    // shape the balance rows above are about — and a suite is a unit of
+    // reporting, not of subject matter. The proposition keeps its name.
 
-@Suite struct PlaceBoundStress {
     @Test func allBindingsGetTheSentenceWrittenOut() {
         for v in ["give me instagram until i leave the gym",
                   "while im at the gym unlock instagram for me",
@@ -2253,7 +2243,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     @Test func grantShrinksToTheNightEdge() {
         // 21:59 + "thirty" → one minute, relock 22:00.
         guard case .grant(_, let m, let relock) = verdict("give me thirty minutes of instagram",
-                                                           at: at(21, 59)) else {
+                                                           at: julyAt(21, 59)) else {
             Issue.record("expected sliver grant"); return
         }
         #expect(m == 1)
@@ -2263,18 +2253,18 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
 
     @Test func exactDownHoursStartRefuses() {
         // 22:00:00 is inside the window (closed-open interval).
-        #expect(verdict("give me ten minutes of instagram", at: at(22))
+        #expect(verdict("give me ten minutes of instagram", at: julyAt(22))
                 == .refuseDownHours(until: TimeOfDay(hour: 7)))
-        #expect(verdict("give me ten minutes of instagram", at: at(23, 59))
+        #expect(verdict("give me ten minutes of instagram", at: julyAt(23, 59))
                 == .refuseDownHours(until: TimeOfDay(hour: 7)))
-        #expect(verdict("give me ten minutes of instagram", at: at(6, 59, day: 30))
+        #expect(verdict("give me ten minutes of instagram", at: julyAt(6, 59, day: 30))
                 == .refuseDownHours(until: TimeOfDay(hour: 7)))
     }
 
     @Test func exactDownHoursEndGrants() {
         // 7:00:00 is outside the window: the day has started, budget fresh.
         guard case .grant(_, let m, _) = verdict("give me ten minutes of instagram",
-                                                 at: at(7, 0, day: 30)) else {
+                                                 at: julyAt(7, 0, day: 30)) else {
             Issue.record("expected grant at the day's first second"); return
         }
         #expect(m == 10)
@@ -2282,11 +2272,11 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
 
     @Test func statedHourClosesAroundTheBoundary() {
         // 3 PM, "until 9" → 9 PM today.
-        #expect(verdict("block tiktok until 9") == .close(door: tiktok, until: at(21)))
+        #expect(verdict("block tiktok until 9") == .close(door: tiktok, until: julyAt(21)))
         // 3 PM, "until 9 am" → next 9 AM is past the day boundary; capped there.
-        #expect(verdict("block tiktok until 9 am") == .close(door: tiktok, until: at(7, 0, day: 30)))
+        #expect(verdict("block tiktok until 9 am") == .close(door: tiktok, until: julyAt(7, 0, day: 30)))
         // 10 PM (down hours), "until 11" → still lands, lifts 11 PM tonight.
-        #expect(verdict("block tiktok until 11", at: at(22, 30)) == .close(door: tiktok, until: at(23)))
+        #expect(verdict("block tiktok until 11", at: julyAt(22, 30)) == .close(door: tiktok, until: julyAt(23)))
     }
 
     @Test func zeroBudgetRefusesEverySpend() {
@@ -2849,10 +2839,12 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     }
 
     /// Every string compiles to something or to silence, and nothing traps. Run
-    /// over this file's corpus AND over the 400 harvested strings the clause
-    /// index is proved against, on both fixtures — door names, timezone
+    /// over this file's corpus AND over the three thousand harvested strings the
+    /// clause index is proved against, on both fixtures — door names, timezone
     /// identifiers, assertion messages, emoji, CRLF and RTL overrides among
-    /// them. The parser has no throwing path, so what this actually pins is the
+    /// them. (It said "the 400" until the harvest was re-run; the corpus had
+    /// gone stale at 399 while the suite grew past three thousand, so this loop
+    /// was reading an eighth of what it claimed.) The parser has no throwing path, so what this actually pins is the
     /// absence of an index trap: every cap rule below reads positions into a
     /// token array, and an off-by-one there costs the user her sentence.
     @Test func everyStringCompilesOrFallsSilentAndNeverTraps() {
@@ -2919,11 +2911,18 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // Any string that does grant grants at most the remaining budget.
         let asks = ["give me 500 of instagram", "give me 299 of tiktok", "give me 41 minutes of youtube",
                     "give me an hour and a half of reddit", "give me ninety minutes of instagram"]
+        var grants = 0
         for text in asks {
             if case .grant(_, let m, _) = verdict(text) {
+                grants += 1
                 #expect(m <= 40, "grant exceeded balance: \(text) → \(m)")
             }
         }
+        // The floor its per-door twin already carried. The clamp is pinned only
+        // by asks that actually reach it, and every assertion above sits inside
+        // the `if case .grant` — so a grammar change that silenced the whole
+        // over-ask list would have left this test green and the clamp untested.
+        #expect(grants >= 5, "the over-ask list stopped producing grants")
     }
 
     @Test func provenanceHoldsForInjectedOutcomes() {
@@ -3128,7 +3127,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     @Test func tonightIsNotTheNightWindow() {
         // "tonight" contains "night"; the substring match let the down-hours
         // branch swallow this close into silence. Token matching fixed it.
-        let boundary = at(7, 0, day: 30)
+        let boundary = julyAt(7, 0, day: 30)
         #expect(verdict("no more instagram tonight") == .close(door: instagram, until: boundary))
         #expect(verdict("block tiktok tonight") == .close(door: tiktok, until: boundary))
         // Bare "night" as its own word is still just a mention.
@@ -3168,7 +3167,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // The opener veto used to see "open" and bail before the closer
         // phrases were checked; the sentence then answered "How long?" —
         // the exact inverse of the ask. Phrases now outrank the veto.
-        let boundary = at(7, 0, day: 30)
+        let boundary = julyAt(7, 0, day: 30)
         #expect(verdict("stop letting me open instagram") == .close(door: instagram, until: boundary))
         #expect(verdict("stop opening tiktok") == .close(door: tiktok, until: boundary))
     }
@@ -3418,8 +3417,19 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     /// The refusal is reachable at the hour it is most likely to be said. The
     /// down-hours short-circuit answers anything that is not a tighten with the
     /// hour the wall opens, which would swallow this question at 11 PM.
+    ///
+    /// SAID AT 11 PM, which is the whole claim and was the one thing the body
+    /// did not do: it built a `Verdict.refuseSayAmOrPm` by hand and read
+    /// `deferredByDownHours` off it, which is a fact about the enum's own
+    /// switch and true whether or not any sentence can reach the case at
+    /// night. The sentence is run at both hours instead, and the assertion is
+    /// that the night changes nothing — same question, same hour quoted back.
     @Test func theQuestionSurvivesDownHours() {
-        #expect(Verdict.refuseSayAmOrPm(at: TimeOfDay(hour: 11)).deferredByDownHours == false)
+        let question = Verdict.refuseSayAmOrPm(at: TimeOfDay(hour: 11))
+        #expect(verdict("down hours till 11") == question)
+        #expect(verdict("down hours till 11", at: julyAt(23)) == question,
+                "the night swallowed the am/pm question")
+        #expect(question.deferredByDownHours == false)
     }
 
     /// The guard lives in the Validator, not the grammar, so the model's

@@ -27,7 +27,12 @@ extension LaunchCatalog {
     #if DEBUG
     /// How many times `open` was asked this process. The Spend intent must
     /// leave this at zero: Siri unshields, it does not launch (finding 4).
-    nonisolated(unsafe) static var testOpenCount = 0
+    ///
+    /// `@MainActor` rather than `nonisolated(unsafe)`: the only writer is
+    /// `open` below, which is `@MainActor` because `UIApplication` is, and the
+    /// only reader is a `@MainActor` test suite. The unchecked spelling bought
+    /// nothing but the loss of the compiler's word for it.
+    @MainActor static var testOpenCount = 0
     #endif
 
     @MainActor

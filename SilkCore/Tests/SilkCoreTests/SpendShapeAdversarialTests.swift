@@ -34,35 +34,6 @@ import Testing
 
 // MARK: - Fixtures
 
-private let instagram = Door(name: "Instagram")
-private let tiktok = Door(name: "TikTok")
-private let reddit = Door(name: "Reddit")
-private let youtube = Door(name: "YouTube")
-
-private var cal: Calendar {
-    var c = Calendar(identifier: .gregorian)
-    c.timeZone = TimeZone(identifier: "America/New_York")!
-    return c
-}
-
-/// 2026-07-29 15:00 local — outside the night window, so a verdict that is
-/// held back is held back by the sentence and never by the hour.
-private func afternoon() -> Date {
-    cal.date(from: DateComponents(year: 2026, month: 7, day: 29, hour: 15))!
-}
-
-/// The budget is 40, as the brief specifies: small enough that the hint's
-/// hundred minutes has something to be clamped against.
-private func makeState(_ doors: [Door] = [instagram, tiktok, reddit, youtube]) -> PolicyState {
-    PolicyState(budgetMinutes: 40,
-                downHours: DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7)),
-                doors: doors)
-}
-
-private func parse(_ text: String, _ state: PolicyState = makeState()) -> ParseOutcome {
-    DeterministicParser.parse(text, state: state)
-}
-
 private func validate(_ text: String, _ state: PolicyState = makeState()) -> Verdict {
     Validator.validate(parse(text, state), utterance: text, state: state,
                        ledger: GrantLedger(), now: afternoon(), calendar: cal)
@@ -423,19 +394,12 @@ private func expectNeverLoosensInstantly(_ text: String,
         expectWriteItOut("10 please tiktok", door: "TikTok", minutes: 10)
     }
 
-    /// The neighbours the fragment rules stand behind. Each still lands.
-    @Test func theNeighbouringCommandsStillLand() {
-        #expect(parse("budget 30") == .command(.setBudget(minutes: 30)))
-        #expect(parse("cap tiktok 20") == .command(.setDoorCap(door: tiktok, minutes: 20)))
-        #expect(parse("how much is left") == .command(.status))
-    }
-
-    /// A DOORLESS POLICY HAS NO DOOR TO GUESS AT.
-    @Test func aDoorlessPolicyStaysSilent() {
-        let empty = makeState([])
-        #expect(parse("10 minutes", empty) == .silence)
-        #expect(parse("instagram", empty) == .silence)
-    }
+    // The neighbours the fragment rules stand behind, and the doorless policy
+    // that has no door to guess at, both lived here as well. Both were byte
+    // for byte the rows `SpendShapeTests` carries (`theNeighbouringCommands
+    // StillLand`, which asserts everything this copy did and the hand close
+    // besides, and `aDoorlessPolicyStaysSilent`), so the copies are gone and
+    // the originals stand.
 
     /// TEN THOUSAND TOKENS OF EACH HALF OF THE FRAGMENT SHAPE, which is what
     /// `bareDoor`'s 1...4 token bound and rule 9's single-number requirement
@@ -452,17 +416,17 @@ private func expectNeverLoosensInstantly(_ text: String,
     /// that baseline by an order that is visibly not a walk of the paste;
     /// measured here at 0.8x for the quantity paste and 3x for the door one,
     /// against a bound of 6.
+    ///
+    /// INTERLEAVED, through `PerformanceMeasurement.fastestPair`. This was the
+    /// last hand-rolled best-of-five over `Date()` in the suite, and it had
+    /// exactly the defect that instrument was written for: it measured the
+    /// baseline's five rounds and then the paste's five rounds, so a load
+    /// spike covering one block and not the other moved the ratio by the whole
+    /// size of the spike (`PerformanceMeasurement.swift`, and
+    /// `docs/design/wait.md` §3.3). Two pairs rather than one triple, so each
+    /// ratio's numerator and denominator are measured microseconds apart.
     @Test func aHugePasteIsSilentAndCheap() {
         let state = makeState()
-        func bestMilliseconds(_ text: String) -> Double {
-            var best = Double.infinity
-            for _ in 0..<5 {
-                let t0 = Date()
-                _ = DeterministicParser.parse(text, state: state)
-                best = min(best, Date().timeIntervalSince(t0) * 1000)
-            }
-            return best
-        }
         let noise = Array(repeating: "lorem ipsum dolor sit amet", count: 2_000)
             .joined(separator: " ")
         let quantities = String(repeating: "10 ", count: 10_000)
@@ -471,9 +435,12 @@ private func expectNeverLoosensInstantly(_ text: String,
         #expect(parse(quantities, state) == .silence)
         #expect(parse(doors, state) == .silence)
 
-        let baseline = bestMilliseconds(noise)
-        let quantityCost = bestMilliseconds(quantities) / baseline
-        let doorCost = bestMilliseconds(doors) / baseline
+        let quantityPair = fastestPair({ _ = DeterministicParser.parse(quantities, state: state) },
+                                       { _ = DeterministicParser.parse(noise, state: state) })
+        let quantityCost = ratio(quantityPair.first, to: quantityPair.second)
+        let doorPair = fastestPair({ _ = DeterministicParser.parse(doors, state: state) },
+                                   { _ = DeterministicParser.parse(noise, state: state) })
+        let doorCost = ratio(doorPair.first, to: doorPair.second)
         #expect(quantityCost < 6, "ten thousand quantities cost \(quantityCost)x the baseline")
         #expect(doorCost < 6, "ten thousand doors cost \(doorCost)x the baseline")
     }
@@ -493,7 +460,7 @@ private func expectNeverLoosensInstantly(_ text: String,
     }
 
     private var manyShapes: PolicyState {
-        makeState([Door(name: "Google Maps"), Door(name: "Threads"),
+        makeState(doors: [Door(name: "Google Maps"), Door(name: "Threads"),
                    Door(name: "X"), Door(name: "9GAG"), instagram, tiktok])
     }
 
@@ -586,7 +553,7 @@ private func expectNeverLoosensInstantly(_ text: String,
     /// The particle's object is matched through `door(_:in:)` like every other
     /// door in the file, so a TWO-WORD name is still the door it governs.
     @Test func aTwoWordDoorOnTheParticleStillCommits() {
-        let maps = makeState([Door(name: "Google Maps"), instagram])
+        let maps = makeState(doors: [Door(name: "Google Maps"), instagram])
         expectSpend("i'm going on google maps for 10 minutes",
                     door: "Google Maps", minutes: 10, maps)
         expectSpend("im going on google maps for 10 minutes",
@@ -602,10 +569,10 @@ private func expectNeverLoosensInstantly(_ text: String,
     /// "instagram", in either direction, and the sentence belongs to the
     /// widener rather than to a door the user did not name.
     @Test func aNameIsNotAPrefixOfAnother() {
-        let insta = makeState([Door(name: "Insta")])
+        let insta = makeState(doors: [Door(name: "Insta")])
         expectSilence("10 minutes of instagram", "instagram is not insta", insta)
         expectSilence("unlock instagram for 10 min", "instagram is not insta", insta)
-        let threads = makeState([Door(name: "Threads")])
+        let threads = makeState(doors: [Door(name: "Threads")])
         expectWriteItOut("threads", door: "Threads", minutes: nil, threads)
         expectSilence("thread", "the deinflection strips an s, it does not add one", threads)
     }
@@ -620,7 +587,7 @@ private func expectNeverLoosensInstantly(_ text: String,
     @Test func caseFoldsBothWays() {
         expectWriteItOut("TIKTOK", door: "TikTok", minutes: nil)
         expectSpend("UNLOCK TIKTOK FOR 10 MIN", door: "TikTok", minutes: 10)
-        let maps = makeState([Door(name: "Google Maps")])
+        let maps = makeState(doors: [Door(name: "Google Maps")])
         expectWriteItOut("GOOGLE MAPS", door: "Google Maps", minutes: nil, maps)
     }
 }
