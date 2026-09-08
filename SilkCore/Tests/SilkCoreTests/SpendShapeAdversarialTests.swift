@@ -291,10 +291,18 @@ private func expectNeverLoosensInstantly(_ text: String,
     /// stopping verbs for the second, a comparative for the third — and each
     /// of those is a class, not this defect. **Delete the row when somebody
     /// closes it.**
+    ///
+    /// THE COMPARATIVE ROW IS GONE, on this file's own instruction. "i need
+    /// less instagram, 10 minutes max" is silence as of round three: the
+    /// comparative stands in a clause that names the door and RESTRICTS it,
+    /// and the ask in the next breath names no door of its own, so it was
+    /// borrowing one from a refusal (`aRestrictionLendsTheDoor`,
+    /// `SpendShapeAdversarialRound3Tests`). The other two rows are untouched
+    /// — noun-compounding and the stopping verbs are still classes nobody has
+    /// written.
     @Test(arguments: [
         "10 minutes is my instagram spend",
         "i want to stop using instagram for 10 minutes",
-        "i need less instagram, 10 minutes max",
     ])
     func aNounCompoundOrAStoppingVerbStillGrants(_ text: String) {
         expectSpend(text, door: "Instagram", minutes: 10)

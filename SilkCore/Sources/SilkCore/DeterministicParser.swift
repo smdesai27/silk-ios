@@ -481,12 +481,24 @@ public enum DeterministicParser {
         if let d = door, let n = number, !windowMention {
             guard spendClauseFunds(d, clauses(), state: state) else { return .silence }
             guard !aRefusalNamesTheDoor(d, clauses(), state: state) else { return .silence }
+            // AND A RESTRICTION DOES NOT LEND ITS DOOR. "block tiktok, give me
+            // 20 minutes" opened TikTok for twenty minutes: the ask names no
+            // door, so the door was borrowed from the only clause that named
+            // one — the clause asking for the app to be SHUT. See
+            // `aRestrictionLendsTheDoor` for why the close itself was already
+            // gone by the time this line ran.
+            guard !aRestrictionLendsTheDoor(d, clauses(), state: state) else { return .silence }
             // AND A NEGATOR ON THE OPENING VERB IS THE SAME REFUSAL. "dont
             // open tiktok for 20 minutes" is the plainest way to type one, and
             // the noun scan above cannot see it — while the close rule vetoes
             // itself on the opener token, so nothing else claimed the sentence
             // and the refused app was opened for exactly the refused minutes.
             guard !aNegatorRefusesTheAsk(clauses()) else { return .silence }
+            // AND A REPORTED ASK IS SOMEBODY ELSE'S SENTENCE. "she said unlock
+            // tiktok for 20" opened TikTok — see `aReportFramesTheAsk` for the
+            // eleven spellings and for why the quoted-speech arm one gate
+            // below could not see any of them.
+            guard !aReportFramesTheAsk(clauses()) else { return .silence }
             // A STATED DEADLINE IS NOT A DURATION. "give me tiktok till 7"
             // asks for the app until a CLOCK; reading the 7 as seven minutes
             // debits the pool on a reading no human shares, and the re-ask
@@ -3201,6 +3213,100 @@ public enum DeterministicParser {
         return false
     }
 
+    /// Whether the door a grant would leave on is named — in a breath other
+    /// than the one carrying the quantity — by a clause that RESTRICTS it.
+    ///
+    /// A DOORLESS ASK BORROWED ITS DOOR FROM THE CLAUSE THAT REFUSED IT.
+    /// "block tiktok, give me 20 minutes" spent twenty minutes of TikTok, and
+    /// so did "close tiktok, give me 20 minutes of tiktok", "i want less
+    /// tiktok, give me 20 minutes", "i should quit tiktok, unlock tiktok for
+    /// 20" and "less tiktok please, give me 20 minutes". The ask names no
+    /// door of its own, so `spendClauseFunds` hands the question to the whole
+    /// sentence, which names exactly one — and the only clause naming it was
+    /// the one asking for the app to be shut.
+    ///
+    /// The close was already lost before this line: `hasClosingVerb` lets an
+    /// opener outrank a closer ("openers win", so the substring "lock" inside
+    /// "unlock" cannot flip a polarity), and the opener in the second breath
+    /// vetoes the closer in the first. So the sentence asking for LESS got
+    /// minutes rather than a shut door, which is both wrong answers at once.
+    ///
+    /// "limit tiktok, give me 20 minutes" and "cap tiktok, give me 20
+    /// minutes" were already silent — the ceiling family claims those and
+    /// terminates — so what was open was exactly the restriction vocabulary
+    /// the cap rules do not own.
+    ///
+    /// THE DONOR CLAUSE ONLY, never the ask's own breath. "give me 20 minutes
+    /// off tiktok" spells a restriction word inside the ask, where it is a
+    /// preposition, and an ask is not poisoned by its own words. The anchor is
+    /// `spendClauseFunds`' anchor, so the two rules agree about which breath
+    /// is the ask.
+    ///
+    /// TWO KINDS OF RESTRICTION, and the second is narrower than the first:
+    ///
+    ///  - a word from `restrictionWords` — `lessWords` MINUS the ceiling
+    ///    nouns. The nouns come out because a ceiling NAMED is not a ceiling
+    ///    IMPOSED: "im at my limit on tiktok, give me 20 minutes" is a pinned
+    ///    grant, and its "limit" is the speaker's own state, not a rule she is
+    ///    stating about the door.
+    ///  - and the ceiling nouns come back UNDER A NEGATOR: "never raise the
+    ///    tiktok cap, give me 20 minutes" and "dont touch the tiktok cap,
+    ///    give me 20 minutes" are standing rules about the door, and a
+    ///    standing rule lends nothing either.
+    ///
+    /// A NEGATED RESTRICTION IS NOT A RESTRICTION, and it is what splits the
+    /// two arms above rather than joining them. "dont close instagram, just
+    /// give me 10" refuses the close and then asks; it is pinned as a grant,
+    /// and a negator in the donor's breath is exactly the word saying the
+    /// restriction is the thing being refused. So the vocabulary arm requires
+    /// the clause to be unnegated, and the ceiling nouns — which are not
+    /// restrictions on their own — require that it is.
+    ///
+    /// "BREAK" IS A PHRASE, NOT A TOKEN. "i need a break from tiktok, i'd like
+    /// 20 minutes" restricts the door, while "give my tiktok a break, 20
+    /// minutes" and "give tiktok a 20 minute break" are pinned ASKS in the
+    /// ditransitive. The preposition is the only word that tells them apart,
+    /// so the word is read here with it and is kept off `lessWords`, where a
+    /// bare token would have taken the pinned rows down with it.
+    ///
+    /// A NEGATOR ALONE IS NOT A RESTRICTION, and that is the whole of what
+    /// keeps the pinned preamble granting: "i dont use instagram much, unlock
+    /// instagram for 10" negates a HABIT, names the door, and then asks with
+    /// Silk's own hint sentence. Its clause carries no restriction word and no
+    /// ceiling noun, so nothing here can see it — the same distinction
+    /// `aNegatorRefusesTheAsk` draws when it declines to let a derived stem
+    /// refuse a preamble.
+    private static func aRestrictionLendsTheDoor(_ d: Door, _ index: NumberParser.ClauseIndex,
+                                                 state: PolicyState) -> Bool {
+        let t = index.tokens
+        let anchor = t.indices.first { NumberParser.readsAsNumber(t[$0]) }
+            ?? t.indices.first { doorAt(t, $0, within: t.count, state: state) != nil }
+        let asked = anchor.flatMap { index.clauseRange(containing: $0) }
+        for clause in clauseRanges(index) where clause != asked {
+            guard clauseNames(d, in: clause, of: index, state: state) else { continue }
+            let refused = clause.contains { negators.contains(t[$0]) }
+            if refused {
+                if clause.contains(where: { capNouns.contains(t[$0]) }) { return true }
+                continue
+            }
+            if clause.contains(where: { restrictionWords.contains(t[$0]) }) { return true }
+            if clause.contains(where: { i in
+                t[i] == "break" && i + 1 < clause.upperBound && t[i + 1] == "from"
+            }) { return true }
+        }
+        return false
+    }
+
+    /// The words that RESTRICT a door rather than merely name a ceiling on it:
+    /// `lessWords` with the ceiling nouns taken back out. Derived from that
+    /// set and never written by hand, so a closing verb added there is a donor
+    /// refused here by the same edit — the hole a second hand-kept copy of
+    /// this vocabulary would have.
+    ///
+    /// Read only by the scan above, and only to REFUSE a grant, so a word that
+    /// lands here can cost a sentence and can never mint one.
+    private static let restrictionWords: Set<String> = lessWords.subtracting(capNouns)
+
     /// Whether a negator stands on the OPENING VERB — the other spelling of a
     /// refusal, and the one `aRefusalNamesTheDoor` cannot see. "dont open
     /// tiktok for 20 minutes", "do not unlock reddit for 45 minutes" and
@@ -3209,10 +3315,30 @@ public enum DeterministicParser {
     /// is an opener token, the close rule vetoes itself on it, and nothing
     /// else claimed the sentence.
     ///
-    /// ADJACENCY, exactly as the noun scan reads its negator: "dont GIVE",
-    /// "not UNLOCK", "never LET". A negator further off is governing something
-    /// else — "dont close instagram, just give me 10" negates the CLOSE and
-    /// still grants.
+    /// THE WINDOW IS THE CLAUSE, and it used to be ADJACENCY — the negator
+    /// standing directly on the verb, "ever" excepted. English does not put
+    /// them that close when it refuses across a verb of speech or of promise,
+    /// and every one of these opened the door and debited the pool: "i never
+    /// SAID give me 20 minutes of tiktok", "i never said UNLOCK tiktok for
+    /// 20", "never AGAIN unlock tiktok for 20", "i REFUSE TO unlock tiktok for
+    /// 20", "i PROMISED NOT TO unlock tiktok for 20", "remind me NEVER TO
+    /// unlock tiktok for 20", "i would never SAY give me 20 minutes of
+    /// tiktok". One word of distance was the whole difference between a
+    /// refusal this guard reads and a grant it cannot take back.
+    ///
+    /// So the scan walks FORWARD from the negator to the first opening verb in
+    /// the negator's own clause. The clause bound is what keeps the widening
+    /// honest, and it is the same bound the adjacency test already carried:
+    /// "dont close instagram, just give me 10" negates the CLOSE in a breath
+    /// that holds no opening verb, and the ask in the next breath is untouched.
+    ///
+    /// What it costs is the preamble that negates something else in the same
+    /// breath — "i dont care just unlock tiktok for 20", "i cant focus so give
+    /// me 20 minutes of tiktok". Those are asks and they now fall silent, which
+    /// is the direction this file fails in: silence reaches the widener, and a
+    /// grant out of a refusal cannot be taken back. The comma-ed spellings of
+    /// both ("i dont care, just unlock tiktok for 20") still grant, because
+    /// there the negator's clause ends before the verb.
     ///
     /// The one carve-out is the bounded ask, and it is pinned: "dont give me
     /// MORE THAN 10 of tiktok" negates the exceeding, not the giving, and the
@@ -3223,66 +3349,68 @@ public enum DeterministicParser {
     private static func aNegatorRefusesTheAsk(_ index: NumberParser.ClauseIndex) -> Bool {
         let t = index.tokens
         for i in t.indices where negators.contains(t[i]) {
-            // "ever" is the one word English glues between the negator and the
-            // verb it strengthens — "dont EVER open tiktok" — and skipping it
-            // can only widen a refusal, never a grant.
-            var verbAt = i + 1
-            if verbAt < t.count, t[verbAt] == "ever" { verbAt += 1 }
-            // THE LEXICON IS THE ONE THE MINT USES. `askVerbs` predates the
-            // spend grammar's opening-verb authority and never learned its
-            // last four stems, so "dont USE instagram for 10 minutes", "dont
-            // SPEND 10 minutes on instagram", "dont GET on instagram for 10
-            // minutes" and "no USE, instagram for 10" each bought ten minutes
-            // of the app the sentence was refusing — while "dont OPEN
-            // instagram for 10 minutes", the same sentence with a stem this
-            // set already held, fell silent. The refusal has to read whatever
-            // the grant reads or it is a guard with holes in the shape of the
-            // newest verbs.
-            //
-            // STEMS ONLY, and only here: `askVerbs` is read by the cap family
-            // too, and this is the spend path's own refusal, whose every
-            // answer is a silence.
-            guard verbAt < t.count,
-                  askVerbs.contains(t[verbAt]) || openingVerbStems.contains(t[verbAt]),
-                  let clause = index.clauseRange(containing: i), clause.contains(verbAt)
-            else { continue }
-            // AND THOSE TWO NEED THEIR PARTICLE. "go" and "get" mean the app
-            // only as "go on"/"get on" — the same fact `particledGerunds`
-            // reads on the commitment side. Without this the refusal claims
-            // "dont get mad, give me 10 minutes of instagram", which is an ask
-            // with a preamble, and a guard that eats asks is how a widening
-            // pays for itself twice.
-            if t[verbAt] == "go" || t[verbAt] == "get" {
-                guard verbAt + 1 < t.count, t[verbAt + 1] == "on" else { continue }
+            // The window is the negator's own clause, walked forward to the
+            // first opening verb in it. "ever" used to be stepped over by
+            // name — "dont EVER open tiktok" — and needs no name now: every
+            // word English glues between a negator and the verb it refuses is
+            // inside the clause, and so is the speech verb ("i never SAID
+            // give me…") and the promise ("i PROMISED NOT TO unlock…").
+            guard let clause = index.clauseRange(containing: i) else { continue }
+            for verbAt in (i + 1)..<clause.upperBound {
+                // THE LEXICON IS THE ONE THE MINT USES. `askVerbs` predates the
+                // spend grammar's opening-verb authority and never learned its
+                // last four stems, so "dont USE instagram for 10 minutes", "dont
+                // SPEND 10 minutes on instagram", "dont GET on instagram for 10
+                // minutes" and "no USE, instagram for 10" each bought ten minutes
+                // of the app the sentence was refusing — while "dont OPEN
+                // instagram for 10 minutes", the same sentence with a stem this
+                // set already held, fell silent. The refusal has to read whatever
+                // the grant reads or it is a guard with holes in the shape of the
+                // newest verbs.
+                //
+                // STEMS ONLY, and only here: `askVerbs` is read by the cap family
+                // too, and this is the spend path's own refusal, whose every
+                // answer is a silence.
+                guard askVerbs.contains(t[verbAt]) || openingVerbStems.contains(t[verbAt])
+                else { continue }
+                // AND THOSE TWO NEED THEIR PARTICLE. "go" and "get" mean the app
+                // only as "go on"/"get on" — the same fact `particledGerunds`
+                // reads on the commitment side. Without this the refusal claims
+                // "dont get mad, give me 10 minutes of instagram", which is an ask
+                // with a preamble, and a guard that eats asks is how a widening
+                // pays for itself twice.
+                if t[verbAt] == "go" || t[verbAt] == "get" {
+                    guard verbAt + 1 < t.count, t[verbAt + 1] == "on" else { continue }
+                }
+                // A DERIVED STEM REFUSES ONLY THE CLAUSE THAT CARRIES THE ASK.
+                // "i dont use instagram much, unlock instagram for 10 min" opens
+                // with a negated "use" in a clause that asks for nothing, and
+                // then asks in the next one — with Silk's own hint sentence. The
+                // ask-verb family keeps its whole-sentence reading, which its
+                // rows were pinned against; the stems the tightening added
+                // ("use", "spend", "go on", "get on") are ordinary verbs of
+                // ordinary preambles, so their negation refuses the sentence only
+                // when the number stands in the same clause as the negator.
+                // The bare negators — "no", "not", "never", "none" — keep the whole-
+                // sentence reading even on a derived stem: "no use, instagram for
+                // 10" and "never use instagram for 10 minutes" are refusals wearing
+                // the noun and the imperative, and neither has a preamble to
+                // exempt. Only the verbal contractions ("dont", "shouldnt", …)
+                // open a preamble a real ask can follow.
+                if !askVerbs.contains(t[verbAt]), !bareNegators.contains(t[i]),
+                   !clause.contains(where: { NumberParser.readsAsNumber(t[$0]) }) { continue }
+                // The bounded-ask carve is scoped to the immediate "dont": "dont
+                // give me more than 10 of tiktok" negates the exceeding. "NEVER
+                // open instagram for more than 20 minutes" is a standing rule, and
+                // granting its 20 is the wrong answer twice over — so the durative
+                // negators keep the refusal and the sentence goes to the widener.
+                let immediate = t[i] == "dont" || t[i] == "don't"
+                    || (t[i] == "not" && i > t.startIndex && t[i - 1] == "do")
+                let bounded = immediate && (i + 1..<clause.upperBound).dropLast().contains {
+                    t[$0] == "more" && t[$0 + 1] == "than"
+                }
+                if !bounded { return true }
             }
-            // A DERIVED STEM REFUSES ONLY THE CLAUSE THAT CARRIES THE ASK.
-            // "i dont use instagram much, unlock instagram for 10 min" opens
-            // with a negated "use" in a clause that asks for nothing, and
-            // then asks in the next one — with Silk's own hint sentence. The
-            // ask-verb family keeps its whole-sentence reading, which its
-            // rows were pinned against; the stems the tightening added
-            // ("use", "spend", "go on", "get on") are ordinary verbs of
-            // ordinary preambles, so their negation refuses the sentence only
-            // when the number stands in the same clause as the negator.
-            // The bare negators — "no", "not", "never", "none" — keep the whole-
-            // sentence reading even on a derived stem: "no use, instagram for
-            // 10" and "never use instagram for 10 minutes" are refusals wearing
-            // the noun and the imperative, and neither has a preamble to
-            // exempt. Only the verbal contractions ("dont", "shouldnt", …)
-            // open a preamble a real ask can follow.
-            if !askVerbs.contains(t[verbAt]), !bareNegators.contains(t[i]),
-               !clause.contains(where: { NumberParser.readsAsNumber(t[$0]) }) { continue }
-            // The bounded-ask carve is scoped to the immediate "dont": "dont
-            // give me more than 10 of tiktok" negates the exceeding. "NEVER
-            // open instagram for more than 20 minutes" is a standing rule, and
-            // granting its 20 is the wrong answer twice over — so the durative
-            // negators keep the refusal and the sentence goes to the widener.
-            let immediate = t[i] == "dont" || t[i] == "don't"
-                || (t[i] == "not" && i > t.startIndex && t[i - 1] == "do")
-            let bounded = immediate && (i + 1..<clause.upperBound).dropLast().contains {
-                t[$0] == "more" && t[$0 + 1] == "than"
-            }
-            if !bounded { return true }
         }
         return false
     }
@@ -3375,6 +3503,23 @@ public enum DeterministicParser {
               let first = clause.first
         else { return false }
         let ahead = clause.lowerBound..<anchor
+        // A DELIBERATION IS NOT AN ASK, and it is asked FIRST because the word
+        // that makes it a deliberation is the same word that would exempt it.
+        // "should i unlock tiktok for 20" opened TikTok and debited the pool:
+        // "should" is a `requestModals` entry, the exemption below fired on
+        // it, and the sentence went to the mint. But the cap family's pinned
+        // request — "should i cap tiktok at 20" — is somebody asking the app
+        // to do something, and "should i unlock tiktok for 20" is somebody
+        // asking HERSELF whether to. Silk answers questions about the balance
+        // and nothing else; the answer to "should i" is not twenty minutes.
+        //
+        // FIRST PERSON AND ADJACENT, which is the whole rule: the pronoun has
+        // to stand directly on the modal, because that is the shape English
+        // deliberates in. "would you unlock tiktok for 20" keeps its
+        // exemption and still grants — see `requestModals`: a request modal
+        // wrapping an instruction addressed to the app is the politeness the
+        // exemption exists for, and the addressee is the difference.
+        if deliberatesRatherThanAsks(t, clause: clause) { return true }
         // A request modal marks the ask, unless a wh-word ahead makes the
         // sentence a question — the same exemption `reportsRatherThanSets`
         // carries, read over the whole clause because the pinned ask puts its
@@ -3491,6 +3636,22 @@ public enum DeterministicParser {
         return false
     }
 
+    /// Whether the clause DELIBERATES — "should i", "shouldnt i", "should we"
+    /// — rather than asking. Read only by the spend gate, and only to REFUSE,
+    /// so the word "should" keeps every other reading it has: the cap
+    /// family's pinned setter "should i cap tiktok at 20" never reaches here,
+    /// and the pool's own "should i set my budget to 30" is rule 3's.
+    ///
+    /// The first-person plural rides along because "should we" is the same
+    /// mood with the same answer; the second person does not, because "should
+    /// you" is not a sentence anybody types at a door.
+    private static func deliberatesRatherThanAsks(_ t: [String], clause: Range<Int>) -> Bool {
+        clause.dropLast().contains { i in
+            (t[i] == "should" || t[i] == "shouldnt" || t[i] == "shouldn't")
+                && (t[i + 1] == "i" || t[i + 1] == "we")
+        }
+    }
+
     /// The verbs that report somebody's words. Read only by the quoted-speech
     /// arm above, and only to REFUSE a grant, so an entry can never widen what
     /// spends.
@@ -3513,6 +3674,90 @@ public enum DeterministicParser {
         "advise", "advises", "advised", "advising",
         "mention", "mentions", "mentioned", "mentioning",
     ]
+
+    /// The speech verbs that REPORT, as against the ones a person aims at
+    /// Silk. `speechVerbs` carries the writing families because the CAP side
+    /// reads quoted notes ("my notes say tiktok - 20 a day"); on the grant
+    /// side the same words are what the user types TO the app — "text me
+    /// later, unlock tiktok for 20", and above all "write it out: unlock
+    /// tiktok for 20", which is Silk's own hint sentence echoed back at it and
+    /// was answered with silence by the first cut of this gate. Reporting a
+    /// sentence and asking for one to be written out are opposite moods
+    /// wearing one lexeme; the grant side reads the reporting half.
+    ///
+    /// Derived by SUBTRACTION so the two cannot drift: a report verb added to
+    /// `speechVerbs` is read here by the same edit, and only the three
+    /// writing families are named as the exception.
+    private static let reportingSpeechVerbs: Set<String> =
+        speechVerbs.subtracting(["type", "types", "typed", "typing",
+                                 "text", "texts", "texted",
+                                 "write", "writes", "wrote"])
+
+    /// The verbs that put an ask in a world that is not this one. A wish is
+    /// reported exactly as a sentence is — "i WISH i could unlock tiktok for
+    /// 20" is no more a request for twenty minutes than "she SAID unlock
+    /// tiktok for 20" is — so it is read in the same gate rather than in a
+    /// second theory of mood. Round two recorded the sentence as inherited and
+    /// said **delete the row when somebody closes it**; this closes it.
+    ///
+    /// The CONDITIONAL is deliberately not here. "i would use instagram for 10
+    /// minutes if i could" is the row beside it in that same list, and it needs
+    /// the mood gate to learn the conditional clause — a class, not this
+    /// defect. It still grants.
+    private static let wishVerbs: Set<String> = ["wish", "wishes", "wished", "wishing"]
+
+    /// Whether a REPORT FRAME stands in front of the ask's own verb, in the
+    /// ask's own breath.
+    ///
+    /// A QUOTED ASK IS NOT AN ASK, AND THE DOOR'S POSITION IS NOT WHAT DECIDES
+    /// THAT. "she said give me 20 minutes" names no door and is silent for
+    /// want of one; put the door inside the quote and every one of these
+    /// opened the app and debited the pool — "she said unlock tiktok for 20",
+    /// "he said give me 20 minutes of tiktok", "the note said unlock tiktok
+    /// for 20", "my journal says i want 20 minutes of tiktok", "he keeps
+    /// saying unlock tiktok for 20", "my friend says open tiktok for 20", "the
+    /// app told me to unlock tiktok for 20", "i almost said unlock tiktok for
+    /// 20", "you always say unlock tiktok for 20". A door standing to the
+    /// right of the quote's verb does not make the quote the user's sentence.
+    ///
+    /// The gate one rule below (`reportsRatherThanSpends`' quoted-speech arm)
+    /// could see none of them: it demands a RESUMING frame — a non-modal
+    /// auxiliary closing the quote, "…give me 20 minutes of tiktok IS what i
+    /// always type" — and a report that simply never resumes had no proof
+    /// against it. The resumption was the evidence; the frame is the fact.
+    ///
+    /// WHAT IT COSTS, and this is the round's one re-pinned row: "my friend
+    /// said give me an hour of tiktok" was a pinned GRANT, defended as the
+    /// user adopting somebody else's ask. It is the same sentence as "my
+    /// friend says open tiktok for 20" with an idiom for its quantity, and no
+    /// rule can silence one and mint the other without a hole in the shape of
+    /// the word "hour". Canon decides it: a report gets terminating silence,
+    /// silence reaches the widener, and a grant out of a report cannot be
+    /// taken back. "i said unlock tiktok for 20" goes with it.
+    ///
+    /// THE VERB, NOT THE QUANTITY, is what the frame has to stand in front of.
+    /// Anchoring on the number (which is what every other spend guard does)
+    /// would have read "give me 20 minutes, she said" as quoted too, and that
+    /// sentence puts its frame after the ask, where it is an attribution of a
+    /// breath already spoken.
+    ///
+    /// The particle guard is `aNegatorRefusesTheAsk`'s, for its reason: "go"
+    /// and "get" mean the app only as "go on"/"get on", and without it "she
+    /// said get ready, unlock tiktok for 20" would be read as a quoted ask on
+    /// the strength of the word "get".
+    private static func aReportFramesTheAsk(_ index: NumberParser.ClauseIndex) -> Bool {
+        let t = index.tokens
+        for i in t.indices where askVerbs.contains(t[i]) || openingVerbStems.contains(t[i]) {
+            if t[i] == "go" || t[i] == "get" {
+                guard i + 1 < t.count, t[i + 1] == "on" else { continue }
+            }
+            guard let clause = index.clauseRange(containing: i) else { continue }
+            if (clause.lowerBound..<i).contains(where: {
+                reportingSpeechVerbs.contains(t[$0]) || wishVerbs.contains(t[$0])
+            }) { return true }
+        }
+        return false
+    }
 
     /// Whether a doorless clause is a bare fragment an ask can stand on — a
     /// quantity and the words that dress one, nothing predicated. "ten",
@@ -3965,6 +4210,12 @@ public enum DeterministicParser {
     /// closing anything. Spelled out twice it was two literals that happened to
     /// overlap on four words, and a closing verb added to one and forgotten in
     /// the other would leave a refusal reading as an ask.
+    ///
+    /// "break" is NOT here, and the reason is a pinned grant: this corpus
+    /// reads "give my tiktok a break, 20 minutes" and "give tiktok a 20 minute
+    /// break" as the ordinary ditransitive ask. The word asks for less only
+    /// with its preposition — "a break FROM tiktok" — so it is read as a
+    /// phrase, once, by `aRestrictionLendsTheDoor`, and never as a token here.
     private static let lessWords: Set<String> = closerTokens.union([
         "less", "fewer", "cut", "reduce", "reduced", "limit", "limited", "lower", "stop", "quit",
         "blocked", "locked", "closed", "off", "away", "without",
@@ -4214,13 +4465,88 @@ public enum DeterministicParser {
         }) { return true }
         var start = clause.upperBound
         while start > clause.lowerBound, isARetractionWord(t[start - 1]) { start -= 1 }
+        // AND THE PHRASE IS THE RUN'S OWN HEAD. The walk above steps back over
+        // retraction VOCABULARY, and the phrases have words that are not on it
+        // — "im using instagram for 5 minutes SCRATCH THAT" stops on "that"
+        // and the comma-less spelling kept granting while the comma-ed one
+        // went silent, which is the punctuation dependency this veto's own
+        // comment says it will not have. So one phrase is allowed to end where
+        // the walk stopped, and nothing else moves: a run that stops on "more"
+        // ("…for 10 minutes no more") finds no phrase ending there and stays a
+        // bounded ask.
+        for phrase in retractionPhrases where start - phrase.count >= clause.lowerBound {
+            let head = start - phrase.count
+            if phrase.indices.allSatisfy({ t[head + $0] == phrase[$0] }) {
+                start = head
+                break
+            }
+        }
         return start < clause.upperBound && isARetraction(t, start..<clause.upperBound)
     }
 
     private static func isARetraction(_ t: [String], _ range: Range<Int>) -> Bool {
-        range.contains { negators.contains(t[$0]) || spokenDeclines.contains(t[$0]) }
+        if aRetractionPhraseHeads(t, range) { return true }
+        return range.contains { negators.contains(t[$0]) || spokenDeclines.contains(t[$0]) }
             && range.allSatisfy { isARetractionWord(t[$0]) }
     }
+
+    /// Whether the range is HEADED by one of the phrases English cancels a
+    /// sentence with, and says nothing after it but retraction vocabulary.
+    ///
+    /// A RETRACTION NEED NOT NEGATE ANYTHING. The scan above proves a
+    /// retraction by finding a negator or a spoken decline in the clause, and
+    /// the commonest ways to take a sentence back carry neither: "i'm using
+    /// instagram for 5 minutes, SCRATCH THAT" minted the five minutes, and so
+    /// did the same sentence closed with "forget it", "cancel that", "ignore
+    /// that", "disregard that", "just kidding", "kidding", "i changed my
+    /// mind", "i take it back", "undo" and "wait" — every one a plan the
+    /// sentence itself cancels, answered with an open door and a debited pool.
+    /// "not really" and "on second thought no" DO negate, and still failed:
+    /// their remaining words ("really", "second", "thought") are not
+    /// vocabulary the allSatisfy knew.
+    ///
+    /// The leading run of retraction vocabulary is stepped over first, which
+    /// is what admits the pronoun ("I take it back"), the decline stacked in
+    /// front ("no wait"), and the transparent adverbs the answer slot already
+    /// steps over ("actually scratch that").
+    private static func aRetractionPhraseHeads(_ t: [String], _ range: Range<Int>) -> Bool {
+        var start = range.lowerBound
+        while true {
+            for phrase in retractionPhrases where start + phrase.count <= range.upperBound {
+                guard phrase.indices.allSatisfy({ t[start + $0] == phrase[$0] }) else { continue }
+                if (start + phrase.count..<range.upperBound)
+                    .allSatisfy({ isARetractionWord(t[$0]) }) { return true }
+            }
+            // The head is tried where the breath starts and then after each
+            // word of retraction vocabulary, so "wait" — which is itself on
+            // that vocabulary — is read as the phrase before it is stepped
+            // over as filler.
+            guard start < range.upperBound, isARetractionWord(t[start]) else { return false }
+            start += 1
+        }
+    }
+
+    /// The phrases a person takes a sentence back with. A CLOSED CLASS, and a
+    /// REFUSAL-ONLY one: it is read from `isARetraction` and from nowhere
+    /// else, `isARetraction` is read only through `aLaterClauseRetractsIt`,
+    /// and that veto's only power is to turn a commitment-framed grant into
+    /// the silence it was before the frame existed. A phrase nobody thought of
+    /// costs a retraction; a phrase seated here can never mint a minute.
+    ///
+    /// Written as PHRASES and not as tokens for the reason `lessWords` keeps
+    /// "break" out: "forget", "cancel", "ignore", "wait" and "back" are
+    /// ordinary words of ordinary sentences, and only the whole phrase, at the
+    /// head of its own breath, cancels anything.
+    private static let retractionPhrases: [[String]] = [
+        ["scratch", "that"], ["scratch", "it"],
+        ["forget", "it"], ["forget", "that"],
+        ["cancel", "that"], ["cancel", "it"],
+        ["ignore", "that"], ["ignore", "it"],
+        ["disregard", "that"], ["disregard", "it"],
+        ["just", "kidding"], ["kidding"], ["jk"], ["undo"], ["wait"],
+        ["changed", "my", "mind"], ["take", "it", "back"],
+        ["not", "really"], ["on", "second", "thought"],
+    ]
 
     private static func isARetractionWord(_ w: String) -> Bool {
         negators.contains(w) || spokenDeclines.contains(w)

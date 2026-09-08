@@ -277,10 +277,18 @@ private func budget(_ utterance: String) -> Int? {
 
     /// The hot path is the floor. Ask verbs, request modals and the corpus's
     /// own permissive rows all still grant.
+    ///
+    /// THE QUOTED ROW IS GONE, and it is round three's one re-pinned grant.
+    /// "my friend said give me an hour of tiktok" was defended here as the
+    /// user ADOPTING somebody else's ask, on the evidence that the quote never
+    /// resumes. It is the same sentence as "my friend says open tiktok for 20"
+    /// with an idiom for its quantity, and that one opened the door and
+    /// debited the pool — so the two compile alike now, both silent
+    /// (`aReportFramesTheAsk`, `SpendShapeAdversarialRound3Tests`). Its
+    /// doorless twin, "my friend said give me an hour", was already silent.
     @Test(arguments: [
         ("give me 20 of tiktok", "TikTok", 20),
         ("can i have twenty minutes of tiktok", "TikTok", 20),
-        ("my friend said give me an hour of tiktok", "TikTok", 60),
         ("im at my limit on tiktok, give me 20 minutes", "TikTok", 20),
         ("give me instagram until i leave the gym, 20 minutes tops", "Instagram", 20),
     ])

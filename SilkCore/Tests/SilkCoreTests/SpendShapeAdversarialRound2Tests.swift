@@ -589,12 +589,19 @@ private func expectNeverLoosensInstantly(_ text: String,
     /// clitic reads as the request modal precisely so that a thumb's spelling
     /// and a typist's compile alike, and a fix that split them would be a new
     /// bug wearing an apostrophe.
+    ///
+    /// THE WISH IS GONE, on this list's own instruction. "i wish i could use
+    /// instagram for 10 minutes" is silence as of round three: a wish reports
+    /// an ask exactly as a speech verb does, and it is read in the same gate
+    /// (`aReportFramesTheAsk`, `SpendShapeAdversarialRound3Tests`). The four
+    /// rows left are the CONDITIONAL and the plan for tomorrow, which still
+    /// need the mood gate to learn the conditional clause and the future —
+    /// still a class, still not a defect.
     @Test(arguments: [
         "i'd like 10 minutes of instagram tomorrow",
         "i would use instagram for 10 minutes if i could",
         "i'd use instagram for 10 minutes if i could",
         "id use instagram for 10 minutes if i could",
-        "i wish i could use instagram for 10 minutes",
     ])
     func aCounterfactualOrAPlanForTomorrowStillGrantsToday(_ text: String) {
         expectSpend(text, door: "Instagram", minutes: 10)

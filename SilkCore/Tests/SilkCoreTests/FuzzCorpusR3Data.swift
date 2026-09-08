@@ -70,7 +70,12 @@ enum FuzzCorpusR3Data {
         FuzzCorpusRow(source: "conversation", index: 58, utterance: "dont give me more than 10 of tiktok", stateSpec: nil, expect: "VERDICT GRANT door=tiktok minutes=10"),
         FuzzCorpusRow(source: "conversation", index: 59, utterance: "seriously no more reddit today i mean it", stateSpec: nil, expect: "VERDICT CLOSE door=reddit until=day-boundary"),
         FuzzCorpusRow(source: "conversation", index: 60, utterance: "my friend said give me an hour", stateSpec: nil, expect: "PARSE UNPARSED-to-widener"),
-        FuzzCorpusRow(source: "conversation", index: 61, utterance: "my friend said give me an hour of tiktok", stateSpec: nil, expect: "VERDICT GRANT door=tiktok minutes=40 relock=+40m"),
+        // ROUND 3 (D5): a quoted ask is not an ask. The frame — "my friend
+        // said" — stands in front of the ask's own verb in the ask's own
+        // breath, and the door being inside the quote does not make the
+        // quote the user's sentence. Re-pinned to the silence its doorless
+        // twin above already had, not dropped.
+        FuzzCorpusRow(source: "conversation", index: 61, utterance: "my friend said give me an hour of tiktok", stateSpec: nil, expect: "PARSE UNPARSED-to-widener"),
         FuzzCorpusRow(source: "conversation", index: 62, utterance: "my mom says i should block tiktok", stateSpec: nil, expect: "VERDICT CLOSE door=tiktok until=day-boundary"),
         FuzzCorpusRow(source: "conversation", index: 63, utterance: "shes always telling me to limit tiktok to 20", stateSpec: nil, expect: "VERDICT RULE_CHANGE polarity=tighten cap[tiktok]=20"),
         FuzzCorpusRow(source: "conversation", index: 64, utterance: "everyone says i should cap tiktok at 20", stateSpec: nil, expect: "VERDICT RULE_CHANGE polarity=tighten cap[tiktok]=20"),
