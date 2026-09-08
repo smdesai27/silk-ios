@@ -256,7 +256,7 @@ private let table: [NoModelRow] = [
     .init(say: "asdfgh qwerty zxcvb", reply: .refused, grammar: false, remaining: 40),
 
     // THREE OF THE PARAPHRASES THE BRIEF EXPECTED TO BE REFUSED ARE NOT.
-    // "let me", "can i" and "use" are opening verbs (DeterministicParser.swift:3639),
+    // "let me", "can i" and "use" are opening verbs (`DeterministicParser.openingVerbs`),
     // so rule 8 claims all three and the bar writes the sentence out.
     // Recorded here rather than filed as a defect: the answer is deterministic,
     // it names no minutes it was not given, it debits nothing, and it is
@@ -400,14 +400,14 @@ private let table: [NoModelRow] = [
     ///
     /// Two numbers per sentence, and they answer different questions.
     ///
-    /// COMPILE is the grammar plus the silent widener — the same two calls
-    /// `AppModel.handle` makes (AppModel.swift:597-603), timed on their own.
+    /// COMPILE is the grammar plus the silent widener — the same two `parse`
+    /// calls `AppModel.handle` makes, timed on their own.
     /// This is what a user pays for the parse when there is no model, and it
     /// must be far under a frame: the grammar is a string walk and the widener
     /// returns before it allocates anything.
     ///
     /// TURN is the whole of `handle`, which includes the deliberate ~480 ms
-    /// beat the reply waits out (AppModel.swift:606-610). The bound on it is
+    /// beat `AppModel.handle` waits out. The bound on it is
     /// what proves the silent widener costs nothing ON TOP of that beat — a
     /// refusal that sat behind `SilkModelParser.deadline` would land at 2.5 s,
     /// not 0.5 s.

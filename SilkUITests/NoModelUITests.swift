@@ -5,7 +5,7 @@ import XCTest
 /// `NoModelTurnTests` drives `AppModel.handle` directly and proves the grammar
 /// answers every canonical sentence on its own. That is the pipeline; this is
 /// the product. It launches the app under `-silkNoModel YES` — which sets
-/// `SilkModelParser.testForceSilent` in `AppModel.init` (AppModel.swift:126),
+/// `SilkModelParser.testForceSilent` in `AppModel.init`,
 /// making the widener answer `.silence` exactly as an unavailable one does —
 /// walks setup, and types five sentences at the bar: half a spend, the whole
 /// sentence it is answered with, a paraphrase only a model could read, a budget

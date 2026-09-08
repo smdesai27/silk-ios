@@ -170,6 +170,54 @@ public enum DayLog {
     /// because §3.5's observability rule turns on the blob being *at* it.
     public static let attemptsCap = 2000
 
+    /// How many attempts the render path's append buffer holds before it has
+    /// to pay for a fold. Small on purpose: the shield encodes the whole tail
+    /// on every reach, so the tail is the thing that must stay cheap, and 64
+    /// is more reaches than a heavy day produces between two app foregrounds.
+    public static let attemptsTailCap = 64
+
+    /// The attempts blob as it stands once the render path's tail buffer is
+    /// folded in — **the single definition of "the attempts", used both by the
+    /// fold that writes it and by every reader that has not folded yet.**
+    ///
+    /// Why it lives in Core rather than beside the `UserDefaults` keys. The
+    /// shield extension may not re-encode a 2000-entry `[Date]` on the path
+    /// that draws the wall, so a reach is appended to a small tail key and the
+    /// app folds it later. That split is only safe while a reader cannot tell
+    /// the two states apart, and §3.5's observability rule is the reader that
+    /// could: `summarise` calls a day unobservable when the blob is AT its cap
+    /// and the day starts before the blob's oldest entry, so a merge that
+    /// trimmed differently from the fold would move a day's verdict simply by
+    /// virtue of when the app was last opened. One function, both callers, and
+    /// the rule reads the same number either way.
+    ///
+    /// **Idempotent**, which is what makes the fold safe to lose a race:
+    /// `UserDefaults` has no compare-and-swap, and two processes can fold the
+    /// same tail (the app on foreground, the shield when the tail overflows).
+    /// Entries the blob already carries are dropped, so a doubled fold cannot
+    /// double-count a reach — the failure this would otherwise have is an
+    /// inflated `reaches` term on a real day, which is a wrong verdict rather
+    /// than a missing one.
+    ///
+    /// Order is preserved (blob first, then the tail in the order it was
+    /// appended) and the cap is applied last, exactly as `recordAttempt` used
+    /// to apply it.
+    public static func foldedAttempts(blob: [Date], tail: [Date]) -> [Date] {
+        guard !tail.isEmpty else { return capped(blob) }
+        // Only the blob's own tail-length window can hold a doubled fold — a
+        // fold appends to the end — so the membership set stays small rather
+        // than being built over all 2000 entries on every read.
+        let known = Set(blob.suffix(attemptsTailCap * 2))
+        var out = blob
+        out.append(contentsOf: tail.filter { !known.contains($0) })
+        return capped(out)
+    }
+
+    private static func capped(_ attempts: [Date]) -> [Date] {
+        guard attempts.count > attemptsCap else { return attempts }
+        return Array(attempts.dropFirst(attempts.count - attemptsCap))
+    }
+
     /// A Silk day shorter or longer than this is a boundary that moved under
     /// the user — a timezone change, not a day. It draws a ring rather than a
     /// fill, because `observed` has a span term even though `fraction` does

@@ -178,7 +178,19 @@ private enum Leaf {
 /// three strokes, so the steady state costs nothing to redraw.
 struct Planting {
     struct Item {
-        var path: Path          // stems absolute; leaves local to their attach point
+        /// **A stem's curve, absolute — and a stem's only.** It is what
+        /// `trimmedPath` cuts while the runner draws itself on, tip-first, and
+        /// there is no other way to express that.
+        ///
+        /// A leaf carries an EMPTY path here, and `placed` is the whole of its
+        /// geometry. It used to carry its own copy, local to the attach point,
+        /// so the unfurl could rotate and scale about the origin — but that is
+        /// the same transform either way: conjugating it by the translation to
+        /// the attach point turns it into a transform of `placed`, which is
+        /// what `paint` now does. One copy of every leaf in the planting
+        /// instead of two — the settled aggregate below is the other, and it
+        /// pays for the steady state, which is most of Mirror's life.
+        var path: Path
         var origin: CGPoint
         var band: Int
         var t0: Double
@@ -282,10 +294,17 @@ struct Planting {
 
         func add(_ item: Item) {
             var item = item
-            item.placed = item.isStem
-                ? item.path
-                : item.path.applying(CGAffineTransform(translationX: item.origin.x,
-                                                       y: item.origin.y))
+            if item.isStem {
+                // The same `Path` value, so this shares storage rather than
+                // copying it — a stem is already drawn where it lives.
+                item.placed = item.path
+            } else {
+                item.placed = item.path.applying(
+                    CGAffineTransform(translationX: item.origin.x, y: item.origin.y))
+                // And the local copy is dropped: `paint` unfurls `placed` about
+                // the attach point instead, which is the identical transform.
+                item.path = Path()
+            }
             out.items.append(item)
             if item.isStem {
                 out.settledStems[item.band].addPath(item.placed)
@@ -489,11 +508,20 @@ struct Hedgerow: View, @MainActor Animatable {
                            with: .color(ladder[item.band].opacity(alpha * 0.9)),
                            style: StrokeStyle(lineWidth: Ladder.stemWidth[item.band], lineCap: .round))
             } else {
+                // The unfurl, about the attach point, applied to the PLACED
+                // leaf — so no second copy of the geometry has to be kept for
+                // the fraction of a second the leaf is opening.
+                //
+                // Translating back by the origin before the fill is what makes
+                // the two identical: the placed leaf is the local one moved to
+                // its attach point, so undoing that move first leaves exactly
+                // the local geometry under exactly the old transform.
                 var c = ctx
                 c.translateBy(x: item.origin.x, y: item.origin.y)
                 c.rotate(by: .radians(-0.34 * (1 - e)))
                 c.scaleBy(x: e, y: e)
-                c.fill(item.path, with: .color(ladder[item.band].opacity(alpha)))
+                c.translateBy(x: -item.origin.x, y: -item.origin.y)
+                c.fill(item.placed, with: .color(ladder[item.band].opacity(alpha)))
             }
         }
     }

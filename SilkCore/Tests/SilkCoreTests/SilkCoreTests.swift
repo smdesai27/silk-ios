@@ -276,7 +276,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         #expect(c.hour == 22 && c.minute == 0)
     }
 
-    @Test func placeBoundGetsFourWords() {
+    @Test func placeBoundGetsTheSentenceWrittenOut() {
         #expect(parseAndValidate("give me instagram until i leave the gym")
                 == .refuseWriteItOut(door: instagram, minutes: nil))
     }

@@ -322,8 +322,8 @@ private func freshModel(budget: Int = 40) -> (AppModel, Door) {
     /// later, leaving ~0.4 s — and less than that in practice, because
     /// `startClock()`'s body cannot run until `landWait` returns, so the ledger
     /// write, the re-validation and the wall reconcile all come out of the same
-    /// margin. Lose that race and `nextTransition` drops the expired row
-    /// (`GrantLedger.swift:163-165`), `nextWake` falls back to the next
+    /// margin. Lose that race and `GrantLedger.nextTransition` drops the
+    /// expired row, `nextWake` falls back to the next
     /// minute boundary, and the poll below fails with a message accusing
     /// `clearWait` of a defect that is not there. It is a cliff and not a
     /// gradient: win and the tick fires at 1 s, lose and it is up to 60 s out.

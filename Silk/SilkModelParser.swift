@@ -119,6 +119,19 @@ actor SilkModelParser {
     /// would answer with the wrong doors in it, so a mismatch throws it away
     /// rather than using it.
     private var warm: (instructions: String, session: LanguageModelSession)?
+    /// Whether anybody still wants a warm session — the bar's focus, held here
+    /// as a fact rather than asked for.
+    ///
+    /// `parse` spends the warm session and warms a replacement on its way out,
+    /// so a second sentence in the same conversation is warm too. But "on its
+    /// way out" is up to two seconds after the sentence went in, and a blur
+    /// inside those two seconds runs `cool()` first — so the `defer` then built
+    /// and warmed a session for a bar nobody was looking at, and it stayed
+    /// resident until the next conversation happened to replace it. Set on the
+    /// way into `prewarm`, cleared by `cool`, and read by that `defer`, which
+    /// turns "warm a replacement" into "warm a replacement if the conversation
+    /// is still standing".
+    private var wanted = false
     /// Generations still running, counted on this actor by the work arm
     /// itself. Nonzero at the top of `parse` means the last clock won and
     /// its loser ignored the cancel; see the guard there.
@@ -144,6 +157,9 @@ actor SilkModelParser {
     /// Safe to call on every focus: a session already warmed against these
     /// instructions is left alone.
     func prewarm(state: PolicyState) {
+        // Before every guard below: this says the bar is focused, which is true
+        // whether or not this device has a model to warm.
+        wanted = true
         #if DEBUG
         // The seam covers the warm-up too, or it is not a simulation of an
         // unavailable model: a run under `testForceSilent` would otherwise
@@ -164,6 +180,7 @@ actor SilkModelParser {
     /// Drop the warm session. The thread is a moment, not a log, and a session
     /// held past the conversation is memory kept warm for nobody.
     func cool() {
+        wanted = false
         warm = nil
     }
 
@@ -220,7 +237,11 @@ actor SilkModelParser {
         } else {
             session = LanguageModelSession(instructions: prompt)
         }
-        defer { prewarm(state: state) }
+        // A replacement for the one just spent — but only while the
+        // conversation that would use it is still standing. A blur during a
+        // parse runs `cool()` while this frame is suspended, and re-warming
+        // behind it left a session resident for nobody.
+        defer { if wanted { prewarm(state: state) } }
 
         let options = GenerationOptions(sampling: .greedy)
 

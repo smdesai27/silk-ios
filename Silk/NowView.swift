@@ -241,11 +241,16 @@ struct NowView: View {
         VStack(spacing: 0) {
             ForEach(model.policy.doors) { door in
                 let state = model.state(of: door)
+                // Formatted ONCE per row. The row draws it and the spoken label
+                // repeats it, and both used to call `displayTime` themselves —
+                // two `DateFormatter` trips per door per pass, on the list that
+                // redraws whenever anything on this model moves.
+                let time = state.displayTime()
                 Button {
                     model.raiseShield(for: door)
                 } label: {
                     DoorRow(name: door.name,
-                            time: state.displayTime(now: model.now),
+                            time: time,
                             state: state.rowState,
                             night: night,
                             showsRule: door.id != model.policy.doors.last?.id)
@@ -255,7 +260,7 @@ struct NowView: View {
                 // One spoken element per door: name, state, deadline. The
                 // label sits on the button, not on the row — the inner texts
                 // stay in the hierarchy for the UI tests to match.
-                .accessibilityLabel(Text(doorLabel(name: door.name, state: state)))
+                .accessibilityLabel(Text(Self.doorLabel(name: door.name, state: state, time: time)))
             }
         }
         .padding(.horizontal, 46)
@@ -263,13 +268,17 @@ struct NowView: View {
 
     /// "Reddit, open till 4:52" — the row's own strings, spoken in one breath.
     /// The dot and the rule say nothing.
-    private func doorLabel(name: String, state: DoorState) -> String {
+    ///
+    /// `time` is handed in rather than asked for, so the row and its label are
+    /// the same formatting and not two of it. `static` because it now reads
+    /// nothing off the view.
+    private static func doorLabel(name: String, state: DoorState, time: String?) -> String {
         let word = switch state {
         case .open: SilkStrings.open
         case .live: SilkStrings.inUse
         case .rest: SilkStrings.closed
         }
-        guard var time = state.displayTime(now: model.now) else { return "\(name), \(word)" }
+        guard var time else { return "\(name), \(word)" }
         if time.hasPrefix("\u{00B7} ") { time.removeFirst(2) }
         return "\(name), \(word) \(time)"
     }

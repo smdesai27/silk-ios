@@ -29,11 +29,36 @@ public struct TimeOfDay: Hashable, Codable, Sendable, Comparable {
 /// voice vocabulary, the launch mapping, and the web-domain block.
 public struct Door: Hashable, Codable, Sendable, Identifiable {
     public let id: UUID
-    public var name: String          // display name, user-chosen from the catalogue
+    public var name: String {        // display name, user-chosen from the catalogue
+        didSet { key = name.lowercased() }
+    }
+    /// The name lowercased, kept rather than computed. `door(named:)` is
+    /// asked once per token and once per bigram of every sentence, and each
+    /// ask used to lowercase every door's name again: `String.lowercased()`
+    /// was the single largest symbol left in the parser's profile once the
+    /// grammar itself had been made cheap. Derived from `name` at every
+    /// write, never encoded — an older blob without it decodes the same.
+    public private(set) var key: String
 
     public init(id: UUID = UUID(), name: String) {
         self.id = id
         self.name = name
+        self.key = name.lowercased()
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, name }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        key = name.lowercased()
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
     }
 
     /// The door's spoken form, lowercased: **its name and nothing else**.
@@ -58,7 +83,7 @@ public struct Door: Hashable, Codable, Sendable, Identifiable {
     /// An array rather than a String because `door(named:)` and
     /// `DoorRoster.canAdd` both ask "does this door answer to this word", and
     /// the shape of that question is a membership test.
-    public var spokenForms: [String] { [name.lowercased()] }
+    public var spokenForms: [String] { [key] }
 }
 
 /// The night window. May cross midnight (22:00 → 7:00).
@@ -213,7 +238,7 @@ public struct PolicyState: Hashable, Codable, Sendable {
 
     public func door(named utteranceToken: String) -> Door? {
         let t = utteranceToken.lowercased()
-        return doors.first { $0.spokenForms.contains(t) }
+        return doors.first { $0.key == t }
     }
 
     /// What a parked loosening becomes when its day finally turns.

@@ -10,7 +10,8 @@ import UIKit
 // `SpendIntentTests` owns the same three facts from Siri's side and pins the
 // dialogs. Nothing owned them from the *bar's* side, which is the surface the
 // user actually types into and the one where the refusal is composed twice:
-// `handle`'s own down-hours gate (AppModel.swift:551) and `apply`'s
+// `handle`'s own down-hours gate (the `isDownHours, verdict.deferredByDownHours`
+// gate in `AppModel.handle`) and `apply`'s
 // `.refuseDownHours` arm compose the same sentence from the same field, and a
 // change to either that missed the other would ship a night that answers
 // differently depending on which gate caught the sentence.

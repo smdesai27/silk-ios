@@ -2,6 +2,10 @@ import ManagedSettings
 import ManagedSettingsUI
 import UIKit
 import SilkCore
+// For `FamilyActivitySelection` alone: the door map the reconcile hands back
+// is typed in it, and this file reads `applicationTokens` off it and nothing
+// else. No picker, no authorization, no UI — the type only.
+import FamilyControls
 
 /// The wall. A statement, not a control: one word, one quiet line, one button
 /// Apple forces us to render (it dismisses). No menu, no durations, no escape
@@ -17,10 +21,15 @@ import SilkCore
 final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
 
     // Silk's grounds, as UIKit colors (tokens/color.css).
-    private let paper = UIColor(red: 0.965, green: 0.953, blue: 0.925, alpha: 1)      // #F6F3EC
-    private let ink = UIColor(red: 0.129, green: 0.118, blue: 0.090, alpha: 1)        // #211E17
-    private let lacquer = UIColor(red: 0.086, green: 0.075, blue: 0.055, alpha: 1)    // #16130E
-    private let linen = UIColor(red: 0.937, green: 0.914, blue: 0.859, alpha: 1)      // #EFE9DB
+    //
+    // Static, because the two ensō bitmaps below are: an image cached for the
+    // life of the process cannot be built out of an instance's properties.
+    // `UIColor` is `Sendable`, so immutable `let`s of it need no annotation;
+    // the system instantiates this data source off the main actor.
+    private static let paper = UIColor(red: 0.965, green: 0.953, blue: 0.925, alpha: 1)      // #F6F3EC
+    private static let ink = UIColor(red: 0.129, green: 0.118, blue: 0.090, alpha: 1)        // #211E17
+    private static let lacquer = UIColor(red: 0.086, green: 0.075, blue: 0.055, alpha: 1)    // #16130E
+    private static let linen = UIColor(red: 0.937, green: 0.914, blue: 0.859, alpha: 1)      // #EFE9DB
 
     /// The day ground is pre-compensation, not a colour choice, and it only
     /// happens to equal the day button's fill. If a device ever forces the
@@ -28,7 +37,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     /// editing `linen`: the day capsule separates from its wall by the layer
     /// order and nothing else, so dragging both to one new colour would leave
     /// the button visible only as prominent glass's blue rim.
-    private var dayGround: UIColor { linen }
+    private var dayGround: UIColor { Self.linen }
 
     /// The night ground, and the one figure in this file that answers to a
     /// design change made after it was measured. The app's night ground is no
@@ -50,7 +59,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     /// under it — the capsule would read as a hole punched in the wall, or as
     /// nothing but prominent glass's blue rim. The mid value keeps every
     /// measured figure in docs/design/screentime-ui.md valid.
-    private var nightGround: UIColor { lacquer }
+    private var nightGround: UIColor { Self.lacquer }
 
     // The ink and paper ramps. The two MARK values are still the tokens
     // tokens/color.css names; the two CAPTION values are the AA-floored ramp
@@ -68,23 +77,39 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     // read against what it renders (docs/design/screentime-ui.md): #FAF8F5 by
     // day, #2F2F29 at night. That is also why the day floor here (α ≈ 0.613)
     // is not the app's (α ≈ 0.618) — the material lifts its wall.
-    private var inkMark: UIColor { ink.withAlphaComponent(0.60) }        // --silk-ink-60,   "shield mark" — 4.32:1 on #FAF8F5
-    private var inkCaption: UIColor { ink.withAlphaComponent(0.70) }     // was .50 → 3.21:1, under AA. 5.94:1
-    private var paperMark: UIColor { paper.withAlphaComponent(0.40) }    // --silk-paper-40, "night mark" — 3.28:1 on #2F2F29
-    private var paperCaption: UIColor { paper.withAlphaComponent(0.62) } // was paperMark → 3.28:1, under AA. 5.45:1
-    private var paperTitle: UIColor { paper.withAlphaComponent(0.90) }   // no token; _ds_bundle.css:465 spends it raw
-    private var paperButton: UIColor { paper.withAlphaComponent(0.80) }  // --silk-paper-80, "night shield button"
+    // The two mark values are static because the ensō bitmaps below are built
+    // from them at process scope; the four caption/title/button values stay
+    // instance-computed because nothing outlives a call needs them.
+    private static let inkMark = ink.withAlphaComponent(0.60)    // --silk-ink-60,   "shield mark" — 4.32:1 on #FAF8F5
+    private var inkCaption: UIColor { Self.ink.withAlphaComponent(0.70) }     // was .50 → 3.21:1, under AA. 5.94:1
+    private static let paperMark = paper.withAlphaComponent(0.40) // --silk-paper-40, "night mark" — 3.28:1 on #2F2F29
+    private var paperCaption: UIColor { Self.paper.withAlphaComponent(0.62) } // was paperMark → 3.28:1, under AA. 5.45:1
+    private var paperTitle: UIColor { Self.paper.withAlphaComponent(0.90) }   // no token; _ds_bundle.css:465 spends it raw
+    private var paperButton: UIColor { Self.paper.withAlphaComponent(0.80) }  // --silk-paper-80, "night shield button"
 
-    // The ensō mark, pre-rendered once per face. Identity, not information —
-    // it is always whole, like EnsoMark in the app.
-    private lazy var dayEnso: UIImage = Self.ensoIcon(color: inkMark)
-    private lazy var nightEnso: UIImage = Self.ensoIcon(color: paperMark)
+    /// The ensō mark, drawn once per face **per process** — not, as this used
+    /// to say, "once per face".
+    ///
+    /// They were `lazy var`s, which is once per face per *instance*, and the
+    /// system makes a fresh `ShieldConfigurationDataSource` for every wall it
+    /// renders. So each wall paid a full `UIGraphicsImageRenderer` pass:
+    /// flattening four cubics into 257 points, a running arc-length table, and
+    /// three fat stroked paths — for an image that is a constant. Hoisting
+    /// them to the type makes it once per extension launch, and the extension
+    /// is kept warm across renders.
+    ///
+    /// `UIImage` is `Sendable`, and these are immutable, fully drawn before
+    /// either `let` is first observed, and only ever read afterwards — the
+    /// documented thread-safety of a `UIImage` you do not mutate.
+    /// Swift's `static let` initialisation is itself once-only and
+    /// thread-safe, so two concurrent renders cannot both draw one.
+    private static let dayEnso: UIImage = ensoIcon(color: inkMark)
+    private static let nightEnso: UIImage = ensoIcon(color: paperMark)
 
     override func configuration(shielding application: Application) -> ShieldConfiguration {
         SharedStore.recordAttempt()
 
         let now = Date()
-        let policy = SharedStore.loadPolicy()
 
         // Every wall also drives layer-4 of the re-lock: any shield render of
         // any app is a wake, and every wake reconciles.
@@ -96,7 +121,19 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
         // against a phone whose owner is asleep and whose Silk is not running.
         // The face a wall shows is a rendering decision; reconciling is not,
         // and nothing that decides what to draw may sit in front of it.
-        Wall.reconcile(now: now)
+        //
+        // Every blob this function needs comes out of that one call now. The
+        // policy read used to sit ABOVE this line and the door selections and
+        // ledger below it, so one render decoded the policy twice, the door
+        // selections twice and the ledger twice — the reconcile's copies and
+        // the subtitle's — for a total of eight JSON decodes on the path that
+        // draws the wall, inside a 6 MB extension. The receipt is what the
+        // reconcile already read; nothing here re-asks the store for it.
+        //
+        // The ordering is unchanged and cannot regress: the reconcile is no
+        // longer merely *before* the night face, it is the thing the night
+        // face's own policy comes from.
+        let read = Wall.reconcile(now: now)
 
         // Down hours: the night answers with the hour it opens, not the app.
         // There is nothing to go ask Silk for until then.
@@ -108,7 +145,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
         // no sentence: a bare "☾ 7:00" on a wall met at eleven at night is read
         // as the evening, which is a wall promising to open eight hours before
         // it will. The nbsp the form carries is why it cannot wrap.
-        guard let p = policy else { return day(subtitle: SilkStrings.openSilk) }
+        guard let p = read.policy else { return day(subtitle: SilkStrings.openSilk) }
         if p.downHours.contains(currentTimeOfDay(now)) {
             return night(subtitle: "☾  \(p.downHours.end.displayWithMeridiem)")
         }
@@ -138,8 +175,14 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
         // not needed: it decides which hour a refusal quotes, and this wall
         // quotes none. Every one of them arrives here as zero, and zero falls
         // through to saying only where to go.
-        if let door = door(for: application, policy: p) {
-            let ledger = SharedStore.loadLedger()
+        if let door = door(for: application, policy: p, selections: read.doors) {
+            // The reconcile's own ledger where it has one. It is nil only on
+            // the paths that refuse to write — an unreadable policy, or a wall
+            // switched off — and neither of those reaches this line: `p`
+            // decoded, and a door row cannot exist under a disabled wall. The
+            // fallback is there because the receipt promises a read, not a
+            // read this function is entitled to assume happened.
+            let ledger = read.ledger ?? SharedStore.loadLedger()
             // The ESTABLISHED day: the subtitle must promise what the bar
             // would actually give, and the bar windows on the established
             // day's start (`GrantLedger.effectiveDayStart`).
@@ -162,10 +205,12 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
         // reconciles nothing of its own — but it is still a live process with
         // the ledger in front of it, and some other door's expiry may be
         // sitting in it. Layer 4 is defined by the wake, not by the subject.
-        Wall.reconcile(now: now)
+        let read = Wall.reconcile(now: now)
         // The same two faces as apps — a domain is not a door, so the day
         // face carries no balance, and the night face answers with the hour.
-        if let p = SharedStore.loadPolicy(), p.downHours.contains(currentTimeOfDay(now)) {
+        // The policy is the reconcile's, not a second decode of the same key
+        // on the same render.
+        if let p = read.policy, p.downHours.contains(currentTimeOfDay(now)) {
             return night(subtitle: "☾  \(p.downHours.end.displayWithMeridiem)")
         }
         return day(subtitle: SilkStrings.openSilk)
@@ -189,10 +234,10 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
         ShieldConfiguration(
             backgroundBlurStyle: .systemThickMaterialLight,
             backgroundColor: dayGround,
-            icon: dayEnso,
-            title: .init(text: SilkStrings.brand, color: ink),
+            icon: Self.dayEnso,
+            title: .init(text: SilkStrings.brand, color: Self.ink),
             subtitle: .init(text: subtitle, color: inkCaption),
-            primaryButtonLabel: .init(text: SilkStrings.ok, color: ink),
+            primaryButtonLabel: .init(text: SilkStrings.ok, color: Self.ink),
             // --silk-linen doing its own job, "raised surfaces on paper". The
             // fill sits over the material rather than under it, so it escapes
             // the compression and renders at #EFE9DB — a step of 1.14:1 from
@@ -201,7 +246,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
             // compression is the only reason it separates from a ground handed
             // over as the same colour; docs/design/screentime-ui.md says what
             // to do if a device ever shows otherwise.
-            primaryButtonBackgroundColor: linen
+            primaryButtonBackgroundColor: Self.linen
         )
     }
 
@@ -209,7 +254,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
         ShieldConfiguration(
             backgroundBlurStyle: .systemChromeMaterialDark,
             backgroundColor: nightGround,
-            icon: nightEnso,
+            icon: Self.nightEnso,
             title: .init(text: SilkStrings.brand, color: paperTitle),
             subtitle: .init(text: subtitle, color: paperCaption),
             primaryButtonLabel: .init(text: SilkStrings.ok, color: paperButton),
@@ -221,7 +266,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
             // that renders #2F2F29; against the palette's floor stop instead it
             // would be #33312C at +2.5, which is why `nightGround` is the
             // radial's middle and says so at length.
-            primaryButtonBackgroundColor: Self.flatten(paper, over: nightGround, alpha: 0.16)
+            primaryButtonBackgroundColor: Self.flatten(Self.paper, over: nightGround, alpha: 0.16)
         )
     }
 
@@ -335,9 +380,13 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     /// than a Bool because the subtitle now has to ask the ledger about this
     /// door in particular — its close, its ceiling — and the loop already has
     /// the door in hand.
-    private func door(for application: Application, policy: PolicyState) -> Door? {
+    ///
+    /// `selections` is passed in rather than loaded: the reconcile that ran
+    /// two lines above this call already decoded that blob, and this is a
+    /// shield render inside a 6 MB extension.
+    private func door(for application: Application, policy: PolicyState,
+                      selections: [UUID: FamilyActivitySelection]) -> Door? {
         guard let token = application.token else { return nil }
-        let selections = SharedStore.loadDoorSelections()
         for door in policy.doors {
             if let sel = selections[door.id], sel.applicationTokens.contains(token) {
                 return door

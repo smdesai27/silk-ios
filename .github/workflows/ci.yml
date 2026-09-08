@@ -32,16 +32,16 @@ jobs:
   # is about the product.
   #
   # SilkCore imports Foundation and nothing else — no UIKit, no SwiftUI, and not
-  # one conditional compilation block in its 7,900 lines of source — so it builds
+  # one conditional compilation block anywhere in its source — so it builds
   # and tests on a plain swift.org toolchain. That is worth a runner because it
-  # is the property that lets 899 of this repo's 1,000 test cases run somewhere
-  # that is not a Mac: a container, a Linux runner, a cloud session with no Xcode
-  # in it. This job is what keeps that true. The day someone reaches into UIKit
-  # from the spine for one convenience, this is the thing that says no — on a
-  # runner that bills at a tenth of the ones below it.
+  # is the property that lets the spine's whole count minus the one Darwin-only
+  # case run somewhere that is not a Mac: a container, a Linux runner, a cloud
+  # session with no Xcode in it. This job is what keeps that true. The day
+  # someone reaches into UIKit from the spine for one convenience, this is the
+  # thing that says no — on a runner that bills at a tenth of the ones below it.
   #
-  # 899 and not 900 because the tests carry exactly one `#if`, and it is worth
-  # knowing about: `HotPathCostTests.tokenizeDoesNotPayPerCallSetupCost` bounds
+  # The spine's whole count minus the one Darwin-only case, not the spine's
+  # whole count, because the tests carry exactly one `#if`, and it is worth
   # a ratio whose size is a property of the Foundation underneath rather than of
   # the code, so it asks only on Darwin and this job reports it as a named skip.
   # Its portable half runs here. That file's `darwinFoundation` has the numbers.

@@ -61,6 +61,14 @@ settings:
       # It also does not reach SilkCore: Xcode does not propagate
       # OTHER_SWIFT_FLAGS to Swift Package targets.
       OTHER_SWIFT_FLAGS: -file-prefix-map $(SRCROOT)=/Silk
+      # Explicit rather than relying on the default: a shipped Release build
+      # has no business being testable, and leaving it implicit is how it
+      # quietly stops being true.
+      ENABLE_TESTABILITY: NO
+      # Release-only: full asset-catalog optimization trades build time for a
+      # smaller archive, which is the right side of that trade for a build
+      # nobody iterates on.
+      ASSETCATALOG_COMPILER_OPTIMIZATION: space
 
 packages:
   SilkCore:

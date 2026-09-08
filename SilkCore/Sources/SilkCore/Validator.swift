@@ -125,6 +125,15 @@ public enum Validator {
         now: Date,
         calendar: Calendar = .current
     ) -> Verdict {
+        // A SILENT PARSE PAYS FOR NOTHING. Every path below returns `.silence`
+        // for it, and the two lines under this one are the day's arithmetic:
+        // two calendar walks and a pass over the ledger, run for a sentence
+        // that compiled to nothing. Silence is the commonest outcome there is —
+        // it is what ordinary prose produces, and it is what every guard in the
+        // grammar returns — so the work was being done mostly for sentences
+        // that had already been declined.
+        if case .silence = outcome { return .silence }
+
         // The ESTABLISHED day's start, not the live boundary's: a tighten that
         // moves when down hours end lands mid-day, and the day she is standing
         // in must keep the start it opened with, or the pool, the caps and

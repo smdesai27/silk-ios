@@ -98,6 +98,19 @@ final class AppModel {
     /// The clock the views read instead of `.now`. Deadlines are absolute and
     /// the day turns on its own, so the screen has to be able to change with
     /// nobody touching it.
+    ///
+    /// **It is not the wall clock, and must not be read as one.** The minute
+    /// tick adopts a fresh instant only when the screen can see the difference
+    /// — a transition passed, the ledger moved, the day turned, or the face
+    /// changed (`tick(at:transition:)` states the whole argument) — because
+    /// every page and every derived property here observes it, so a write is a
+    /// full tree pass. Between those, it can sit hours behind `.now`.
+    ///
+    /// So: anything that decides something, or writes something, asks `.now`
+    /// directly — every grant, close and validation in this file already does.
+    /// And anything new that would read the wall clock CONTINUOUSLY on a page
+    /// belongs in `face(at:)`, or it will draw stale and nobody will find out
+    /// from here.
     private(set) var now: Date = .now
     @ObservationIgnored private var clock: Task<Void, Never>?
 
@@ -160,14 +173,34 @@ final class AppModel {
         applyPendingIfDayTurned()
         wall.reconcile()
         refreshWallStanding()
+        // Stated rather than defaulted, so the launch's one door-selection
+        // decode is a line somebody can count instead of a `nil` that hides
+        // one. It is deliberately read HERE and not earlier: a matured
+        // loosening goes through `commit`, which retires orphaned selections,
+        // and a copy taken before `applyPendingIfDayTurned` would seat a
+        // retired binding's icon on the first frame.
+        refreshDoorIcons(SharedStore.loadDoorSelections())
         // Re-armed on every launch rather than once, because the daemon's
         // activity list is not documented to survive everything that can
         // happen to it, and arming is a restatement (it stops before it
         // starts) rather than a second registration.
+        //
+        // **Off the init frame, though.** `armHeartbeat` is a `stopMonitoring`
+        // and a `startMonitoring` against the DeviceActivity daemon: two
+        // synchronous XPC round trips, on the main actor, between the process
+        // launching and the first frame — and the schedule they restate is a
+        // daily anchor whose next firing is hours away, so nothing about the
+        // first frame depends on it. A `Task` hop puts it after the launch
+        // instead of inside it; every launch still arms, because the anchor is
+        // nil on a model this young and `reconcileOnReturn`'s retry reads the
+        // same flag. Whichever of the two gets there first, the other is a
+        // no-op — which is what the guard is for, not merely an optimisation.
         if onboarded {
-            armHeartbeatRecordingAnchor(policy.downHours)
+            Task { @MainActor [weak self] in
+                guard let self, self.armedHeartbeatAnchor == nil else { return }
+                self.armHeartbeatRecordingAnchor(self.policy.downHours)
+            }
         }
-        refreshDoorIcons()
         startClock()
     }
 
@@ -301,13 +334,19 @@ final class AppModel {
         return Double(remainingMinutes) / Double(policy.budgetMinutes)
     }
 
-    var isDownHours: Bool {
+    var isDownHours: Bool { isDownHours(at: now) }
+
+    /// The same question asked of an arbitrary instant, so the clock's gate can
+    /// ask it of the instant it is *considering* adopting. One function and not
+    /// two, or the gate would answer for a face the screen does not wear — the
+    /// `-silkNight` pin included.
+    private func isDownHours(at instant: Date) -> Bool {
         #if DEBUG
         // QA: -silkNight YES pins the night face so the crossing can be seen
         // without waiting for 10 PM. Same shape as -silkReset; debug only.
         if UserDefaults.standard.bool(forKey: "silkNight") { return true }
         #endif
-        let c = Calendar.current.dateComponents([.hour, .minute], from: now)
+        let c = Calendar.current.dateComponents([.hour, .minute], from: instant)
         return policy.downHours.contains(TimeOfDay(hour: c.hour ?? 0, minute: c.minute ?? 0))
     }
 
@@ -344,8 +383,11 @@ final class AppModel {
     /// The closed-day records, decoded and sorted once and then held — the
     /// same bargain `weekAttemptBuckets` strikes with the attempts blob, under
     /// the counter `SharedStore.daysRevision` keeps for exactly this. Mirror's
-    /// body reads `lastClosedScore`, `closedWeekScores` and `daysHeld` several
-    /// times a pass and each one was a full decode and sort of the whole blob.
+    /// body reached `closedWeekScores` — and `lastClosedScore` and `daysHeld`
+    /// through it — several times a pass, and each one was a full decode and
+    /// sort of the whole blob. (The body now takes the band once and hands it
+    /// down; this cache is what makes the *first* of those calls cheap, and the
+    /// two answer different halves of the same waste.)
     ///
     /// The revision is read BEFORE the blob, as the attempts cache reads its
     /// own: a record written between the two reads then shows as a mismatch on
@@ -393,6 +435,12 @@ final class AppModel {
     /// on a fresh install the hero showed 100 under a real weekday name, a
     /// flawless week that never happened — Mirror falls back to `todayScore`
     /// then, labelled as today, so the screen is never scoreless.
+    ///
+    /// It is the last element of `closedWeekScores` and nothing else, which is
+    /// why `MirrorView` no longer reads it: the page takes the band once and
+    /// takes this off the end of it. Kept because the name is the meaning —
+    /// nothing else in the app should have to know where the hero's number
+    /// lives in that array.
     var lastClosedScore: Int? { closedWeekScores.last ?? nil }
 
     /// Today's running score. The record's own equation on the live counts —
@@ -588,52 +636,112 @@ final class AppModel {
                 guard let wake = self?.nextWake() else { return }
                 try? await Task.sleep(for: .seconds(wake.seconds))
                 guard !Task.isCancelled, let self else { return }
-                // A shield render can record attempts while Silk stays
-                // .active — iPad Split View — so the tick cannot blindly
-                // trust the cache; but a blind delete re-decoded the whole
-                // attempts blob every minute for a page that mostly is not
-                // Mirror. The revision is one integer read, and it moves
-                // only when `recordAttempt` actually appended.
-                if let cache = self.weekAttemptsCache,
-                   cache.revision != SharedStore.attemptsRevision() {
-                    self.weekAttemptsCache = nil
-                }
-                // The records blob is the same bargain under its own counter:
-                // the Spend intent's sweep can seal a day in another process
-                // while Silk sits on Mirror.
-                self.invalidateDayRecordsIfStale()
-                let ledgerMoved = self.syncLedgerIfStale()
-                self.now = .now
-                // The wall is re-applied only when something it enforces could
-                // actually have moved. `Wall.reconcile` reads the union of the
-                // selections and subtracts the doors the ledger says are open,
-                // and the only inputs to that answer which change while nobody
-                // touches Silk are `now` crossing a grant's expiry or a close's
-                // lift (both are `nextTransition`, and the sleep is aimed at
-                // them), the day boundary passing under a close (`turned`), and
-                // a write from another process (`ledgerMoved`). Every local
-                // write reconciles at its own commit. A wake that is none of
-                // those is the plain minute, and it exists to redraw a deadline
-                // — four JSON decodes and a settings-store write to change
-                // nothing was the whole cost of showing the time.
-                let turned = DayBoundary.dayStart(now: self.now,
-                                                  downHours: self.policy.downHours)
-                    != self.compactedDayStart
-                // Asked of the clock this wake actually landed on, not of the
-                // one it was aimed at: a sleep the system overshoots past an
-                // expiry must still close that door, and a transition tested at
-                // scheduling time would have said "not yet" and never asked
-                // again — `nextTransition` drops a row once it is in the past.
-                // Fail-closed is the only direction this may be wrong in.
-                let passed = wake.transition.map { $0 <= self.now } ?? false
-                guard passed || ledgerMoved || turned else { continue }
-                // A grant that just expired has to close its door, and a day
-                // that turned matures whatever was waiting for it.
-                self.wall.reconcile()
-                self.applyPendingIfDayTurned()
-                self.compactLedgerIfDayTurned()
+                self.tick(at: .now, transition: wake.transition)
             }
         }
+    }
+
+    /// One wake of the minute clock — everything it does between two sleeps.
+    ///
+    /// A method rather than a paragraph inside the loop because the loop cannot
+    /// be asked a question: it is a sleep, and the thing worth asserting about
+    /// it is what a wake at a *chosen* instant does. `DayTurnTests` runs two of
+    /// these a minute apart and reads `now` between them; nothing else calls it.
+    func tick(at fresh: Date, transition: Date?) {
+        // A shield render can record attempts while Silk stays
+        // .active — iPad Split View — so the tick cannot blindly
+        // trust the cache; but a blind delete re-decoded the whole
+        // attempts blob every minute for a page that mostly is not
+        // Mirror. The revision is one integer read, and it moves
+        // only when `recordAttempt` actually appended.
+        if let cache = weekAttemptsCache,
+           cache.revision != SharedStore.attemptsRevision() {
+            weekAttemptsCache = nil
+        }
+        // The records blob is the same bargain under its own counter:
+        // the Spend intent's sweep can seal a day in another process
+        // while Silk sits on Mirror.
+        invalidateDayRecordsIfStale()
+        let ledgerMoved = syncLedgerIfStale()
+        // The wall is re-applied only when something it enforces could
+        // actually have moved. `Wall.reconcile` reads the union of the
+        // selections and subtracts the doors the ledger says are open,
+        // and the only inputs to that answer which change while nobody
+        // touches Silk are `now` crossing a grant's expiry or a close's
+        // lift (both are `nextTransition`, and the sleep is aimed at
+        // them), the day boundary passing under a close (`turned`), and
+        // a write from another process (`ledgerMoved`). Every local
+        // write reconciles at its own commit. A wake that is none of
+        // those is the plain minute, and it exists to redraw a deadline
+        // — four JSON decodes and a settings-store write to change
+        // nothing was the whole cost of showing the time.
+        //
+        // Asked of `fresh` and not of `now`, because `now` is no longer
+        // written unconditionally below and a gate that read it would be
+        // asking about the last wake that mattered.
+        let turned = DayBoundary.dayStart(now: fresh,
+                                          downHours: policy.downHours)
+            != compactedDayStart
+        // Asked of the clock this wake actually landed on, not of the
+        // one it was aimed at: a sleep the system overshoots past an
+        // expiry must still close that door, and a transition tested at
+        // scheduling time would have said "not yet" and never asked
+        // again — `nextTransition` drops a row once it is in the past.
+        // Fail-closed is the only direction this may be wrong in.
+        let passed = transition.map { $0 <= fresh } ?? false
+        // `now` is what the whole tree observes — the root, all three pages and
+        // every derived property on this model hang off it — so writing it is a
+        // full invalidation pass. It used to be written on every wake, which is
+        // sixty passes an hour of which about three change a pixel: the deadline
+        // strings the minute exists to redraw are `till 4:52`, and those move
+        // when a grant expires (`passed`), not when the minute does.
+        //
+        // So the write is gated on the instant being visibly different. Three of
+        // the four gates are the same ones the reconcile below has always used;
+        // the fourth is the FACE — day/night and the greeting's band — which is
+        // the only thing on any page that reads the wall clock continuously
+        // rather than reading a stored instant. Everything else `now` feeds
+        // (`dayStart`, `remainingMinutes`, `state(of:)`, the receipt's live
+        // grant, the rule in force) changes only at an instant that is already
+        // a `nextTransition` or a day boundary — which is exactly the argument
+        // the reconcile gate above is built on, applied to the screen instead
+        // of to the wall.
+        if passed || ledgerMoved || turned || face(at: fresh) != face(at: now) {
+            now = fresh
+        }
+        guard passed || ledgerMoved || turned else { return }
+        // The render path's tail, folded before anything reads the attempts:
+        // the extension appends there to keep its own encode bounded, and the
+        // app is the process that may pay the whole-array write. No revision
+        // moves, so the caches above are right not to have noticed.
+        SharedStore.foldAttemptsTail()
+        // A grant that just expired has to close its door, and a day
+        // that turned matures whatever was waiting for it.
+        wall.reconcile()
+        applyPendingIfDayTurned()
+        compactLedgerIfDayTurned()
+    }
+
+    /// What the screen can actually see of an instant.
+    ///
+    /// Two facts, and they are the only two anywhere in the app that are read
+    /// off the wall clock CONTINUOUSLY rather than off a stored instant: the
+    /// day/night face (`isDownHours`, which recolours every page) and the
+    /// greeting's band. Everything else `now` feeds moves at a transition the
+    /// tick already watches for by other means. Two instants with the same face
+    /// therefore draw the same screen, and replacing one with the other is a
+    /// tree pass that changes nothing.
+    private struct Face: Equatable {
+        var night: Bool
+        /// The hour `greeting` branches on — 20, 17, 12 or 0 — and not the hour
+        /// itself, so 12:59 and 12:01 are the same afternoon.
+        var band: Int
+    }
+
+    private func face(at instant: Date) -> Face {
+        let hour = Calendar.current.component(.hour, from: instant)
+        return Face(night: isDownHours(at: instant),
+                    band: hour >= 20 ? 20 : hour >= 17 ? 17 : hour >= 12 ? 12 : 0)
     }
 
     /// When to wake, and the instant the LEDGER wanted waking for — a grant
@@ -651,6 +759,15 @@ final class AppModel {
     }
 
     // MARK: - The bar
+
+    /// The door the bar last wrote out for her, and nothing else about the
+    /// turn before. One turn of memory, held here and not in the grammar:
+    /// "tiktok" is answered "Write it out: unlock TikTok for 10 min.", and
+    /// "10" typed next has to write out TikTok, not the first door on the
+    /// list. Set by the hint, cleared by every other reply, and read by the
+    /// one rule that guesses a door (`DeterministicParser.parse(recentDoor:)`).
+    /// `@ObservationIgnored`: nothing draws it.
+    @ObservationIgnored private var recentHintDoor: Door?
 
     /// The compile pipeline: deterministic grammar first; the on-device model
     /// widens rule-change paraphrases only; everything passes the Validator.
@@ -1180,19 +1297,14 @@ final class AppModel {
             // reloaded and re-applied over another process's write, and a door
             // that already had a longer grant running keeps ITS deadline.
             restateRelockLayers(for: door)
-            // Every unlock is an exception spent, so the journal takes one
-            // here, at the landing, not only on the key-tap path. Sanil's call
-            // (2026-08-25): the counter must visibly rise each time an unlock
-            // is used. The counter is no longer read from here — the footnote
-            // counts today's grants off the ledger, which needs no write at
-            // all — but the journal keeps the entry as a record.
-            //
-            // Synchronous on purpose, even though nothing reads it here: the
-            // next line hands the phone to the granted app, and a hop to the
-            // next turn of this actor's loop is a hop that may never come
-            // before the scene suspends. A dropped entry is the record going
-            // missing on the one path it exists for.
-            SharedStore.recordKeyUse()
+            // The key journal used to take an entry here — every unlock is an
+            // exception spent — and the write is gone with the journal itself.
+            // `SharedStore` carries the argument where the key used to live:
+            // the last reader was Mirror's footnote, which counts today's
+            // grants off the ledger now, and the record cost a decode and a
+            // whole-array re-encode of up to 2000 `Date`s on the one frame that
+            // is about to hand the phone to another app. The ledger holds every
+            // grant with its own timestamp, so nothing was actually lost.
             LaunchCatalog.open(doorName: door.name)
             return ("\(door.name) \(SilkStrings.isOpenFor) \(minutes) \(SilkStrings.minutes).",
                     { [weak self] in
@@ -2172,21 +2284,27 @@ final class AppModel {
     /// spent by `clearWait`. `@ObservationIgnored`: nothing draws it.
     @ObservationIgnored private var foregroundWorkDeferred = false
 
-    /// The door the bar last wrote out for her, and nothing else about the
-    /// turn before. One turn of memory, held here and not in the grammar:
-    /// "tiktok" is answered "Write it out: unlock TikTok for 10 min.", and
-    /// "10" typed next has to write out TikTok, not the first door on the
-    /// list. Set by the hint, cleared by every other reply, and read by the
-    /// one rule that guesses a door (`DeterministicParser.parse(recentDoor:)`).
-    /// `@ObservationIgnored`: nothing draws it.
-    @ObservationIgnored private var recentHintDoor: Door?
-
     /// Everything a genuine return from the background owes, in the order it
     /// owes it. Split out of `foregrounded` so the wait's ending can run the
     /// same paragraph, unchanged, at the moment it becomes safe to.
     private func reconcileOnReturn() {
         Silk.rereadReduceMotion()
-        weekAttemptsCache = nil
+        // The render path's tail, folded before anything reads the attempts.
+        // The shield extension appends there so its own encode stays bounded by
+        // 64 dates; the app is the process that may pay the whole-array write,
+        // and a return is where it has the frames to. It bumps no revision —
+        // nothing observable changes — so the two gates below are right not to
+        // notice it.
+        SharedStore.foldAttemptsTail()
+        // The same revision the clock tick compares, and for the same reason:
+        // a suspension is exactly where a shield render can have appended, so
+        // the cache cannot be trusted blindly — but it also mostly has not, and
+        // a blind drop re-decoded the whole attempts blob on every return to a
+        // page that is usually not Mirror. One integer read instead.
+        if let cache = weekAttemptsCache,
+           cache.revision != SharedStore.attemptsRevision() {
+            weekAttemptsCache = nil
+        }
         invalidateDayRecordsIfStale()
         // The suspension is where external writes accumulate — a Shortcuts
         // grant performed against the store while this copy slept — so the
@@ -2366,22 +2484,19 @@ final class AppModel {
         // The key buys the wait, not the merge: a tighten made since the
         // sentence was said still stands, exactly as it would at the boundary.
         let next = matured(pending)
-        // An exception spent is an exception journalled, but only an exception
-        // actually spent. The merge can legitimately deliver nothing — every
-        // field the sentence proposed may have been overtaken by a tighten
-        // since — and the key is scarce and hand-tapped. Burning it on a no-op
-        // is the one outcome the user can neither see nor undo, and it is more
-        // invisible than it was: the footnote counts today's unlocks now, so
-        // nothing on screen surfaces this journal at all. The pending stays
-        // parked and the journal stays untouched. `pendingChange` hides the button before it comes to
-        // this; the guard is here because the key will also arrive over NFC,
-        // where nothing consults the screen.
+        // A key is spent only on a merge that delivers something. The merge can
+        // legitimately deliver nothing — every field the sentence proposed may
+        // have been overtaken by a tighten since — and the key is scarce and
+        // hand-tapped. Burning it on a no-op is the one outcome the user can
+        // neither see nor undo, and it is invisible: the footnote counts today's
+        // unlocks off the ledger, and a key tap that changes no policy opens no
+        // door, so nothing on any page would move. The pending stays parked.
+        // `pendingChange` hides the button before it comes to this; the guard is
+        // here because the key will also arrive over NFC, where nothing consults
+        // the screen.
         guard next != policy else { return }
         policy = next
         park(nil, baseline: nil)
-        // The NFC key will record through the same call when the hardware flow
-        // lands.
-        SharedStore.recordKeyUse()
         commit()
     }
 

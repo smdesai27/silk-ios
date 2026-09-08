@@ -72,6 +72,18 @@ struct MirrorView: View {
     private var night: Bool { model.isDownHours }
 
     var body: some View {
+        // The week, read ONCE for the whole page.
+        //
+        // `closedWeekScores` walks the seven buckets against the day records on
+        // every call, and this body used to ask for it four times — once for the
+        // band, three through `lastClosedScore`, which is nothing but its last
+        // element. The caches under it (`dayRecordsCache`, `weekAttemptsCache`)
+        // make each call cheap; they do not make four of them one, and a body
+        // that asks the same question four times is a body whose cost moves with
+        // whatever the answer is derived from next. So the answer is taken here
+        // and handed down.
+        let scores = model.closedWeekScores
+        let lastClosed = scores.last ?? nil
         ZStack {
             Hedgerow(count: age, night: night, progress: grown)
                 .ignoresSafeArea()
@@ -81,7 +93,8 @@ struct MirrorView: View {
             // top glass and the log — not centred in the whole page, which would
             // sit visibly low.
             VStack(spacing: 0) {
-                cluster.frame(maxHeight: .infinity)
+                cluster(scores: scores, lastClosed: lastClosed)
+                    .frame(maxHeight: .infinity)
                 Color.clear.frame(height: 126)
             }
 
@@ -91,7 +104,7 @@ struct MirrorView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(Silk.motion(0.45), value: model.lastClosedScore != nil)
+        .animation(Silk.motion(0.45), value: lastClosed != nil)
         // 110 is measured from the glass in the mockup, the same coordinate space
         // as the bar's 44 — that is what gives the footnote its clearance.
         .ignoresSafeArea(.container, edges: .bottom)
@@ -174,10 +187,10 @@ struct MirrorView: View {
     }
 
     /// The score over the week, sharing one axis.
-    private var cluster: some View {
+    private func cluster(scores: [Int?], lastClosed: Int?) -> some View {
         VStack(spacing: 0) {
-            hero
-            week.padding(.top, 52)
+            hero(lastClosed: lastClosed)
+            week(scores: scores).padding(.top, 52)
         }
     }
 
@@ -186,10 +199,10 @@ struct MirrorView: View {
     /// the whole first day — it reads today's running score instead, named
     /// as today, so the screen always answers "how am I doing" with a number.
     /// The stroke is the score, so it is drawn at the score and nowhere else.
-    private var hero: some View {
-        let score = model.lastClosedScore ?? model.todayScore
-        let dayName = model.lastClosedScore != nil ? model.lastClosedDayName
-                                                   : SilkStrings.today
+    private func hero(lastClosed: Int?) -> some View {
+        let score = lastClosed ?? model.todayScore
+        let dayName = lastClosed != nil ? model.lastClosedDayName
+                                        : SilkStrings.today
         return ZStack {
             EnsoView(fraction: Double(score) / 100.0,
                      color: night ? Silk.scoreRingNight : Silk.scoreRing)
@@ -220,13 +233,13 @@ struct MirrorView: View {
     /// 190 wide and centre-aligned: the band is the ensō's base, not a rule
     /// across the page, so the label sits over its middle rather than its
     /// leading edge.
-    private var week: some View {
+    private func week(scores: [Int?]) -> some View {
         VStack(spacing: 16) {
             Text(SilkStrings.week)
                 .font(Silk.sans(12))
                 .tracking(Silk.track(0.04, 12))
                 .foregroundStyle(night ? Silk.paperAlpha(0.59) : Silk.inkAlpha(0.69))
-            WeekBand(closedScores: model.closedWeekScores, night: night)
+            WeekBand(closedScores: scores, night: night)
         }
         .frame(width: 190)
     }

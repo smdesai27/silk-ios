@@ -197,10 +197,19 @@ public struct GrantLedger: Codable, Sendable, Equatable {
     /// calendar of its own MUST pass it through, because a dropped forward
     /// splits one computation across two calendars and moves the day's far
     /// edge (`CalendarFarEdgeTests`).
+    ///
+    /// Summed in one pass rather than filtered into an array and then reduced.
+    /// The window and the arithmetic are unchanged; what is gone is the
+    /// intermediate `[Grant]`, which `Validator.validate` allocates twice on
+    /// every sentence that reaches it — once for the pool and once for a
+    /// capped door's own ceiling.
     public func spentMinutes(dayStart: Date, calendar: Calendar = .current) -> Int {
         let dayEnd = DayBoundary.nextDayStart(after: dayStart, calendar: calendar)
-        return grants.filter { $0.issuedAt >= dayStart && $0.issuedAt < dayEnd }
-            .reduce(0) { $0 + $1.minutes }
+        var total = 0
+        for g in grants where g.issuedAt >= dayStart && g.issuedAt < dayEnd {
+            total += g.minutes
+        }
+        return total
     }
 
     public func remainingMinutes(budget: Int, dayStart: Date, calendar: Calendar = .current) -> Int {
@@ -236,8 +245,11 @@ public struct GrantLedger: Codable, Sendable, Equatable {
     /// spend is.
     public func spentMinutes(doorID: UUID, dayStart: Date, calendar: Calendar = .current) -> Int {
         let dayEnd = DayBoundary.nextDayStart(after: dayStart, calendar: calendar)
-        return grants.filter { $0.doorID == doorID && $0.issuedAt >= dayStart && $0.issuedAt < dayEnd }
-            .reduce(0) { $0 + $1.minutes }
+        var total = 0
+        for g in grants where g.doorID == doorID && g.issuedAt >= dayStart && g.issuedAt < dayEnd {
+            total += g.minutes
+        }
+        return total
     }
 
     /// What is left under one door's own ceiling. `cap` is non-optional on

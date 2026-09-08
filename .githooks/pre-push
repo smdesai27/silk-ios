@@ -5,7 +5,7 @@
 # to catch the cheap failures before they cost a round trip, not to duplicate
 # CI.
 #
-# So it runs the spine and stops. The spine's tests run in about three seconds
+# So it runs the spine and stops. The spine's tests run in about eight seconds
 # and catch most of what breaks; the simulator walks take five minutes locally
 # and thirteen on a runner, and paying that on every push to learn what the PR
 # is about to tell you anyway is how a hook gets deleted. (Counts deliberately

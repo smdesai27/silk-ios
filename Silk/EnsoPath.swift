@@ -123,19 +123,55 @@ enum EnsoGeometry {
         guard n > 0 else { return CGVector(dx: 0, dy: -1) }
         return CGVector(dx: dx / n, dy: dy / n)
     }
+
+    /// Both answers from ONE lookup.
+    ///
+    /// The flick is a line from the brush tip along the direction of travel, so
+    /// it wants the point and the tangent at the same fraction — and asking the
+    /// two functions above bisects the same 513-entry table twice, over the same
+    /// target, to land on the same segment. Once is enough: they are read off
+    /// the one pair of samples the search returns.
+    ///
+    /// The single-answer forms stay. They are the named questions, one of them
+    /// has no `rect` to be given, and `docs/design/wait.md` §3.3's ratio test
+    /// measures the bisection through them.
+    static func pointAndTangent(atFraction fraction: Double,
+                                in rect: CGRect) -> (point: CGPoint, tangent: CGVector) {
+        let f = min(max(fraction, 0), 1)
+        let (i, t) = locate(CGFloat(f) * arcTable.total)
+        let a = arcTable.points[i - 1], b = arcTable.points[i]
+        let p = CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
+        let dx = b.x - a.x, dy = b.y - a.y
+        let n = (dx * dx + dy * dy).squareRoot()
+        return (p.applying(transform(in: rect)),
+                n > 0 ? CGVector(dx: dx / n, dy: dy / n) : CGVector(dx: 0, dy: -1))
+    }
 }
 
 // MARK: - Path
 
 /// The authored gesture, fitted into `rect`. Left open on purpose.
 struct EnsoPath: Shape {
-    func path(in rect: CGRect) -> Path {
+    /// The gesture in its authored 200×200 box, built once for the process.
+    ///
+    /// Only the *fit* is per-frame. The four cubics are literals in this file
+    /// and cannot change, yet `path(in:)` rebuilt them — a `move` and four
+    /// `addCurve`s, each growing a fresh `CGPath` — on every call, and it is
+    /// called once per stroke per frame: six on Now's hero, three more in every
+    /// wordmark on screen, and all of them again on each frame of the wait's
+    /// 120 Hz mark. What is left is one `applying`, which is the transform that
+    /// genuinely differs between callers.
+    static let basePath: Path = {
         var path = Path()
         path.move(to: EnsoGeometry.start)
         for c in EnsoGeometry.curves {
             path.addCurve(to: c.end, control1: c.c1, control2: c.c2)
         }
-        return path.applying(EnsoGeometry.transform(in: rect))
+        return path
+    }()
+
+    func path(in rect: CGRect) -> Path {
+        Self.basePath.applying(EnsoGeometry.transform(in: rect))
     }
 }
 
@@ -256,8 +292,10 @@ private struct EnsoFlick: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        let p = EnsoGeometry.point(atFraction: fraction, in: rect)
-        let t = EnsoGeometry.tangent(atFraction: fraction)
+        // One lookup for both: the tip and the direction it leaves in are read
+        // off the same segment of the arc table, and this shape is rebuilt on
+        // every frame the budget moves — every frame, during the wait.
+        let (p, t) = EnsoGeometry.pointAndTangent(atFraction: fraction, in: rect)
         let len = 10 * EnsoGeometry.fitScale(in: rect)
         var path = Path()
         path.move(to: p)

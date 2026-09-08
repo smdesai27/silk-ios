@@ -48,17 +48,11 @@ public enum NumberParser {
     /// is exactly why they had to be spelled out and why nothing below can see
     /// them.
     public static func allNumbers(in utterance: String) -> [Int] {
-        let text = utterance.lowercased()
+        let text = lowered(utterance)
         var results: [Int] = []
 
         // Duration idioms first — their component words must not double-count.
         var consumed = text
-        let idioms: [(pattern: String, value: Int)] = [
-            ("an hour and a half", 90), ("hour and a half", 90),
-            ("a quarter of an hour", 15), ("quarter of an hour", 15), ("quarter hour", 15),
-            ("half an hour", 30), ("half hour", 30),
-            ("an hour", 60), ("one hour", 60),
-        ]
         // ONCE PER OCCURRENCE, NOT ONCE PER PATTERN. The scan appended one
         // value and then REPLACED every copy, so a sentence carrying the
         // same idiom twice read as one quantity — "capping tiktok at an
@@ -70,16 +64,33 @@ public enum NumberParser {
         // cap never held (ROUND 7, n26). The digit and word paths below
         // already append per occurrence; the idioms now count the same
         // way, and the duplicate is visible to every count.
-        for (pattern, value) in idioms {
-            var occurrences = 0
-            var search = consumed.startIndex
-            while let r = consumed.range(of: pattern, range: search..<consumed.endIndex) {
-                occurrences += 1
-                search = r.upperBound
+        //
+        // EVERY IDIOM SPELLS "hour", so one byte scan stands in for nine
+        // whole-string searches. This is the hot path's single largest line:
+        // the guards below ask `allNumbers` of ONE TOKEN at a time — "is this
+        // word a number" — dozens of times per sentence, and each of those
+        // asks was running nine `range(of:)` searches over a word that could
+        // not hold an idiom. Sampled at 22% of the whole parse.
+        //
+        // A NEGATIVE FILTER ONLY, which is what makes it a speed change and
+        // not a reading change. `utf8Contains` answers "are these bytes
+        // present"; `range(of:)` answers a question about canonical
+        // equivalence, which is wider. But every pattern here is ASCII with
+        // no decomposition, so a canonical match REQUIRES those exact bytes —
+        // their absence is proof no pattern can match, and their presence
+        // still hands the decision to `range(of:)` unchanged.
+        if utf8Contains(text, hourBytes) {
+            for (pattern, value) in durationIdioms {
+                var occurrences = 0
+                var search = consumed.startIndex
+                while let r = consumed.range(of: pattern, range: search..<consumed.endIndex) {
+                    occurrences += 1
+                    search = r.upperBound
+                }
+                guard occurrences > 0 else { continue }
+                results.append(contentsOf: repeatElement(value, count: occurrences))
+                consumed = consumed.replacingOccurrences(of: pattern, with: " ")
             }
-            guard occurrences > 0 else { continue }
-            results.append(contentsOf: repeatElement(value, count: occurrences))
-            consumed = consumed.replacingOccurrences(of: pattern, with: " ")
         }
 
         // Digits, and the unit standing on them.
@@ -99,10 +110,21 @@ public enum NumberParser {
         // the fuzz campaign already declined to make.
         var tokens: [String] = []
         var opensGroup: [Bool] = []
-        for (g, piece) in groups(of: consumed).enumerated() {
-            for (t, token) in tokenize(String(piece)).enumerated() {
-                tokens.append(token)
-                opensGroup.append(g > 0 && t == 0)
+        // A SENTENCE WITH NO PUNCTUATION IN IT IS ONE GROUP, and one group is
+        // the string itself. Cutting it and copying the piece back out is what
+        // `groups` + `String(piece)` amount to there, and it is the ordinary
+        // case: every one-token ask, and every sentence typed without a comma.
+        // `opensGroup` is all false by construction — nothing opens a group but
+        // a boundary, and there is none.
+        if isOneGroup(consumed) {
+            tokens = tokenize(consumed)
+            opensGroup = Array(repeating: false, count: tokens.count)
+        } else {
+            for (g, piece) in groups(of: consumed).enumerated() {
+                for (t, token) in tokenize(String(piece)).enumerated() {
+                    tokens.append(token)
+                    opensGroup.append(g > 0 && t == 0)
+                }
             }
         }
 
@@ -143,6 +165,28 @@ public enum NumberParser {
         return results
     }
 
+    /// The quantities that live in no token at all — "half an hour" is 30 with
+    /// no digit anywhere — and so have to be spelled out.
+    ///
+    /// A `static let` rather than the array literal this used to build inside
+    /// `allNumbers`: nine Strings and their array were allocated on every one
+    /// of the dozens of per-token calls a sentence makes, to be searched for in
+    /// a word that could not hold them. The table itself is untouched, and the
+    /// order still matters — the longest spelling of a quantity must be
+    /// consumed before its own prefix is.
+    private static let durationIdioms: [(pattern: String, value: Int)] = [
+        ("an hour and a half", 90), ("hour and a half", 90),
+        ("a quarter of an hour", 15), ("quarter of an hour", 15), ("quarter hour", 15),
+        ("half an hour", 30), ("half hour", 30),
+        ("an hour", 60), ("one hour", 60),
+    ]
+
+    /// The word every entry in `durationIdioms` contains, as bytes.
+    private static let hourBytes: [UInt8] = Array("hour".utf8)
+
+    /// The character both dotted meridiem spellings need.
+    private static let dotBytes: [UInt8] = Array(".".utf8)
+
     /// The sentence cut at punctuation, keeping whitespace inside a piece.
     ///
     /// `tokenize` cannot answer this — it erases a comma and a space alike —
@@ -162,9 +206,66 @@ public enum NumberParser {
     /// homework'") never applied to a character the tokenizer defines as
     /// whitespace — the "twenty-five" → 25 contract already depends on it.
     private static func groups(of text: String) -> [Substring] {
-        text.split(whereSeparator: { c in
+        // The same partition, decided a byte at a time when a byte is all
+        // there is. `split(whereSeparator:)` asks `isLetter`/`isNumber` of a
+        // CHARACTER, and a Character is a grapheme cluster: every test walks
+        // the grapheme breaker and two Unicode property tables. On the ASCII a
+        // typed sentence actually is, the answer is a range check. The
+        // non-ASCII arm is the original, unchanged, so anything with a
+        // combining mark in it is still decided by the Unicode properties.
+        if isASCII(text) {
+            var out: [Substring] = []
+            let u = text.utf8
+            var start = u.startIndex
+            var i = u.startIndex
+            var inRun = false
+            while i < u.endIndex {
+                if isGroupByte(u[i]) {
+                    if !inRun { start = i; inRun = true }
+                } else if inRun {
+                    out.append(text[start..<i])
+                    inRun = false
+                }
+                i = u.index(after: i)
+            }
+            if inRun { out.append(text[start..<u.endIndex]) }
+            return out
+        }
+        return text.split(whereSeparator: { c in
             !(c.isLetter || c.isNumber || c == ":" || c == " " || c == "\t" || c == "-")
         })
+    }
+
+    /// Whether `groups(of:)` would cut this string nowhere — every character is
+    /// one a group may contain, and there is at least one of them. The single
+    /// piece it would return is then the string itself, which is what lets the
+    /// caller skip the cut and the copy.
+    ///
+    /// A non-ASCII character says nothing here (a letter of any alphabet keeps
+    /// a group open), so the question is refused rather than guessed at: the
+    /// caller falls back to `groups`, which asks the Unicode properties.
+    private static func isOneGroup(_ text: String) -> Bool {
+        var any = false
+        for b in text.utf8 {
+            guard b < 0x80, isGroupByte(b) else { return false }
+            any = true
+        }
+        return any
+    }
+
+    /// `groups`' predicate for one ASCII byte: a letter, a digit, a colon, or
+    /// the whitespace and the hyphen the tokenizer treats as a space.
+    @inline(__always)
+    private static func isGroupByte(_ b: UInt8) -> Bool {
+        isAlnumByte(b) || b == UInt8(ascii: ":") || b == UInt8(ascii: " ")
+            || b == UInt8(ascii: "\t") || b == UInt8(ascii: "-")
+    }
+
+    @inline(__always)
+    private static func isAlnumByte(_ b: UInt8) -> Bool {
+        (b >= UInt8(ascii: "a") && b <= UInt8(ascii: "z"))
+            || (b >= UInt8(ascii: "A") && b <= UInt8(ascii: "Z"))
+            || (b >= UInt8(ascii: "0") && b <= UInt8(ascii: "9"))
     }
 
     /// The units that stand on a number and change what it means. "m" and
@@ -248,8 +349,8 @@ public enum NumberParser {
     /// tests in a grammar that has been wrong about positions before. So the
     /// word poisons the phrase instead. A number standing next to "hundred"
     /// yields nothing at all, which makes "give me one hundred minutes of
-    /// reddit" reach the elliptical ask and be answered "How long?" — a
-    /// question the user can answer, where the old reading granted one minute
+    /// reddit" reach the elliptical ask and be answered with the sentence to
+    /// write — one she can type back, where the old reading granted one minute
     /// and the new one granted a hundred out of "a hundred percent".
     ///
     /// People type "100". This costs the spelled-out form and keeps every
@@ -407,9 +508,16 @@ public enum NumberParser {
     /// `aHugeUtteranceValidatesInOnePass` now bounds this side too.
     private static func scanStatedTimes(in utterance: String, assumeEvening: Bool,
                                         stopAtFirst: Bool) -> [StatedTime] {
-        let text = utterance.lowercased()
-            .replacingOccurrences(of: "p.m.", with: "pm")
-            .replacingOccurrences(of: "a.m.", with: "am")
+        // The dotted spellings are rewritten only when a dot is there to
+        // rewrite. `readsAsHour` asks this of ONE TOKEN at a time — the
+        // window rules walk the sentence with it — and a token that carries
+        // no full stop cannot carry "p.m."; the two Foundation rewrites were
+        // allocating two strings per word to find nothing.
+        var text = lowered(utterance)
+        if utf8Contains(text, dotBytes) {
+            text = text.replacingOccurrences(of: "p.m.", with: "pm")
+                .replacingOccurrences(of: "a.m.", with: "am")
+        }
         let tokens = tokenize(text)
         var found: [StatedTime] = []
 
@@ -483,16 +591,69 @@ public enum NumberParser {
     private static let separators: CharacterSet =
         CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ":")).inverted
 
+    /// EVERY REWRITE BELOW IS NOW ASKED FOR BEFORE IT IS PAID FOR, and that is
+    /// the whole of the change. The four steps — case-fold, hyphen, apostrophe,
+    /// colon — each allocated a fresh String and made a Foundation or a
+    /// grapheme-level pass over the sentence whether or not the character they
+    /// exist for was in it, and `tokenize` is the most-called function in the
+    /// package (`allNumbers` runs it on an idiom-stripped copy, `statedTime` on
+    /// a meridiem-rewritten one, `ClauseIndex` once per piece, and the grammar
+    /// asks `allNumbers` of one token at a time all the way down the ladder).
+    /// One pass over the UTF-8 answers all four questions at once; the string
+    /// that needs no rewriting is now returned untouched.
+    ///
+    /// The reading is unchanged, and each skip states its proof:
+    ///   - lowercasing is skipped only for a string that is ASCII with no
+    ///     A–Z in it, where `lowercased()` is the identity;
+    ///   - the hyphen and colon rewrites are skipped only when that byte is
+    ///     absent, and an ASCII byte has no other canonical spelling;
+    ///   - the apostrophe fold is skipped on the byte for an ASCII string,
+    ///     and by the original Character scan for anything else — the three
+    ///     exotic spellings in `apostrophes` are all non-ASCII, so an ASCII
+    ///     string cannot be carrying one.
     static func tokenize(_ text: String) -> [String] {
-        var lowered = text.lowercased().replacingOccurrences(of: "-", with: " ")
-        if lowered.contains(where: { apostrophes.contains($0) }) { lowered = foldingApostrophes(lowered) }
-        if lowered.contains(":") { lowered = loosingColons(lowered) }
-        let raw = lowered.components(separatedBy: separators).filter { !$0.isEmpty }
+        let shape = shape(of: text)
+        var lowered = shape.isLowercaseASCII ? text : text.lowercased()
+        if shape.hasHyphen { lowered = lowered.replacingOccurrences(of: "-", with: " ") }
+        let marked = shape.isASCII
+            ? shape.hasApostrophe
+            : lowered.contains(where: { apostrophes.contains($0) })
+        if marked { lowered = foldingApostrophes(lowered) }
+        if shape.hasColon { lowered = loosingColons(lowered) }
+        // `lowered` is still ASCII if `text` was: case folding, the hyphen and
+        // the two folds above all map ASCII to ASCII.
+        let raw = shape.isASCII
+            ? asciiComponents(lowered)
+            : lowered.components(separatedBy: separators).filter { !$0.isEmpty }
         guard raw.contains(where: { gluedUnit($0) != nil }) else { return raw }
         return raw.flatMap { tok -> [String] in
             guard let (number, unit) = gluedUnit(tok) else { return [tok] }
             return [number, unit]
         }
+    }
+
+    /// `components(separatedBy: separators)` for a string that is all ASCII,
+    /// where the separator set is exactly "not a letter, a digit or a colon".
+    /// Foundation's version bridges to NSString and walks composed character
+    /// sequences; neither can arise here.
+    private static func asciiComponents(_ text: String) -> [String] {
+        var out: [String] = []
+        let u = text.utf8
+        var start = u.startIndex
+        var i = u.startIndex
+        var inRun = false
+        while i < u.endIndex {
+            let b = u[i]
+            if isAlnumByte(b) || b == UInt8(ascii: ":") {
+                if !inRun { start = i; inRun = true }
+            } else if inRun {
+                out.append(String(text[start..<i]))
+                inRun = false
+            }
+            i = u.index(after: i)
+        }
+        if inRun { out.append(String(text[start..<u.endIndex])) }
+        return out
     }
 
     /// A COLON IS A SEPARATOR EVERYWHERE BUT INSIDE A CLOCK TIME. The
@@ -524,6 +685,13 @@ public enum NumberParser {
     /// "9GAG" or "F1", and splitting those would erase the door. Only the
     /// units the number parser already reads are peeled off.
     private static func gluedUnit(_ token: String) -> (String, String)? {
+        // Asked of every token of every tokenization, so the ordinary answer —
+        // "this word does not start with a digit" — is settled on one byte.
+        // ASCII that is not 0–9 is not `isNumber`; anything else falls through
+        // to the Unicode property, which is what decides "٣min".
+        guard let lead = token.utf8.first,
+              lead >= 0x80 || (lead >= UInt8(ascii: "0") && lead <= UInt8(ascii: "9"))
+        else { return nil }
         guard let first = token.first, first.isNumber else { return nil }
         let digits = token.prefix { $0.isNumber }
         let rest = token.dropFirst(digits.count)
@@ -541,6 +709,130 @@ public enum NumberParser {
     /// grammar's bare-quantity rule, whose question is one token at a time.
     static func isNumberWord(_ token: String) -> Bool {
         units[token] != nil || teens[token] != nil || tens[token] != nil
+    }
+
+    /// **`!allNumbers(in: s).isEmpty`, and nothing else.** Same answer for every
+    /// string, reached without building the reader's machinery when the string
+    /// is plainly one word or one run of digits.
+    ///
+    /// This is the question the grammar actually asks. Twenty-five guards in
+    /// `DeterministicParser` locate a number by walking tokens and asking "is
+    /// THIS word a number", and each ask was running the whole reader over one
+    /// word: a case-fold, an idiom scan, a punctuation split, a tokenization,
+    /// two array builds and two passes — to be told that "instagram" is not a
+    /// number. Sampled at a third of the parse.
+    ///
+    /// The two fast answers are derivations, not approximations, and each holds
+    /// because of what the string cannot contain:
+    ///
+    ///   - **All lowercase ASCII letters.** No digit, so nothing reaches the
+    ///     digit pass; no space, so no duration idiom can match (every one of
+    ///     them is spelled with one); no leading digit, so no glued unit
+    ///     splits it. `tokenize` hands back the word itself, and the word pass
+    ///     appends exactly when the word is in one of the three tables —
+    ///     which is `isNumberWord`.
+    ///   - **All ASCII digits.** `tokenize` hands back the run itself, the
+    ///     digit pass appends iff `Int` can hold it (a run too long for `Int`
+    ///     falls through to the word tables and matches nothing), and neither
+    ///     `hundredPoisons` nor `scaled` can change EMPTINESS with no
+    ///     neighbouring token to read.
+    ///
+    /// Everything else — a clock, a glued "10min", an apostrophe, a phrase,
+    /// anything non-ASCII — is handed to the reader itself, so a caller may
+    /// pass this any string at all and get the reader's own answer.
+    static func readsAsNumber(_ s: String) -> Bool {
+        var sawLetter = false
+        var sawDigit = false
+        for b in s.utf8 {
+            if b >= UInt8(ascii: "a"), b <= UInt8(ascii: "z") { sawLetter = true }
+            else if b >= UInt8(ascii: "0"), b <= UInt8(ascii: "9") { sawDigit = true }
+            else { return !allNumbers(in: s).isEmpty }
+            if sawLetter, sawDigit { return !allNumbers(in: s).isEmpty }
+        }
+        if sawDigit { return Int(s) != nil }
+        if sawLetter { return isNumberWord(s) }
+        return false            // the empty string reads as no number
+    }
+
+    // MARK: - Cheap questions about a string
+
+    /// What one pass over a string's UTF-8 can tell `tokenize` before it starts
+    /// rewriting: whether the string is ASCII at all, whether case folding
+    /// would change it, and whether the three characters the tokenizer rewrites
+    /// are even present.
+    ///
+    /// The flags survive the `lowercased()` that may follow them: no case
+    /// mapping in Unicode produces or destroys a hyphen, a colon or an
+    /// apostrophe, so a question answered about the original is answered about
+    /// the folded string too.
+    struct StringShape {
+        var isASCII = true
+        var hasUppercaseASCII = false
+        var hasHyphen = false
+        var hasApostrophe = false
+        var hasColon = false
+        /// Whether `lowercased()` on this string is the identity, which is the
+        /// only condition under which it may be skipped.
+        var isLowercaseASCII: Bool { isASCII && !hasUppercaseASCII }
+    }
+
+    static func shape(of text: String) -> StringShape {
+        var s = StringShape()
+        for b in text.utf8 {
+            if b >= 0x80 { s.isASCII = false; continue }
+            switch b {
+            case UInt8(ascii: "A")...UInt8(ascii: "Z"): s.hasUppercaseASCII = true
+            case UInt8(ascii: "-"): s.hasHyphen = true
+            case UInt8(ascii: "'"): s.hasApostrophe = true
+            case UInt8(ascii: ":"): s.hasColon = true
+            default: break
+            }
+        }
+        return s
+    }
+
+    /// `text.lowercased()` without the allocation when it would change nothing.
+    static func lowered(_ text: String) -> String {
+        shape(of: text).isLowercaseASCII ? text : text.lowercased()
+    }
+
+    static func isASCII(_ text: String) -> Bool {
+        for b in text.utf8 where b >= 0x80 { return false }
+        return true
+    }
+
+    /// Whether `text`'s UTF-8 carries `needle`'s bytes, `needle` being ASCII.
+    ///
+    /// **A NEGATIVE FILTER, AND ONLY THAT.** Every caller uses it to skip work
+    /// that could not have found anything, and then does the real test. It is
+    /// not a replacement for `contains`/`range(of:)`, which decide canonical
+    /// equivalence and refuse a match that would cut a grapheme cluster in
+    /// half — both wider questions than this one. What makes the skip sound is
+    /// the one direction that IS exact: an ASCII letter has no other canonical
+    /// spelling, so a needle whose bytes are absent cannot match under any
+    /// reading, and the caller's answer is settled without asking.
+    static func utf8Contains(_ text: String, _ needle: [UInt8]) -> Bool {
+        let n = needle.count
+        guard n > 0 else { return true }
+        let hay = text.utf8
+        guard hay.count >= n else { return false }
+        let first = needle[0]
+        var i = hay.startIndex
+        var remaining = hay.count - n
+        while true {
+            if hay[i] == first {
+                var j = hay.index(after: i)
+                var k = 1
+                while k < n, hay[j] == needle[k] {
+                    j = hay.index(after: j)
+                    k += 1
+                }
+                if k == n { return true }
+            }
+            guard remaining > 0 else { return false }
+            remaining -= 1
+            i = hay.index(after: i)
+        }
     }
 
     /// The four spellings of one mark. iOS smart punctuation types U+2019 by
@@ -673,8 +965,16 @@ extension NumberParser {
             // minting empty clauses that would shift every id after them.
             var pendingBreak = false
 
-            for piece in ClauseIndex.split(utterance) {
-                for token in NumberParser.tokenize(String(piece)) {
+            // A SENTENCE WITH NO SEPARATOR IN IT IS ITS OWN ONE PIECE, and
+            // `String(piece)` there is a copy of the whole utterance made only
+            // to hand it back to the tokenizer. On a paste that is a copy of
+            // the paste; on the hot path it is a copy per parse. `split`
+            // always closes with the tail, so a single piece means no cut was
+            // made and the piece IS the utterance.
+            let pieces = ClauseIndex.split(utterance)
+            for piece in pieces {
+                for token in NumberParser.tokenize(pieces.count == 1
+                                                   ? utterance : String(piece)) {
                     let opensClause = pendingBreak || ClauseIndex.clauseOpeners.contains(token)
                     if opensClause, !tokens.isEmpty {
                         bounds.append(clauseStart..<tokens.count)
@@ -858,6 +1158,13 @@ extension NumberParser {
             var currentWord = ""
             var lastWord = ""
             var onlyWhitespaceSinceWord = false
+            // ONLY THE DASHES READ THE WORDS, and a sentence with no dash in it
+            // was building one String per word to hand to nobody. `wordBefore`
+            // and `wordAfter` are consulted in exactly one arm of
+            // `isSeparator`, so a text carrying none of the three dash
+            // spellings can skip the bookkeeping outright — which is every
+            // sentence in the corpus and every word of a paste.
+            let tracksWords = text.contains(where: dashes.contains)
 
             while i < text.endIndex {
                 let c = text[i]
@@ -872,15 +1179,17 @@ extension NumberParser {
                     pieces.append(text[start..<i])
                     start = after
                 }
-                if c.isLetter || c.isNumber || c == ":" {
-                    currentWord.append(c)
-                } else {
-                    if !currentWord.isEmpty {
-                        lastWord = currentWord
-                        currentWord = ""
-                        onlyWhitespaceSinceWord = true
+                if tracksWords {
+                    if c.isLetter || c.isNumber || c == ":" {
+                        currentWord.append(c)
+                    } else {
+                        if !currentWord.isEmpty {
+                            lastWord = currentWord
+                            currentWord = ""
+                            onlyWhitespaceSinceWord = true
+                        }
+                        if !c.isWhitespace { onlyWhitespaceSinceWord = false }
                     }
-                    if !c.isWhitespace { onlyWhitespaceSinceWord = false }
                 }
                 alnumRun = (c.isLetter || c.isNumber) ? alnumRun + 1 : 0
                 prevPrev = prev
@@ -921,6 +1230,10 @@ extension NumberParser {
         /// rule a start with no end — the same "splitting cuts a single quantity
         /// in two" failure that keeps "and" out of `clauseOpeners`, committed
         /// against the character English reserves for ranges.
+        /// The three dash spellings, named once so `split` can ask whether the
+        /// text carries any of them before it starts tracking words for them.
+        private static let dashes: Set<Character> = ["\u{2014}", "\u{2013}", "-"]
+
         private static func isQuantity(_ word: String) -> Bool {
             guard let first = word.first else { return false }
             // Anything opening with a digit: "20", "10:00", "7am", "450ms".

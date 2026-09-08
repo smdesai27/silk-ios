@@ -108,12 +108,13 @@ public enum SharedStore {
         static let wallSelection = "silk.wall.selection"       // FamilyActivitySelection (the extras)
         static let doorSelections = "silk.door.selections"     // [UUID: FamilyActivitySelection]
         static let attempts = "silk.attempts"                  // [Date] shield renders
+        static let attemptsTail = "silk.attempts.tail"         // [Date] the render path's append buffer
         static let pendingLoosening = "silk.pending"           // PolicyState applying tomorrow
         static let pendingProposedAt = "silk.pending.at"       // when it was asked for
         static let pendingBaseline = "silk.pending.base"       // the policy it was measured against
         static let firstRunAt = "silk.firstrun"                // days before it have no score
-        static let keyJournal = "silk.key.journal"             // [Date] — every exception spent
         static let undoSeconds = "silk.undo.seconds"           // the take-it-back window
+        static let migratedCategories = "silk.migrated.categories"  // the one-shot category clear ran
         static let days = "silk.days"                          // [DayRecord] — closed days, append-only
         static let daysRevision = "silk.days.rev"              // bumped per append
         static let daysStamp = "silk.days.stamp"               // proof-of-read, as the ledger has
@@ -122,52 +123,66 @@ public enum SharedStore {
 
     /// Debug/QA only: wipe everything so onboarding runs again.
     public static func wipeAll() {
-        // silk.key.code / silk.key.placement / silk.proposal are dead keys
-        // from the retired key step and proposal card; wiped so upgraded QA
-        // installs carry nothing forward.
+        // silk.key.code / silk.key.placement / silk.key.journal / silk.proposal
+        // are dead keys from the retired key step, the retired key journal and
+        // the proposal card; wiped so upgraded QA installs carry nothing
+        // forward.
+        //
+        // `silk.migrated.categories` goes with them and must: it is the
+        // one-shot flag that says the legacy category shields were already
+        // cleared, and a wipe that left it standing would hand the next
+        // reconcile a store it believes it has already migrated.
         for key in ["silk.policy", "silk.ledger", "silk.ledger.stamp",
                     "silk.wall.selection", "silk.door.selections",
-                    "silk.attempts", "silk.attempts.last", "silk.attempts.rev",
+                    "silk.attempts", "silk.attempts.tail",
+                    "silk.attempts.last", "silk.attempts.rev",
                     "silk.days", "silk.days.rev", "silk.days.stamp",
                     "silk.heartbeat",
                     "silk.pending", "silk.pending.at", "silk.pending.base",
                     "silk.proposal", "silk.firstrun",
                     "silk.key.code", "silk.key.placement", "silk.key.journal",
-                    "silk.undo.seconds"] {
+                    "silk.undo.seconds", "silk.migrated.categories"] {
             defaults.removeObject(forKey: key)
         }
     }
 
     // MARK: - The key
+    //
+    // The key journal — `silk.key.journal`, a capped `[Date]` of every
+    // exception spent — is **gone**, and this note is what stands where it did
+    // so the next reader does not reinvent it by accident.
+    //
+    // It had no reader. Mirror's footnote was the last one: it printed the
+    // lifetime count and last date ("⚿ 1 · Jul 12") and now counts today's
+    // grants off the ledger instead, which is both a narrower window and a
+    // different subject. The writes were kept anyway, on the argument that the
+    // record was cheap and unrecoverable once dropped — but "cheap" was a
+    // decode and a whole-array re-encode of up to 2000 `Date`s on every grant
+    // landing, and the record was of a question nothing has ever asked. The
+    // ledger holds every grant with its own timestamp, so exceptions-over-time
+    // is answerable from it whenever something actually wants to ask; what the
+    // journal alone carried was the "Tap your key." loosening, which opens no
+    // door and is not an exception in any sense a reader would want counted.
+    //
+    // `silk.key.journal` stays in `wipeAll`'s dead-key list so an upgraded
+    // install stops carrying the blob around.
 
-    /// The key journal: every exception spent, in order.
+    // MARK: - The category migration's one-shot flag
+
+    /// Whether this install has already had its legacy category shields
+    /// cleared. `Wall.reconcile` owns the meaning; the key lives here with
+    /// every other key, and the two accessors exist because `Key` is private
+    /// to this type and `Wall` is a different one.
     ///
-    /// **Nothing reads this today.** Mirror's footnote used to — it printed the
-    /// lifetime count and last date ("⚿ 1 · Jul 12") — and now counts today's
-    /// grants off the ledger instead, which is both a narrower window and a
-    /// different subject: the journal also takes an entry on the "Tap your
-    /// key." path, and a loosening opens no door. The writes stay because the
-    /// record is cheap, capped, and cannot be recovered once it stops being
-    /// kept; a reader that wants exceptions-over-time will want it whole.
-    ///
-    /// Three writers, not the one this used to claim: both unlock landings —
-    /// the in-app grant path and the Siri intent's — and the "Tap your key."
-    /// loosening. The physical key isn't built yet; when NFC lands it records
-    /// through this same call.
-    public static func recordKeyUse(at now: Date = Date()) {
-        var uses = decode([Date].self, key: Key.keyJournal) ?? []
-        uses.append(now)
-        // Capped like its sibling, the attempts array. It used to be the
-        // footnote's count that clamped here; nothing reads the journal now,
-        // so the cap only bounds the record — still the right trade against a
-        // blob that grows for the life of the install.
-        if uses.count > 2000 { uses.removeFirst(uses.count - 2000) }
-        encode(uses, key: Key.keyJournal)
+    /// Absent reads as `false` (`UserDefaults.bool` on a missing key), so a
+    /// fresh install and an install whose flag was lost both clear the
+    /// categories once more — which is idempotent, and the safe direction.
+    static var categoryShieldsMigrated: Bool {
+        defaults.bool(forKey: Key.migratedCategories)
     }
 
-    public static func keyJournal() -> (count: Int, last: Date?) {
-        let uses = decode([Date].self, key: Key.keyJournal) ?? []
-        return (uses.count, uses.last)
+    static func markCategoryShieldsMigrated() {
+        defaults.set(true, forKey: Key.migratedCategories)
     }
 
     // MARK: - The undo window
@@ -371,7 +386,13 @@ public enum SharedStore {
         // The whole blob, not `attempts(since:)` — DayLog decides
         // observability partly from whether the blob sits at its cap, and a
         // filtered slice cannot answer that.
-        func attemptsBlob() -> [Date] { decode([Date].self, key: Key.attempts) ?? [] }
+        //
+        // Merged with the render path's tail, and that is not an approximation
+        // of the cap reading but the exact one: `DayLog.foldedAttempts` trims
+        // to the same cap the fold writes, so a day's `observed` verdict — and
+        // the corroboration horizon this same array anchors — cannot turn on
+        // whether the app happened to fold before the walk ran.
+        func attemptsBlob() -> [Date] { SharedStore.attemptsMerged() }
         func heartbeats() -> [Date] { SharedStore.heartbeats() }
         func save(dayRecords records: [DayRecord]) { SharedStore.save(dayRecords: records) }
     }
@@ -504,9 +525,13 @@ public enum SharedStore {
     /// already `[UUID: Set<ApplicationToken>]` — Core cannot name
     /// `FamilyActivitySelection`, and this only ever read `applicationTokens`
     /// off it anyway.
-    static func openDoorTokens(at now: Date, policy: PolicyState,
+    ///
+    /// Takes the ledger too, for the same reason it takes the token sets: its
+    /// one caller now keeps what it read, so the shield's subtitle can ask the
+    /// same ledger about the same door without decoding it a second time on
+    /// the same render.
+    static func openDoorTokens(at now: Date, ledger: GrantLedger, policy: PolicyState,
                                selections: [UUID: Set<ApplicationToken>]) -> Set<ApplicationToken> {
-        let ledger = loadLedger()
         // The ESTABLISHED day, not the live boundary: a hand close must keep
         // binding the wall itself across a mid-day down-hours move, exactly
         // as it keeps binding the bar (`GrantLedger.effectiveDayStart`).
@@ -527,26 +552,105 @@ public enum SharedStore {
     /// Records a shield render. Renders within 60s of the last one count as
     /// the same attempt (docs/market/gaps.md #9) — otherwise the Sunday
     /// equation inflates into a scold.
+    ///
+    /// **The append goes to the tail, not to the blob.** This is called from
+    /// the shield extension on the path that draws the wall, and it used to
+    /// decode a 2000-entry `[Date]` and re-encode all of it to add one
+    /// timestamp — a whole-array JSON round trip per reach, inside a 6 MB
+    /// extension, in front of the frame the user is waiting for. The tail is a
+    /// separate key holding at most `DayLog.attemptsTailCap` entries, so the
+    /// encode the render pays is bounded by 64 dates and not by the install's
+    /// whole history. The app folds it back (`foldAttemptsTail`), and until it
+    /// does, every reader below merges the two — see `attemptsMerged`.
+    ///
+    /// The overflow fold is the one path that still pays the full encode, and
+    /// it is why the tail cannot silently lose reaches when the app is not
+    /// opened for a long stretch: at the cap the render folds the tail itself
+    /// rather than evicting its oldest entry. That is one whole-array encode
+    /// per 64 reaches instead of one per reach, and nothing is dropped.
     public static func recordAttempt(at now: Date = Date()) {
-        // The dedupe answer usually lives in one Date, not in the 2000-entry
-        // blob: renders arrive in bursts, so the refusal is the hot path and
-        // must not pay a whole-array decode to say no.
+        // The dedupe answer usually lives in one Date, not in an array at all:
+        // renders arrive in bursts, so the refusal is the hot path and must
+        // not pay a decode to say no.
         if let last = defaults.object(forKey: Key.attemptsLast) as? Date,
            now.timeIntervalSince(last) < 60 { return }
-        var attempts = decode([Date].self, key: Key.attempts) ?? []
-        // Kept behind the cheap check: an install that predates the
-        // timestamp key still dedupes off the blob itself.
-        if let last = attempts.last, now.timeIntervalSince(last) < 60 { return }
-        attempts.append(now)
-        if attempts.count > 2000 { attempts.removeFirst(attempts.count - 2000) }
-        encode(attempts, key: Key.attempts)
+        var tail = decode([Date].self, key: Key.attemptsTail) ?? []
+        // Kept behind the cheap check, and asked of the tail before the blob:
+        // an install that predates the timestamp key still dedupes off the
+        // stored attempts themselves, and the newest of those is the tail's
+        // last entry whenever the tail holds anything at all. The blob is only
+        // decoded when the tail cannot answer — which after a fold is once,
+        // and never again until the next fold.
+        let newest = tail.last ?? attemptsBlob().last
+        if let newest, now.timeIntervalSince(newest) < 60 { return }
+        tail.append(now)
+        encode(tail, key: Key.attemptsTail)
+        // The tail is full. Fold here rather than evict: an evicted entry is a
+        // reach that never happened as far as the Sunday equation is
+        // concerned, and the whole point of the tail is that it costs the
+        // render less, not that it costs the record anything. Written first,
+        // so the fold folds this reach too and a kill between the two lines
+        // loses nothing.
+        if tail.count >= DayLog.attemptsTailCap { foldAttemptsTail() }
         defaults.set(now, forKey: Key.attemptsLast)
         defaults.set(attemptsRevision() &+ 1, forKey: Key.attemptsRevision)
         // After the dedupe, never before it: `reaches` counts what was
         // APPENDED, and a burst of renders that collapses into one attempt
         // must read as one line here or the calibration day counts renders
         // and calls them reaches. docs/qa/calibration-day.md.
-        calibrationLog("reach recorded at \(iso(now)) — attempts blob now \(attempts.count)")
+        //
+        // The count is the tail's, and the line says so: a merged count would
+        // cost the very decode this function exists to stop paying.
+        calibrationLog("reach recorded at \(iso(now)) — attempts tail now \(tail.count)")
+    }
+
+    /// The stored blob, exactly as it sits — no tail merged in. Private, and
+    /// the only callers are the merge and the fold: everything that reads
+    /// "the attempts" reads `attemptsMerged`, or it will report a number that
+    /// depends on when the app was last opened.
+    private static func attemptsBlob() -> [Date] {
+        decode([Date].self, key: Key.attempts) ?? []
+    }
+
+    /// The attempts as they stand: the blob with the render path's tail folded
+    /// in, cap applied, in order. Identical to what the store holds after
+    /// `foldAttemptsTail` — that is `DayLog.foldedAttempts`' whole job, and it
+    /// is why the observability rule's "at cap" reading cannot move simply
+    /// because a fold has or has not run yet.
+    static func attemptsMerged() -> [Date] {
+        DayLog.foldedAttempts(blob: attemptsBlob(),
+                              tail: decode([Date].self, key: Key.attemptsTail) ?? [])
+    }
+
+    /// Fold the render path's tail buffer into the attempts blob.
+    ///
+    /// Called by the app — on a foreground and on the clock tick — because the
+    /// app is the process that may spend a whole-array encode. The shield
+    /// calls it only when its tail overflows.
+    ///
+    /// No reader depends on this having run (`attemptsMerged` is the same
+    /// answer either way) and no revision is bumped: nothing observable
+    /// changes, so a cache keyed on `attemptsRevision` must not fall for a
+    /// fold. What it buys is a bounded tail and one decode instead of two on
+    /// the reads that follow.
+    ///
+    /// **The tail is truncated by length, not cleared.** A shield render
+    /// appending between the blob write and this line would otherwise have its
+    /// reach dropped, and `UserDefaults` has no compare-and-swap to close that
+    /// window properly. Dropping exactly what was folded leaves anything newer
+    /// standing. The other side of the same race — two processes folding the
+    /// same entries — is closed in `DayLog.foldedAttempts`, which is
+    /// idempotent.
+    public static func foldAttemptsTail() {
+        let tail = decode([Date].self, key: Key.attemptsTail) ?? []
+        guard !tail.isEmpty else { return }
+        encode(DayLog.foldedAttempts(blob: attemptsBlob(), tail: tail), key: Key.attempts)
+        let fresh = decode([Date].self, key: Key.attemptsTail) ?? []
+        if fresh.count > tail.count {
+            encode(Array(fresh.dropFirst(tail.count)), key: Key.attemptsTail)
+        } else {
+            defaults.removeObject(forKey: Key.attemptsTail)
+        }
     }
 
     /// Moves exactly when an attempt is appended, so a reader can hold its
@@ -558,11 +662,22 @@ public enum SharedStore {
         defaults.integer(forKey: Key.attemptsRevision)
     }
 
+    /// Merged, so a reach recorded by a shield render is on the week chart
+    /// before the app has folded anything — the tail is a storage detail and
+    /// no reader may be able to see it.
     public static func attempts(since: Date) -> [Date] {
-        (decode([Date].self, key: Key.attempts) ?? []).filter { $0 >= since }
+        attemptsMerged().filter { $0 >= since }
     }
 
     // MARK: - Codable plumbing
+
+    /// One coder each for the process. A `JSONDecoder` was built for every
+    /// store access — a dozen on the launch path, eight per shield render —
+    /// and each is a small object graph nobody kept. Neither has a strategy
+    /// set, so there is nothing per-call about them, and both are `Sendable`
+    /// once configured.
+    private static let decoder = JSONDecoder()
+    private static let encoder = JSONEncoder()
 
     /// Three outcomes and not two: `try?` collapses "never configured" and
     /// "configured, and the blob would not decode" into the same nil, and a
@@ -571,7 +686,7 @@ public enum SharedStore {
     /// it, and carries the full argument.
     static func decoded<T: Decodable>(_ type: T.Type, key: String) -> Decoded<T> {
         guard let data = defaults.data(forKey: key) else { return .absent }
-        guard let value = try? JSONDecoder().decode(type, from: data) else { return .corrupt }
+        guard let value = try? decoder.decode(type, from: data) else { return .corrupt }
         return .value(value)
     }
 
@@ -581,7 +696,7 @@ public enum SharedStore {
     }
 
     private static func encode<T: Encodable>(_ value: T, key: String) {
-        if let data = try? JSONEncoder().encode(value) {
+        if let data = try? encoder.encode(value) {
             defaults.set(data, forKey: key)
         }
     }
@@ -628,11 +743,42 @@ public enum Wall {
     /// doctrine for why.
     private static let log = Logger(subsystem: SharedStore.logSubsystem, category: "wall")
 
+    /// What a reconcile read on its way to a verdict, handed back so the one
+    /// caller that needs the same blobs does not decode them a second time.
+    ///
+    /// The shield's subtitle path wants exactly this: the policy (for the
+    /// night face and the door list), the door selections (to find which door
+    /// this app belongs to) and the ledger (for the askable minutes). Every
+    /// render was decoding all three twice — once inside `reconcile`, once
+    /// again in the lines below it — inside a 6 MB extension, in front of the
+    /// frame the user is waiting on.
+    ///
+    /// Every other caller ignores the value, which is why `reconcile` stays
+    /// `@discardableResult` and why nothing here is a parameter: the reconcile
+    /// decides what it needs, and this is a receipt for what it happened to
+    /// read, not a contract about what it will read.
+    ///
+    /// `ledger` is optional and honestly so. The refusing paths never load it
+    /// — `WallPlan.plan` does not call `openDoors` when it will not write —
+    /// and a receipt that pretended otherwise would either be a lie or a read
+    /// those paths do not owe. A caller that needs it anyway loads it itself.
+    ///
+    /// `policy` and `doors` collapse `Decoded`'s corrupt case into the same
+    /// nil/empty the plain loaders return, because that is exactly what the
+    /// shield's own reads did: the distinction is the enforcement path's, and
+    /// this receipt is read by the rendering one.
+    public struct Reconciled {
+        public let policy: PolicyState?
+        public let doors: [UUID: FamilyActivitySelection]
+        public let ledger: GrantLedger?
+    }
+
     /// Reconcile the wall against the ledger. Idempotent, callable from any
     /// process — the app on foreground, the monitor on intervalDidEnd, the
     /// shield extensions on every render/tap. Fail-closed: if state can't be
     /// read, the wall goes up whole.
-    public static func reconcile(now: Date = Date()) {
+    @discardableResult
+    public static func reconcile(now: Date = Date()) -> Reconciled {
         // Three reads in, one write out. Everything between them — which of
         // the three states each blob is in, and what the wall should therefore
         // be — is `WallPlan.plan`, in Core, where it can be run against every
@@ -652,6 +798,20 @@ public enum Wall {
         let doors = SharedStore.loadDoorSelectionsDecoded()
         let store = Self.store
 
+        // Read once and held, for two jobs that used to be two reads: the
+        // stand-in the plan takes, and the value the write below is compared
+        // against. Nothing can move it in between — this is one synchronous
+        // paragraph in one process, and the only writer of this store is this
+        // function.
+        let standing = store.shield.applications
+
+        // The ledger `openDoorTokens` loads, kept for the receipt. Assigned
+        // from a non-escaping closure called synchronously inside the `plan`
+        // call below, so there is no concurrency here to reason about — and
+        // it stays nil on every path that never asks, which is every path
+        // that refuses to write.
+        var ledgerRead: GrantLedger?
+
         // `mapValues`, not a second decode: the token sets are already built
         // inside the selections, and this runs on every shield render inside
         // the extension's 6 MB budget.
@@ -664,12 +824,26 @@ public enum Wall {
             // for a key this process could not read. Nil is passed as
             // nil — a stand-in that cannot be read is no stand-in, and
             // the plan refuses rather than write the doors alone.
-            standing: store.shield.applications,
+            standing: standing,
             openDoors: { policyValue, doorTokens in
                 // The ledger read the plan cannot do — and does not ask for on
                 // any path that refuses to write.
-                SharedStore.openDoorTokens(at: now, policy: policyValue, selections: doorTokens)
+                let ledger = SharedStore.loadLedger()
+                ledgerRead = ledger
+                return SharedStore.openDoorTokens(at: now, ledger: ledger,
+                                                  policy: policyValue, selections: doorTokens)
             })
+
+        // The receipt, returned from every exit below. Corrupt collapses to
+        // nil and to empty — the same answers `loadPolicy()` and
+        // `loadDoorSelections()` give, which are the calls this replaces.
+        func receipt() -> Reconciled {
+            var readPolicy: PolicyState?
+            if case .value(let p) = policy { readPolicy = p }
+            return Reconciled(policy: readPolicy,
+                              doors: doors.orEmpty([:]) ?? [:],
+                              ledger: ledgerRead)
+        }
 
         switch plan {
         case .leaveUntouched:
@@ -682,15 +856,36 @@ public enum Wall {
             if doors.isCorrupt {
                 log.error("reconcile: the door selections would not decode; wall left as it stands")
             }
-            return
+            return receipt()
         case .clearAll:
             store.clearAllSettings()
-            return
+            return receipt()
         case .shield(let blocked):
             if extras.isCorrupt {
                 log.error("reconcile: the wall selection would not decode; the standing shield stood in for it")
             }
-            store.shield.applications = blocked
+            // **Written only when it differs, and this is the one place in the
+            // file where an equality guard is allowed to stand in front of a
+            // fail-closed write.** It is safe here for one reason: the guard
+            // is over the value the daemon already holds, so a skipped write
+            // and a performed write leave the store in the same state. Every
+            // way the comparison can be wrong falls toward writing —
+            // `standing` is `nil` when the read failed or the store was never
+            // written, and `nil != blocked` for every `blocked` there is,
+            // including the empty set.
+            //
+            // Why bother. A `ManagedSettingsStore` write is a cross-process
+            // call into the Screen Time daemon that re-evaluates enforcement,
+            // and this paragraph made four of them — applications, two
+            // categories, web domains — on EVERY shield render, tap, monitor
+            // callback and foreground. At ~40 wall hits a day that is ~160
+            // daemon writes to say what the daemon already knew, and they sit
+            // on the critical path of the wall appearing. The steady state is
+            // that nothing has changed: a render reconciles because the wake
+            // is the point, not because the answer has moved.
+            if standing != blocked {
+                store.shield.applications = blocked
+            }
         }
 
         // Categories are gone from the model. Nil-ing them here clears stale
@@ -704,8 +899,26 @@ public enum Wall {
         // writing the other is the fail-open this file exists to forbid. The
         // migration waits for the next readable reconcile, which is a stuck
         // restriction, not an open door.
-        store.shield.applicationCategories = nil
-        store.shield.webDomainCategories = nil
+        //
+        // **Once per install, behind a flag, and never again.** This is a
+        // migration, not an invariant: there is no category layer in the model
+        // any more, so nothing in Silk can ever put a category shield back.
+        // Two unconditional daemon writes on every shield render to re-clear
+        // something already cleared is the whole cost of a one-line upgrade
+        // path, paid forever, on the frame the wall appears in.
+        //
+        // The flag is set only after the writes, and only on this path — the
+        // one that just wrote the app layer. A process that returned above has
+        // not migrated anything and must not be able to claim it did: that is
+        // the same ordering the paragraph's second sentence already turns on.
+        // A flag that fails to persist costs a repeated clear, which is
+        // idempotent; the fail-closed direction is "clear again", and that is
+        // the direction every failure here takes.
+        if !SharedStore.categoryShieldsMigrated {
+            store.shield.applicationCategories = nil
+            store.shield.webDomainCategories = nil
+            SharedStore.markCategoryShieldsMigrated()
+        }
 
         // Web domains never open with a grant (docs/market/gaps.md #2), which
         // is why they are no part of the plan: that decision is app tokens and
@@ -714,9 +927,23 @@ public enum Wall {
         // standing shield covers apps, not domains) — so on that path the
         // domain shield is left exactly as it stands, never cleared for a
         // key this process could not read.
+        //
+        // Guarded like the app layer, and for the same reason: this was the
+        // fourth unconditional daemon write per render, and the domains in a
+        // wall selection change when the user edits them, which is roughly
+        // never. The read this costs is one read to save one write, and a read
+        // that fails comes back `nil` — which differs from any non-empty set,
+        // so the write still happens. Only "the store already holds exactly
+        // this" is skipped.
         if let extraSelection = extras.orEmpty(FamilyActivitySelection()) {
             let webDomains = extraSelection.webDomainTokens
-            store.shield.webDomains = webDomains.isEmpty ? nil : webDomains
+            if webDomains.isEmpty {
+                if store.shield.webDomains != nil { store.shield.webDomains = nil }
+            } else if store.shield.webDomains != webDomains {
+                store.shield.webDomains = webDomains
+            }
         }
+
+        return receipt()
     }
 }

@@ -287,9 +287,9 @@ private func freshModel(budget: Int = 40,
 
     // MARK: - (g) The minute clock, and why there is no test for it here
     //
-    // `raiseWait` stands the minute clock down (`clock?.cancel()`,
-    // AppModel.swift:639) and `clearWait` is the only thing that puts it back
-    // (`startClock()`, AppModel.swift:716). Every path that ends a wait — the
+    // `raiseWait` stands the minute clock down (`clock?.cancel()` in
+    // `AppModel.raiseWait`) and `clearWait` is the only thing that puts it back
+    // (`startClock()` in `AppModel.clearWait`). Every path that ends a wait — the
     // landing, the down-hours refusal on the far side of it, the deleted door,
     // the staleness drop — funnels through `clearWait`, so "the clock came
     // back" is exactly one call and it is worth an assertion. A drop that

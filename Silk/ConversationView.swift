@@ -209,22 +209,50 @@ final class ConversationModel {
 /// yields (README.md:203-205).
 private struct SilkStage: ViewModifier {
     var dimmed: Bool
+    /// Whether the wait's veil stands over this. See `silkStage(dimmed:veiled:)`.
+    var veiled: Bool = false
 
     func body(content: Content) -> some View {
         content
-            .blur(radius: dimmed ? 7 : 0)
+            .blur(radius: dimmed && !veiled ? 7 : 0)
+            // Both radii snap. `dimmed` for the reason above; `veiled` because
+            // the veil is already crossing on its own curve over the top of
+            // this — a Gaussian tweening underneath it is a full-screen
+            // offscreen pass per frame, spent on a change nothing can see.
             .animation(nil, value: dimmed)
-            .opacity(dimmed ? 0.05 : 1)
+            .animation(nil, value: veiled)
+            // UNDER THE VEIL THE STAGE IS GONE, not dim. At 0.05 under a 0.97
+            // veil the budget ensō still reads, faintly, as a ring above the
+            // mark being drawn — the "ghost ring" the canon refuses, and the
+            // one thing the wait's mark must never be mistaken for
+            // (docs/design/wait.md §3.1). The Gaussian used to smear it into a
+            // wash; with the Gaussian gone it was sharp. Zero opacity removes
+            // it from the image and from the compositor both, and it goes on
+            // the veil's own curve so the ring fades under the rising veil
+            // rather than popping out from beneath it.
+            .opacity(veiled ? 0 : dimmed ? 0.05 : 1)
             .allowsHitTesting(!dimmed)
             .animation(Silk.motion(0.45), value: dimmed)
+            .animation(Silk.motion(Silk.Motion.overlay), value: veiled)
     }
 }
 
 extension View {
     /// `.fx-stage` under `input:focus` — apply to everything behind the
     /// conversation except the wordmark and the bar.
-    func silkStage(dimmed: Bool) -> some View {
-        modifier(SilkStage(dimmed: dimmed))
+    ///
+    /// **`veiled` is how the wait switches the stage off.** A blur is a
+    /// full-subtree offscreen render, re-taken whenever anything inside the
+    /// blurred subtree redraws. While the veil stands, a sibling
+    /// `TimelineView(.animation)` asks for a frame at the display's rate — so
+    /// the blur was being re-taken at 120 Hz for the whole wait, over a stage
+    /// nobody could see. Under the veil the stage now has no blur and no
+    /// opacity at all (see `SilkStage`), which costs the compositor nothing.
+    ///
+    /// The dim itself stays exactly as it was — 0.05, blur 7, on the one
+    /// curve — so the frame the user sees when the veil lifts has not changed.
+    func silkStage(dimmed: Bool, veiled: Bool = false) -> some View {
+        modifier(SilkStage(dimmed: dimmed, veiled: veiled))
     }
 }
 

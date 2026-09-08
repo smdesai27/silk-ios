@@ -167,7 +167,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
                 == .writeItOut(door: instagram, minutes: 10))
     }
 
-    @Test func ellipticalAsksGetHowLong() {
+    @Test func ellipticalAsksGetTheSentenceWrittenOut() {
         for v in ["give me instagram", "i want tiktok", "can i open reddit",
                   "let me on youtube", "unlock instagram"] {
             #expect(writesItOut(verdict(v)), "failed: \(v)")
@@ -2236,7 +2236,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
 // MARK: - PLACE-BOUND
 
 @Suite struct PlaceBoundStress {
-    @Test func allBindingsGetHowLong() {
+    @Test func allBindingsGetTheSentenceWrittenOut() {
         for v in ["give me instagram until i leave the gym",
                   "while im at the gym unlock instagram for me",
                   "instagram while i'm at work",

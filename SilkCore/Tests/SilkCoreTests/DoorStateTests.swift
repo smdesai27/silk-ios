@@ -137,7 +137,7 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
         ledger.closeDoor(instagram, at: closedAt, until: lift)
         #expect(ledger.state(of: instagram, at: at(7, 29, 16), dayStart: dayStart(at(7, 29, 16)), cap: nil, calendar: cal)
                 == .rest(until: lift))
-        #expect(DoorState.rest(until: lift).displayTime(now: at(7, 29, 16), calendar: cal) == "· till 9:00")
+        #expect(DoorState.rest(until: lift).displayTime(calendar: cal) == "· till 9:00")
         #expect(ledger.state(of: instagram, at: at(7, 29, 21, 5), dayStart: dayStart(at(7, 29, 21, 5)), cap: nil, calendar: cal)
                 == .live)
     }
@@ -169,25 +169,23 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
         // shared budget, so there is no per-door window to name.
         let now = at(7, 29, 15)
         #expect(GrantLedger().state(of: instagram, at: now, dayStart: dayStart(now), cap: nil, calendar: cal) == .live)
-        #expect(DoorState.live.displayTime(now: now, calendar: cal) == nil)
+        #expect(DoorState.live.displayTime(calendar: cal) == nil)
     }
 
     @Test func aGrantAnswersInTheDeadlineItExpiresAt() {
         // "· till 4:52" — the duration was spoken once, in the reply; the row
         // holds the deadline forever after. Deadlines, not countdowns; nothing
         // ticks. (docs/design/canon.md, Screens/Interactive)
-        let now = at(7, 29, 16, 37)
-        #expect(DoorState.open(until: at(7, 29, 16, 52)).displayTime(now: now, calendar: cal) == "· till 4:52")
-        #expect(DoorState.open(until: at(7, 29, 18, 7)).displayTime(now: now, calendar: cal) == "· till 6:07")
+        #expect(DoorState.open(until: at(7, 29, 16, 52)).displayTime(calendar: cal) == "· till 4:52")
+        #expect(DoorState.open(until: at(7, 29, 18, 7)).displayTime(calendar: cal) == "· till 6:07")
     }
 
     @Test func aShutDoorStatesItsStatedHourAndOnlyThat() {
         // "· till 9:00" — lowercase, following the separator
         // (Silk Mockup.dc.html:330). A plain close says nothing: the resting
         // costume is the whole message (README.md:90-91).
-        let now = at(7, 29, 15)
-        #expect(DoorState.rest(until: at(7, 29, 21)).displayTime(now: now, calendar: cal) == "· till 9:00")
-        #expect(DoorState.rest(until: nil).displayTime(now: now, calendar: cal) == nil)
+        #expect(DoorState.rest(until: at(7, 29, 21)).displayTime(calendar: cal) == "· till 9:00")
+        #expect(DoorState.rest(until: nil).displayTime(calendar: cal) == nil)
     }
 }
 
@@ -305,13 +303,13 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
     /// cap-exhausted door renders the plain rest — the costume is the message.
     @Test func displayTimeIsUnchangedForEveryState() {
         let now = at(7, 29, 15)
-        #expect(DoorState.live.displayTime(now: now, calendar: cal) == nil)
-        #expect(DoorState.rest(until: nil).displayTime(now: now, calendar: cal) == nil)
-        #expect(DoorState.rest(until: at(7, 29, 21)).displayTime(now: now, calendar: cal) == "· till 9:00")
-        #expect(DoorState.open(until: at(7, 29, 15, 20)).displayTime(now: now, calendar: cal) == "· till 3:20")
+        #expect(DoorState.live.displayTime(calendar: cal) == nil)
+        #expect(DoorState.rest(until: nil).displayTime(calendar: cal) == nil)
+        #expect(DoorState.rest(until: at(7, 29, 21)).displayTime(calendar: cal) == "· till 9:00")
+        #expect(DoorState.open(until: at(7, 29, 15, 20)).displayTime(calendar: cal) == "· till 3:20")
         var ledger = GrantLedger()
         ledger.record(spent(instagram, 20, before: now))
         #expect(ledger.state(of: instagram, at: now, dayStart: dayStart(now), cap: 20, calendar: cal)
-                .displayTime(now: now, calendar: cal) == nil)
+                .displayTime(calendar: cal) == nil)
     }
 }

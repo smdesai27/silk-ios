@@ -126,7 +126,11 @@ struct RootView: View {
                             .ignoresSafeArea(.keyboard, edges: .bottom)
                             // The page yields to the conversation: .05, blur 7,
                             // hit-dead, on the one curve (Silk Mockup.dc.html:24-25).
-                            .silkStage(dimmed: model.conversation.stageDimmed)
+                            // The stage goes while the veil stands — see
+                            // `silkStage(dimmed:veiled:)`; nothing under a wait
+                            // may show, least of all the budget ensō as a ring.
+                            .silkStage(dimmed: model.conversation.stageDimmed,
+                                       veiled: model.waiting != nil)
 
                             // The wordmark, on its own layer: the one thing that never
                             // yields to the conversation (docs/design/handoff/README.md:203-205). It signs
@@ -209,7 +213,8 @@ struct RootView: View {
                             GeometryReader { geo in
                                 ZStack(alignment: .bottom) {
                                     PageDots(count: 3, index: $model.page, night: night)
-                                        .silkStage(dimmed: model.conversation.stageDimmed)
+                                        .silkStage(dimmed: model.conversation.stageDimmed,
+                                                   veiled: model.waiting != nil)
                                         .padding(.bottom, 24 - (44 - 5) / 2)
                                     BarSlot(night: night,
                                             // Floored at the glass: the reader is what

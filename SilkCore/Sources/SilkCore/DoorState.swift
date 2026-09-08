@@ -147,7 +147,14 @@ extension DoorState {
     ///
     /// Meridiem-less on purpose. The row is read in the moment, and there is
     /// only one 4:52 she could mean.
-    public func displayTime(now: Date, calendar: Calendar = .current) -> String? {
+    ///
+    /// **No `now`.** It used to take one and never read it — nothing ticks, so
+    /// every branch below is a pure function of the state itself. The cost of
+    /// the parameter was not the argument: Now's door rows called it with
+    /// `model.now`, which made the app's hottest list observe the minute clock
+    /// a second time, on top of the read `state(of:)` already makes. A deadline
+    /// that does not move must not be able to ask to be redrawn.
+    public func displayTime(calendar: Calendar = .current) -> String? {
         switch self {
         case .open(let until):
             // A grant answers in the deadline it expires at: "· till 4:52".

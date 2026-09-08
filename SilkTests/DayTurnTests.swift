@@ -242,3 +242,218 @@ private func daysAgo(_ n: Int) -> Date {
         #expect(record?.score == 0, "an unobserved day credited a score")
     }
 }
+
+// MARK: - The attempts tail, against the real App Group
+//
+// The properties of the fold itself are pinned in `SilkCore`
+// (`AttemptsTailTests`), over the pure function both the fold and the merge go
+// through. What cannot be asserted there is the BINDING: that
+// `SharedStore.recordAttempt` really appends to the tail key, that every
+// reader really routes through the merge, and that the compaction gate's
+// `attemptsBlob()` — the array §3.5 takes its "at cap" reading from — really
+// sees the tail before anything has folded it.
+//
+// Hosted by the app, so `SharedStore` resolves against the real App Group;
+// serialized over a non-parallel target, and every test starts from a wipe,
+// because that state is global to the process.
+
+@Suite(.serialized) @MainActor struct TheAttemptsTailIsInvisibleToEveryReader {
+
+    /// The whole point of the split, stated as the thing that would otherwise
+    /// break: a reach recorded by a shield render is on Mirror's week chart
+    /// before the app has folded anything.
+    @Test func aReachRecordedThroughTheTailIsVisibleBeforeFolding() {
+        SharedStore.wipeAll()
+        let now = Date()
+        SharedStore.recordAttempt(at: now)
+
+        let since = now.addingTimeInterval(-3600)
+        #expect(SharedStore.attempts(since: since).contains(now),
+                "an attempt sitting in the tail is invisible to `attempts(since:)`")
+        #expect(SharedStore.attemptsMerged().contains(now))
+    }
+
+    /// Folding does not change what anybody can see — the reader's answer is
+    /// the same array on both sides of it — and it does empty the tail, which
+    /// is the only reason to run it at all.
+    @Test func foldingPreservesTheRecordAndEmptiesTheTail() {
+        SharedStore.wipeAll()
+        // Three reaches, each clear of the 60-second dedupe window.
+        let base = Date().addingTimeInterval(-3600)
+        let recorded = (0..<3).map { base.addingTimeInterval(Double($0) * 120) }
+        for at in recorded { SharedStore.recordAttempt(at: at) }
+
+        let before = SharedStore.attemptsMerged()
+        #expect(before == recorded, "the tail did not preserve the order attempts arrived in")
+
+        SharedStore.foldAttemptsTail()
+
+        #expect(SharedStore.attemptsMerged() == before,
+                "folding changed what a reader sees")
+        #expect(SharedStore.defaults.data(forKey: "silk.attempts.tail") == nil,
+                "the fold left the tail standing; the render path's encode never gets cheaper")
+        #expect(SharedStore.defaults.data(forKey: "silk.attempts") != nil,
+                "the fold never reached the blob")
+
+        // And a second fold is a no-op rather than a doubling — the property
+        // that lets the app and an overflowing render both fold.
+        SharedStore.foldAttemptsTail()
+        #expect(SharedStore.attemptsMerged() == before, "a second fold double-counted a reach")
+    }
+
+    /// §3.5's reading, taken through the live store. The compaction gate reads
+    /// the whole array to decide whether the blob is at its cap; that reading
+    /// must not depend on whether a fold has happened yet.
+    @Test func theObservabilityReadingIsTheSameBeforeAndAfterFolding() {
+        SharedStore.wipeAll()
+        let base = Date().addingTimeInterval(-7200)
+        for i in 0..<3 { SharedStore.recordAttempt(at: base.addingTimeInterval(Double(i) * 120)) }
+
+        let policy = PolicyState(budgetMinutes: 40, downHours: nightWellClearOfNow(),
+                                 doors: [Door(name: "Instagram")])
+        let dayStart = DayBoundary.dayStart(now: .now, downHours: policy.downHours,
+                                            calendar: .current)
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: dayStart)!
+
+        func summary(_ attempts: [Date]) -> DayRecord {
+            DayLog.summarise(dayStart: yesterday, downHours: policy.downHours, grants: [],
+                             attempts: attempts, heartbeats: [], wallStanding: true,
+                             calendar: .current)
+        }
+        let unfolded = summary(SharedStore.attemptsMerged())
+        SharedStore.foldAttemptsTail()
+        let folded = summary(SharedStore.attemptsMerged())
+
+        #expect(unfolded.observed == folded.observed,
+                "a day's `observed` verdict turns on whether the app happened to fold")
+        #expect(unfolded.reaches == folded.reaches)
+    }
+
+    /// The 60-second dedupe is unchanged, and it is now answered off the tail
+    /// rather than off the blob — which is the read the split exists to avoid.
+    @Test func theSixtySecondDedupeStillHolds() {
+        SharedStore.wipeAll()
+        let now = Date()
+        SharedStore.recordAttempt(at: now)
+        SharedStore.recordAttempt(at: now.addingTimeInterval(30))
+        #expect(SharedStore.attemptsMerged().count == 1,
+                "a render 30 seconds after the last one counted as a second attempt")
+        SharedStore.recordAttempt(at: now.addingTimeInterval(90))
+        #expect(SharedStore.attemptsMerged().count == 2,
+                "a render well past the dedupe window was swallowed")
+    }
+
+    /// The tail cannot grow without bound while the app is never opened: at
+    /// its cap the render folds rather than evicting, so nothing is lost and
+    /// the tail stays small.
+    @Test func anOverflowingTailFoldsItselfRatherThanDroppingReaches() {
+        SharedStore.wipeAll()
+        let base = Date().addingTimeInterval(-86_400)
+        let n = DayLog.attemptsTailCap + 5
+        for i in 0..<n { SharedStore.recordAttempt(at: base.addingTimeInterval(Double(i) * 120)) }
+
+        #expect(SharedStore.attemptsMerged().count == n,
+                "the tail dropped reaches instead of folding at its cap")
+        let tail = (SharedStore.defaults.data(forKey: "silk.attempts.tail")
+            .flatMap { try? JSONDecoder().decode([Date].self, from: $0) }) ?? []
+        #expect(tail.count < DayLog.attemptsTailCap,
+                "the tail is past its own cap; the render path's encode is unbounded again")
+    }
+}
+
+// MARK: - The minute clock, and what it is allowed to redraw
+
+/// `AppModel.now` is the one stored instant the whole tree observes — the root,
+/// all three pages, and every derived property on the model hang off it — so a
+/// write to it is a full invalidation pass. The clock wakes once a minute
+/// because deadlines are rendered to the minute, and it used to write `now` on
+/// every one of those wakes: sixty passes an hour, of which about three change
+/// a pixel.
+///
+/// The gate is written against the FACE — day/night and the greeting's band —
+/// because that is the only thing on any page that reads the wall clock
+/// continuously. Everything else `now` feeds (`dayStart`, `remainingMinutes`,
+/// `state(of:)`, the rule in force) moves only at an instant the tick already
+/// watches for by other means, which is the same argument the wall's own
+/// reconcile gate is built on.
+///
+/// Asked of `tick(at:transition:)` rather than of the sleeping loop: what is
+/// worth asserting is what a wake at a *chosen* instant does, and a sleep
+/// cannot be asked that.
+@Suite(.serialized) @MainActor struct TheMinuteTickWritesOnlyWhatMoves {
+
+    /// 10 PM to 7 AM. An anchor at 2 PM is clear of both edges, and one at
+    /// 21:59 is a minute from crossing the first.
+    private static let night = DownHours(start: TimeOfDay(hour: 22, minute: 0),
+                                         end: TimeOfDay(hour: 7, minute: 0))
+
+    /// Today at a stated hour. The tick takes its instant as an argument, so
+    /// nothing here depends on the hour the suite happens to run at.
+    private static func today(_ hour: Int, _ minute: Int) -> Date {
+        Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now) ?? .now
+    }
+
+    private static func seed() {
+        SharedStore.wipeAll()
+        SharedStore.save(policy: PolicyState(budgetMinutes: 40,
+                                             downHours: night,
+                                             doors: [Door(name: "Instagram")]))
+    }
+
+    /// The first wake of a process always writes: `compactedDayStart` is nil on
+    /// a model this young, so `turned` is true and the day-turn sweep runs. It
+    /// is the wake AFTER that one that this suite is about, which is why every
+    /// test below takes a settling tick first.
+    private static func settled(_ model: AppModel, at anchor: Date) -> Date {
+        model.tick(at: anchor, transition: nil)
+        return model.now
+    }
+
+    @Test func aPlainMinuteDoesNotMoveTheClockTheTreeReads() {
+        Self.seed()
+        let model = AppModel()
+        let anchor = Self.today(14, 0)
+        let settled = Self.settled(model, at: anchor)
+
+        model.tick(at: anchor.addingTimeInterval(60), transition: nil)
+
+        #expect(model.now == settled,
+                "a minute in which nothing moved wrote `now` — the whole tree redrew for a clock nobody can see")
+    }
+
+    /// The face the gate exists for. 21:59 and 22:00 are the same greeting band
+    /// ("Down hours at 10."), so the only thing that moves across this minute is
+    /// day into night — and that recolours every page.
+    @Test func crossingIntoDownHoursMovesIt() {
+        Self.seed()
+        let model = AppModel()
+        let settled = Self.settled(model, at: Self.today(21, 59))
+        #expect(model.isDownHours == false,
+                "the fixture began inside its own night — the crossing below is not one")
+
+        let crossing = Self.today(22, 0)
+        model.tick(at: crossing, transition: nil)
+
+        #expect(model.now == crossing, "the night arrived and the screen was not told")
+        #expect(model.now != settled)
+        #expect(model.isDownHours, "the night face never landed")
+    }
+
+    /// The other thing the minute exists to redraw: a grant expiring, which
+    /// reaches the tick as the transition its sleep was aimed at. A door that
+    /// just shut must move `now`, or its row goes on reading "till 4:52" over a
+    /// door that is closed.
+    @Test func aTransitionThatHasPassedMovesIt() {
+        Self.seed()
+        let model = AppModel()
+        let anchor = Self.today(14, 0)
+        let settled = Self.settled(model, at: anchor)
+        let wake = anchor.addingTimeInterval(60)
+
+        model.tick(at: wake, transition: anchor.addingTimeInterval(30))
+
+        #expect(model.now == wake,
+                "a grant expired inside this minute and the rows were never asked to redraw")
+        #expect(model.now != settled)
+    }
+}
