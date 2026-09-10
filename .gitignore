@@ -20,6 +20,7 @@ build/
 
 # Signing material and anything carrying a secret. None of it has been
 # committed; these rules exist so it cannot start.
+*.p8
 *.p12
 *.cer
 *.certSigningRequest
@@ -38,3 +39,6 @@ build/
 # there are no external dependencies to pin, and if that ever changes the
 # resolved versions should be tracked, not ignored.
 .swiftpm/
+
+# Agent and editor state. Nothing under it is part of the product.
+.claude/
