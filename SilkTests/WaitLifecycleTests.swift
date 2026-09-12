@@ -49,7 +49,7 @@ import UIKit
     /// because of *when* it is read: `handle` has already returned. Under the
     /// wait ordering nothing is debited until the ink lands, so a threshold
     /// that let 0.2 s through would leave 40 here and answer minutes later.
-    /// `-silkWait 0` — the kill switch `docs/design/wait.md` §8 recommends
+    /// `-silkWait 0` — the kill switch the wait doctrine recommends
     /// shipping behind — takes this same branch and needs no case of its own:
     /// `waitLength` clamps at zero, the only consumer is
     /// `guard Wait.isWorthDrawing(length)`, and 0 and 0.2 are indistinguishable

@@ -3,7 +3,6 @@ import FamilyControls
 import SilkCore
 
 /// Setup — the only long moment in the product. Three steps, then never again.
-/// (docs/market/user-flows.md, Flow 0)
 ///
 ///   1  permission — Screen Time access, one line of why
 ///   2  apps       — pick 1–6 from the catalogue; "Other apps" for the rest

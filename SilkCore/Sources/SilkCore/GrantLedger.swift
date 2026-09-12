@@ -27,7 +27,6 @@ public struct Grant: Codable, Hashable, Sendable, Identifiable {
 
 /// The day-boundary rule: the day starts when down hours END, not at midnight.
 /// The budget refills when the aperture closes — 7:00 AM, not 12:00 AM.
-/// (docs/market/gaps.md #7)
 public enum DayBoundary {
     /// The instant the current "Silk day" began.
     public static func dayStart(now: Date, downHours: DownHours, calendar: Calendar = .current) -> Date {

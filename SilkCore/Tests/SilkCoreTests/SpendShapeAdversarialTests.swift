@@ -10,8 +10,8 @@ import Testing
 // (`statesACommitment`). Two of those three things are WIDENINGS — a
 // sixteen-entry verb list where there were six, and two new exemptions on the
 // mood gate — and this repo's standing rule about widenings is that every one
-// of them hijacks prose until somebody attacks it (docs/qa/fuzz-campaign
-// -2026-08.md). This file is the attack.
+// of them hijacks prose until somebody attacks it (the August 2026 fuzz
+// campaign). This file is the attack.
 //
 // It is written as a negative suite. The tightening's own tests pin what
 // grants; these rows pin what must NOT, because the failure that matters here
@@ -430,8 +430,8 @@ private func expectNeverLoosensInstantly(_ text: String,
     /// exactly the defect that instrument was written for: it measured the
     /// baseline's five rounds and then the paste's five rounds, so a load
     /// spike covering one block and not the other moved the ratio by the whole
-    /// size of the spike (`PerformanceMeasurement.swift`, and
-    /// `docs/design/wait.md` §3.3). Two pairs rather than one triple, so each
+    /// size of the spike (`PerformanceMeasurement.swift`, and the wait
+    /// doctrine's frame budget). Two pairs rather than one triple, so each
     /// ratio's numerator and denominator are measured microseconds apart.
     @Test func aHugePasteIsSilentAndCheap() {
         let state = makeState()

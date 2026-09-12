@@ -1,5 +1,5 @@
 // The Round-3 conversation-reality corpus, authored in the August 2026
-// campaign (docs/qa/fuzz-campaign-2026-08.md). This Swift file is the source
+// campaign. This Swift file is the source
 // of truth — the JSON corpus and generator script it was first mechanized
 // from were never checked in. Edit rows in place.
 // Rows reuse the FuzzCorpusRow struct declared in FuzzCorpusR1Data.swift and

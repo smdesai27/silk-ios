@@ -101,7 +101,7 @@ private func scheduledClose(_ w: RelockWindow, expiry: Date) -> Date? {
 /// question the user asks: *when does it actually shut?* That answer is not a
 /// property of either end on its own — it is the first end that lands on the
 /// far side of expiry, read through the truncation the wall performs. These are
-/// the bounds `docs/qa/relock-device-test.md` states as its pass standard.
+/// the bounds the device re-lock protocol states as its pass standard.
 @Suite struct RelockLatency {
 
     /// The whole bug, in one loop. An ask lands on an arbitrary instant, so

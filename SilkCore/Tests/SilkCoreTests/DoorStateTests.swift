@@ -115,7 +115,6 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
     @Test func aStatedHourCloseLiftsAtThatHourNotTheBoundary() {
         // "block instagram until 9" at 15:00 — the row reads "· till 9:00",
         // and at 9 the door is back in play, hours before the day boundary.
-        // (docs/design/handoff/README.md:243)
         let closedAt = at(7, 29, 15)
         let lift = at(7, 29, 21)
         var ledger = GrantLedger()
@@ -160,7 +159,7 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
     @Test func aGrantAnswersInTheDeadlineItExpiresAt() {
         // "· till 4:52" — the duration was spoken once, in the reply; the row
         // holds the deadline forever after. Deadlines, not countdowns; nothing
-        // ticks. (docs/design/canon.md, Screens/Interactive)
+        // ticks.
         #expect(DoorState.open(until: at(7, 29, 16, 52)).displayTime(calendar: cal) == "· till 4:52")
         #expect(DoorState.open(until: at(7, 29, 18, 7)).displayTime(calendar: cal) == "· till 6:07")
     }

@@ -133,8 +133,8 @@ struct RootView: View {
                                        veiled: model.waiting != nil)
 
                             // The wordmark, on its own layer: the one thing that never
-                            // yields to the conversation (docs/design/handoff/README.md:203-205). It signs
-                            // Now and Settings and is hidden on Mirror (docs/design/handoff/README.md:58-60),
+                            // yields to the conversation. It signs Now and Settings
+                            // and is hidden on Mirror,
                             // crossing on the same curve the pager settles with. The
                             // pages keep an empty seat where it sits, so their columns
                             // hold their spacing under it.

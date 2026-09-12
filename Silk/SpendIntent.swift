@@ -6,7 +6,7 @@ import SilkCore
 /// automations (arrive at the gym → spend 30 on Instagram) call this; nothing
 /// callable from outside can raise the budget, move the night window, add a
 /// door, or extend a live grant. A condition can start a grant; only a number
-/// can end one. (docs/market/open-language.md)
+/// can end one.
 ///
 /// Title, description, parameter titles and the phrase are App Intent metadata
 /// — they sit outside `SilkStrings` because they are the system's chrome, not

@@ -74,7 +74,7 @@ import XCTest
 //        --path "/tmp/shots-$K.xcresult" --output-path "/tmp/att-$K"
 //      python3 - "$W" "/tmp/att-$K" <<'EOF'
 //    import json, shutil, os, sys
-//    raw, att = os.path.join(sys.argv[1], "docs/market/screenshots/raw"), sys.argv[2]
+//    raw, att = os.path.join(sys.argv[1], "assets/screenshots/raw"), sys.argv[2]
 //    for t in json.load(open(os.path.join(att, "manifest.json"))):
 //        for a in t["attachments"]:
 //            n = a["suggestedHumanReadableName"]
@@ -87,7 +87,7 @@ import XCTest
 //  And the finals:
 //
 //    swift "$W/scripts/compose-screenshots.swift" \
-//      "$W/docs/market/screenshots/raw" "$W/docs/market/screenshots/6.9"
+//      "$W/assets/screenshots/raw" "$W/assets/screenshots/6.9"
 //
 final class ScreenshotWalk: SilkWalk {
 

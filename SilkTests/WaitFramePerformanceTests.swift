@@ -29,7 +29,7 @@ import SwiftUI
 // parse, and writes the ledger back — all while the veil is 450 ms into a fade
 // it must not stall. It is the single heaviest piece of synchronous main-actor
 // work anywhere in the feature, and it is scheduled at the worst possible time
-// on purpose (`docs/design/wait.md` §5: the verdict is stale by construction, so
+// on purpose (the wait doctrine: the verdict is stale by construction, so
 // the whole run is done again). If that is going to cost something, this is the
 // file that should say how much.
 //

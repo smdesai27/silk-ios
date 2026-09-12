@@ -20,8 +20,8 @@
 # The spine's "three seconds" became fifteen when the wait's frame-budget bounds
 # arrived: a timing test has to run its loops enough times for a clock to see
 # them. That is the price of the only assertions in the repo that can fail on
-# "buttery smooth" — see docs/design/wait.md §3.3 for what they hold and, just as
-# importantly, what they cannot.
+# "buttery smooth" — the wait doctrine's frame budget says what they hold and,
+# just as importantly, what they cannot.
 #
 # If you change what runs here, change .github/workflows/ci.yml to match.
 

@@ -7,7 +7,7 @@ import SwiftUI
 // `SilkStage` is the modifier the root wraps the pager and the dots in, and it
 // has exactly three states: at rest, dimmed under the thread, and gone under
 // the wait's veil. Two of those three were argued for at length in the design
-// (docs/design/wait.md §3.1) and neither is checked anywhere — a walk can see
+// (the ghost ring) and neither is checked anywhere — a walk can see
 // that the veil stands, and cannot read back an opacity or a blur radius.
 //
 // So the two rules were pulled out of `body` as static functions, which is what

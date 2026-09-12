@@ -29,8 +29,8 @@ enum Silk {
     /// `linen` the one raised surface, `ink` what is written on both, and every
     /// day overlay is `paper` at an alpha, so a veil reads as the page itself
     /// with the page taken out of it. Night is now cut the same way, from the
-    /// warm near-black the canvas draws (`docs/design/canvas/Night.dc.html:18`,
-    /// `radial-gradient(ellipse 118% 78% at 50% 34%, #1C1913 0%, #0E0C08 100%)`).
+    /// warm near-black the canvas draws
+    /// (`radial-gradient(ellipse 118% 78% at 50% 34%, #1C1913 0%, #0E0C08 100%)`).
     ///
     /// **This retires the handoff's slate.** Every night overlay in the app was
     /// still `#1A1C20` — the floor of the `#262B32 → #1A1C20` radial the handoff
@@ -42,8 +42,8 @@ enum Silk {
     /// The step between them is the step day takes between `paper` and `linen`:
     /// `linen` over `ground` is 1.13:1, `linen` over `paper` is 1.09:1. Sizes of
     /// step, not alphas — a dark face needs a little more separation to show the
-    /// same lift, which is the same asymmetry `docs/design/screentime-ui.md`
-    /// measures at the wall.
+    /// same lift, which is the same asymmetry the Screen Time UI measurements
+    /// record at the wall.
     enum Night {
         /// Night's `paper`: the ground itself. `Ground` fills the page with it
         /// and lays the ellipse on top, so this is the colour under everything
@@ -134,7 +134,7 @@ enum Silk {
     /// step) and are now 5.48:1 and 5.98:1 (9%). Alpha carries less of the
     /// hierarchy than it did, so size, weight and tracking carry more. That is
     /// a real change to the design's voice and it was made deliberately;
-    /// docs/design/canon.md records it as a divergence from the token sheet.
+    /// the design canon records it as a divergence from the token sheet.
     ///
     /// **These figures apply to text only.** Hairlines, door rules, dots,
     /// rings, capsule fills, gradients and the ensō mark are not text: WCAG
@@ -161,7 +161,7 @@ enum Silk {
     static func track(_ em: CGFloat, _ size: CGFloat) -> CGFloat { em * size }
 
     /// One motion curve for the whole system — cubic-bezier(.22,1,.28,1), no
-    /// springs (docs/design/canon.md). Only the duration varies, and the
+    /// springs. Only the duration varies, and the
     /// stylesheet declares exactly these.
     ///
     /// **Reduce Motion is answered here and only here.** Every discrete change

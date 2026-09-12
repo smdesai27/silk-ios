@@ -147,7 +147,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
 
     @Test func downHoursWithoutATimeIsAQuestion() {
         // "down hours", "bedtime", "quiet" with no time read the window back
-        // rather than moving it. (docs/design/handoff/README.md:244)
+        // rather than moving it.
         for v in ["down hours", "bedtime", "when is quiet time"] {
             #expect(DeterministicParser.parse(v, state: makeState())
                     == .command(.downHoursQuery), "failed: \(v)")
@@ -159,7 +159,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
 
     @Test func closeCarriesTheStatedHour() {
         // "block tiktok until 9" — the 9 rides along, read as an evening; an
-        // explicit meridiem wins. (docs/design/handoff/Silk Mockup.dc.html:327)
+        // explicit meridiem wins.
         #expect(DeterministicParser.parse("block tiktok until 9", state: makeState())
                 == .command(.closeDoorToday(door: tiktok, until: TimeOfDay(hour: 21))))
         #expect(DeterministicParser.parse("close instagram till 8:30", state: makeState())
@@ -220,7 +220,6 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         // "give me thirty" with 12 left → a 12-minute grant, and the readback
         // states the 12. This asserted a refusal until the handoff superseded
         // it: "Requested durations clamp to the minutes actually remaining."
-        // (docs/design/handoff/README.md:248-249)
         var ledger = GrantLedger()
         let now = afternoon()
         ledger.record(Grant(door: tiktok, minutes: 28, issuedAt: now.addingTimeInterval(-3600),
@@ -280,7 +279,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
 
     @Test func downHoursQueryReadsTheWindowBack() {
         // "down hours" with no time is a read, and the verdict hands the caller
-        // the real window to speak. (docs/design/handoff/README.md:244)
+        // the real window to speak.
         #expect(parseAndValidate("down hours")
                 == .downHours(DownHours(start: TimeOfDay(hour: 22), end: TimeOfDay(hour: 7))))
         // The sentence itself, wired to the reply table's dead strings.
@@ -822,7 +821,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         // as .unchanged and another 644 applied instantly though they handed
         // minutes back. The seats below mirror `downStartTable` and
         // `downEndTable` in the app target (Silk/AppModel.swift:544-545,
-        // specified at docs/design/handoff/README.md:185-186), which SilkCore
+        // specified by the handoff mockup), which SilkCore
         // cannot import — move those tables and this sweep stops covering the
         // picker it names, so it has to be brought back into line by hand. The
         // oracle is the day itself, the literal set of blocked minutes, so it

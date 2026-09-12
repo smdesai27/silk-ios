@@ -105,7 +105,7 @@ struct Moonwash: View {
 ///
 ///   radial-gradient(ellipse 118% 78% at 50% 34%, #1C1913 0%, #0E0C08 100%)
 ///
-/// That line is `docs/design/canvas/Night.dc.html:18` verbatim, and the two
+/// That line is the design canvas's night ground verbatim, and the two
 /// stops are `Silk.Night.linen` and `Silk.Night.ground`. It replaces the older
 /// handoff geometry (580×440 at 32%, with a #15120C stop at 48%): the radii are
 /// fractions of the screen rather than points on a 390pt canvas, so the ground

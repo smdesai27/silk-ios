@@ -166,7 +166,7 @@ final class AppModel {
         toasts.undoLifetime = .seconds(undoSeconds)
         // No local state means a fresh install — and possibly a previous
         // install's orphaned shield still standing. Clear it before anything
-        // draws. (docs/market/gaps.md #5)
+        // draws.
         if saved == nil {
             wall.clearOrphans()
         }
@@ -869,7 +869,7 @@ final class AppModel {
         if undo != nil { scheduleUndoExpiry(for: id) }
     }
 
-    // MARK: - The wait (docs/design/wait.md)
+    // MARK: - The wait
 
     /// The wait on screen: the clock, and the ask it is holding.
     ///
@@ -1504,8 +1504,7 @@ final class AppModel {
             // to nine) and make chaining ordinary — park a raise on TikTok, then
             // clear the cap on Instagram, and the first ask is gone. Knowingly
             // unfixed (spec §6.9); surfacing the displacement in the reply is
-            // the recommended follow-up, and PR 4 lists it under Build status in
-            // `docs/design/README.md`.
+            // the recommended follow-up, and PR 4 lists it under Build status.
             //
             // What is NOT left standing is the second loss that hid behind it.
             // The offer below used to restore blind, so tapping a displaced one
@@ -2041,7 +2040,7 @@ final class AppModel {
     /// but the two-tap route does reach a place rule 3 makes the one-tap route
     /// wait for. Closing it means keying a removed cap by name for the rest of
     /// the Silk day, which is a model change and belongs in the spec first.
-    /// Recorded here; PR 4 lists it under Build status in `docs/design/README.md`.
+    /// Recorded here; PR 4 lists it under Build status.
     ///
     /// The undo is surgical: the one door back at its old seat, its one
     /// selection back in the dictionary. The undo window runs up to five
@@ -2333,14 +2332,14 @@ final class AppModel {
         startClock()
     }
 
-    // MARK: - The wall's standing (docs/market/gaps.md #5)
+    // MARK: - The wall's standing
 
     /// True when the wall cannot actually stand — authorization revoked, or a
     /// restored install whose selection no longer shields. Now shows the truth
     /// and the one action that raises it.
     private(set) var wallDown = false
 
-    // MARK: - The one system picker (docs/market/gaps.md #5; door editing)
+    // MARK: - The one system picker (door editing)
 
     /// Everything the onboarded app asks the family picker for. One request
     /// enum, one selection, one `.familyActivityPicker` modifier (on RootView)

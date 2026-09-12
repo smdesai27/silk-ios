@@ -32,7 +32,7 @@ struct MirrorView: View {
     @State private var age = Self.plantingAge()
 
     /// A day's growth, and therefore the floor: the border is never emptier
-    /// than the day it was planted (docs/design/canvas/Main.dc.html:182).
+    /// than the day it was planted.
     private static let dayOne = 550
 
     /// Every day since install, at 550 a day.

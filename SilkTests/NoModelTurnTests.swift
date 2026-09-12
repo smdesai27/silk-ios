@@ -173,7 +173,7 @@ private let table: [NoModelRow] = [
     // And a bare number names no door, so the hint names the FIRST one. Said
     // here after a partial ask, which is when a person actually types it — the
     // grammar carries nothing between turns and does not need to: the door is
-    // in the reply she is reading. See docs/qa/no-model-verification-2026-09-03.md.
+    // in the reply she is reading — the no-model verification of 2026-09-03.
     .init(given: ["give me instagram"], say: "10",
           reply: .writeItOut(door: "Instagram", minutes: 10), grammar: true, remaining: 40),
     // The door the bar last wrote out is the one a bare number names — one

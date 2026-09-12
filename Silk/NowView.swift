@@ -29,7 +29,7 @@ struct NowView: View {
             .silkFittedColumn(height: columnHeight)
             .animation(Silk.motion(0.45), value: pendingSummary)
             .animation(Silk.motion(0.45), value: model.wallDown)
-        // The re-arm picker (docs/market/gaps.md #5) used to be presented
+        // The re-arm picker used to be presented
         // here; it moved to the root when Settings' door editor arrived —
         // the onboarded tree carries exactly one .familyActivityPicker,
         // serving both requests through the model's ActivityPickerRequest.
@@ -146,7 +146,7 @@ struct NowView: View {
         .animation(Silk.motion(Silk.Motion.crossing), value: night)
     }
 
-    /// Blocking's truth (docs/market/gaps.md #5): revoked in Settings, or a new
+    /// Blocking's truth: revoked in Settings, or a new
     /// phone whose restored tokens no longer shield. One sentence, one action —
     /// the ensō above stays honest about the budget, this row is honest about
     /// blocking. Same idiom as the pending row below it.

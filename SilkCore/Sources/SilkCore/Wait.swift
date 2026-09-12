@@ -65,14 +65,14 @@ public struct Wait: Equatable, Sendable {
 
     /// Seconds of watching a grant of `minutes` costs.
     ///
-    /// **Proportional, and that is the whole argument.** Amendment A (`docs/
-    /// market/vision-amendments.md` §A) is explicit that a *toll* is the
-    /// competitors' mechanic and a *price with a slope* is Silk's: a fixed
-    /// ceremony habituates, and a cost set by what you just chose to spend
-    /// cannot, because it is not the same cost twice. So there is no floor
-    /// here. A one-minute ask is cheap because a one-minute ask is cheap, and
-    /// clamping the bottom would put a step exactly where most asks live and
-    /// turn the slope back into the toll it exists to refuse.
+    /// **Proportional, and that is the whole argument.** Amendment A is
+    /// explicit that a *toll* is the competitors' mechanic and a *price with
+    /// a slope* is Silk's: a fixed ceremony habituates, and a cost set by
+    /// what you just chose to spend cannot, because it is not the same cost
+    /// twice. So there is no floor here. A one-minute ask is cheap because a
+    /// one-minute ask is cheap, and clamping the bottom would put a step
+    /// exactly where most asks live and turn the slope back into the toll it
+    /// exists to refuse.
     ///
     /// **The slope is 0.3 s a minute**, which puts a twenty-minute ask — the
     /// modal one — at six seconds. Six is the dose the only arm's-length
@@ -158,8 +158,8 @@ public struct Wait: Equatable, Sendable {
     /// The only form the wait is ever stated in, and deliberately the only
     /// accessor the surface has. There is no `remaining`: a remainder is the
     /// shape of a countdown, and a type that offers one invites a surface to
-    /// print it. (`docs/design/per-app-caps.md` reaches the same conclusion
-    /// about a remaining cap, for the same reason.)
+    /// print it. (The per-app caps design reaches the same conclusion about
+    /// a remaining cap, for the same reason.)
     ///
     /// A zero-length wait is finished, not half-drawn: the divide has no answer
     /// and the honest one is 1.

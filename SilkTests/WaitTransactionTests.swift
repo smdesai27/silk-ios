@@ -8,7 +8,7 @@ import UIKit
 // puts back.
 //
 // `WaitModelTests` owns the state machine — raise, pause, resume, land, drop.
-// These own the transaction `docs/design/wait.md` §5 is an argument about:
+// These own the transaction the wait doctrine is an argument about:
 // **nothing is debited, unshielded or armed until the ink lands**, the grant
 // lands exactly once when it does, and the way back still works on the far side
 // of seconds it never used to have to survive.

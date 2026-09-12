@@ -6,7 +6,7 @@ import SilkCore
 import os
 
 /// The app-side face of the wall: authorization, the picker selections, and the
-/// re-lock scheduling (defence in depth, docs/market/gaps.md #1).
+/// re-lock scheduling (defence in depth).
 @MainActor
 final class WallController {
     private let center = DeviceActivityCenter()
@@ -31,7 +31,7 @@ final class WallController {
     /// `.notDetermined` on an onboarded install is the new-phone signature —
     /// authorization does not restore from backup — so raising re-runs the
     /// picker too: restored tokens are device-bound and a selection that
-    /// decodes is not a selection that shields. (docs/market/gaps.md #5)
+    /// decodes is not a selection that shields.
     enum Standing: Equatable {
         case up
         case needsAuthorization(freshDevice: Bool)
@@ -69,7 +69,6 @@ final class WallController {
     /// is not authorized is in no position to mutate the settings store. On the
     /// one launch this method exists for, the init call is the sweep that
     /// cannot land; the onboarding call is the one that can.
-    /// (docs/market/gaps.md #5)
     func clearOrphans() {
         // Delete, don't clear. `clearAllSettings()` empties a store that then
         // still exists; `deleteStores` takes the store away — and it takes

@@ -6,7 +6,7 @@
 	     Apple Development and re-signs at export with Apple Distribution,
 	     minting the four App Store profiles itself under
 	     -allowProvisioningUpdates. The one thing it cannot mint is the
-	     Apple Distribution certificate — see docs/market/submission-day.md. -->
+	     Apple Distribution certificate; the submission runbook covers it. -->
 	<key>method</key>
 	<string>app-store-connect</string>
 	<key>destination</key>

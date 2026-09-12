@@ -11,7 +11,8 @@ import Foundation
 /// `SpendIntent`. Records are idempotent by `dayStart`, so a lost write can
 /// lose a day but can never corrupt one.
 ///
-/// See `docs/design/mirror-continuity.md` §2–§3.
+/// The Mirror-continuity design these rules come from is kept outside this
+/// repository.
 
 // MARK: - The record
 

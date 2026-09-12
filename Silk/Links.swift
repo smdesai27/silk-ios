@@ -9,9 +9,9 @@ import Foundation
 /// listing's Support URL is the listing's alone; nothing in the build opens
 /// it, so nothing here names it.
 ///
-/// **The host is not yet chosen** (docs/market/submission-day.md, step (g)):
-/// `docs/market/site/privacy.html` is written and unhosted, and the domain
-/// below is the placeholder the runbook tells you to replace before the
+/// **The host is not yet chosen.** The policy page itself is written and
+/// unhosted, kept outside this repository, and the domain below is the
+/// placeholder the submission runbook tells you to replace before the
 /// archive. A link that 404s is a rejection of its own, so the runbook gates
 /// on it.
 enum SilkLinks {

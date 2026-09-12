@@ -4,7 +4,8 @@ import Foundation
 ///
 /// NEVER replace this with `NumberFormatter(.spellOut)`: measured on this
 /// machine, it parses "twenty five" (space, as a transcript renders it) as
-/// **2005** and "forty five" as 4005, silently. See docs/market/language-layer.md §4.
+/// **2005** and "forty five" as 4005, silently. The language-layer research
+/// records the measurement.
 public enum NumberParser {
 
     private static let units: [String: Int] = [

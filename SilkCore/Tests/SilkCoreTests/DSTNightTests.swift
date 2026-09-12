@@ -6,7 +6,7 @@ import Testing
 //
 // The two DST nights, America/New_York 2026: spring forward Mar 8 (2:00 → 3:00,
 // a 23-hour night) and fall back Nov 1 (2:00 → 1:00, a 25-hour night). The
-// decided semantics (docs/market/gaps.md, "DST and travel"): grant expiries are
+// decided semantics (the gaps list, "DST and travel"): grant expiries are
 // ABSOLUTE instants; down hours are LOCAL WALL-CLOCK. Every test here is one of
 // those two rules meeting a night that is not 24 hours long.
 

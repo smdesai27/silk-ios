@@ -4,7 +4,7 @@ import Foundation
 /// to it.
 ///
 /// There is exactly ONE pending slot and the newest ask replaces the waiting
-/// one — knowingly, and recorded under Build status in `docs/design/README.md`.
+/// one — knowingly, and recorded under Build status.
 /// That decision is not what this type changes. What it closes is the second,
 /// silent loss the first one hides.
 ///

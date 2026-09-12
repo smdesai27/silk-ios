@@ -224,12 +224,12 @@ struct SilkStage: ViewModifier {
             // UNDER THE VEIL THE STAGE IS GONE, not dim. At 0.05 under a 0.97
             // veil the budget ensō still reads, faintly, as a ring above the
             // mark being drawn — the "ghost ring" the canon refuses, and the
-            // one thing the wait's mark must never be mistaken for
-            // (docs/design/wait.md §3.1). The Gaussian used to smear it into a
-            // wash; with the Gaussian gone it was sharp. Zero opacity removes
-            // it from the image and from the compositor both, and it goes on
-            // the veil's own curve so the ring fades under the rising veil
-            // rather than popping out from beneath it.
+            // one thing the wait's mark must never be mistaken for. The
+            // Gaussian used to smear it into a wash; with the Gaussian gone it
+            // was sharp. Zero opacity removes it from the image and from the
+            // compositor both, and it goes on the veil's own curve so the ring
+            // fades under the rising veil rather than popping out from beneath
+            // it.
             .opacity(SilkStage.opacity(dimmed: dimmed, veiled: veiled))
             .allowsHitTesting(!dimmed)
             // Hit-dead is not enough: at .05 the page was still every

@@ -367,7 +367,7 @@ final class OnboardingUITests: SilkWalk {
         XCTAssertTrue(enso(app, reading: 0).waitForExistence(timeout: Self.appear), "ensō did not debit to 0")
     }
 
-    /// The wall's truth-telling row (docs/market/gaps.md #5). The standing is
+    /// The wall's truth-telling row. The standing is
     /// re-judged on an onboarded init or foreground, so the flag is asserted
     /// across a relaunch: setup happens under -silkReset, then the app comes
     /// back onboarded with — and without — the wall forced down.
@@ -1197,7 +1197,7 @@ final class OnboardingUITests: SilkWalk {
                "a wheel that was only looked at tightened the ceiling to its nearest seat")
     }
 
-    // MARK: - The wait (docs/design/wait.md)
+    // MARK: - The wait
 
     /// The shape of the whole feature, walked once: a granted ask does not
     /// open the app, it raises the wait; the ledger is not touched while the
@@ -1220,7 +1220,7 @@ final class OnboardingUITests: SilkWalk {
                       "the wait did not rise over a granted ask")
         // Nothing has been spent. The hero still reads the whole budget, and it
         // must keep reading it for as long as the veil is up — this is the
-        // record-after ordering (docs/design/wait.md §5) caught in the act.
+        // record-after ordering caught in the act.
         //
         // A note for whoever reads this next, because two attempts were spent
         // on it: the veil IS hardened against VoiceOver — `.isModal` on the
@@ -1323,7 +1323,7 @@ final class OnboardingUITests: SilkWalk {
     /// Walk away and never come back: the ask goes, and it costs nothing.
     ///
     /// This is the assertion that pins **record-after**, which is the whole
-    /// transaction argument in `docs/design/wait.md` §5. If the grant were
+    /// transaction argument in the wait doctrine. If the grant were
     /// recorded when the sentence landed — as it was before this feature — the
     /// minutes would be gone here, the wall would be down behind Reddit, and
     /// two DeviceActivity schedules would be armed for a door she never opened.

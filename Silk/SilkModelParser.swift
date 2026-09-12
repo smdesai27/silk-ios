@@ -7,7 +7,7 @@ import FoundationModels
 /// The widener: Apple's on-device model, used only when the deterministic
 /// grammar returned silence. The model proposes; the Validator disposes —
 /// measured 18/18 with zero silently-wrong under this architecture
-/// (docs/market/open-language.md, harness in docs/market/parser-eval/).
+/// (the language-layer research, with its own eval harness).
 ///
 /// Rules baked in here:
 ///  - fresh session per parse (a reused session blows the 4096-token window)
@@ -19,9 +19,9 @@ import FoundationModels
 /// **THE DOOR FIELD IS A FREE `String` ON PURPOSE**, and this used to say the
 /// opposite — that it was "constrained to the user's actual doors via the
 /// schema", which the code has never done. The eval that shipped alongside this
-/// file recommends the constraint (`docs/market/open-language.md`: a closed enum
-/// "fixed three of four leaks"; `parser-eval/03-with-validator.swift` says "in
-/// production this is `DynamicGenerationSchema(name:anyOf:)`"). It was built and
+/// file recommends the constraint (the language-layer research: a closed enum
+/// "fixed three of four leaks"; its eval harness says "in production this is
+/// `DynamicGenerationSchema(name:anyOf:)`"). It was built and
 /// measured on 2026-08-19 — 180 real parses, both shapes, against a five-door
 /// fixture — and the constraint is **worse**:
 ///
@@ -55,7 +55,7 @@ import FoundationModels
 /// the boundary — `PolicyState` in, `ParseOutcome` out — already is.
 ///
 /// **`ModelAction` carries no cap verb, and that is a decision rather than an
-/// omission** (docs/design/per-app-caps.md §5.7). `map` switches over
+/// omission**. `map` switches over
 /// `ModelAction`, not over `Command`, so `Command.setDoorCap` compiled silently
 /// here the day it was added and this widener is structurally incapable of
 /// producing one. Three reasons it stays that way: the model's whole vocabulary
@@ -89,7 +89,7 @@ actor SilkModelParser {
     /// session answers one of these sentences in ~530–650 ms, and the very
     /// first call of a process — the one that pages the model in — took
     /// **1650 ms**. A phone is slower, and the repo's own fuzz campaign records
-    /// the model parse as "1–4 s" (docs/qa/fuzz-campaign-2026-08.md). Two
+    /// the model parse as "1–4 s". Two
     /// seconds sits above every honest answer and below the point where the
     /// user has stopped believing the "…", and the prewarm below is what keeps
     /// the cold case from spending it.

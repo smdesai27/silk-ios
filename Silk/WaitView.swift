@@ -4,8 +4,8 @@ import SilkCore
 // The wait: the screen between asking for an app and walking into it.
 //
 // It says nothing. There is a mark being drawn and the name of the app it will
-// open, and when the ink lands the door opens. Zero strings — see
-// docs/design/wait.md for why that is not minimalism but the only way this
+// open, and when the ink lands the door opens. Zero strings — the wait
+// doctrine is explicit that this is not minimalism but the only way this
 // surface passes the canon at all.
 
 // ============================================================

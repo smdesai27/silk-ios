@@ -133,7 +133,7 @@ enum EnsoGeometry {
     /// the one pair of samples the search returns.
     ///
     /// The single-answer forms stay. They are the named questions, one of them
-    /// has no `rect` to be given, and `docs/design/wait.md` §3.3's ratio test
+    /// has no `rect` to be given, and the frame budget's ratio test
     /// measures the bisection through them.
     static func pointAndTangent(atFraction fraction: Double,
                                 in rect: CGRect) -> (point: CGPoint, tangent: CGVector) {

@@ -45,7 +45,7 @@ public enum SharedStore {
     /// with every one of these gone.
     ///
     /// Calibration is the whole reason it exists, so it is not `wall`'s or
-    /// `monitor`'s category: `docs/qa/calibration-day.md` filters on this one
+    /// `monitor`'s category: the calibration-day protocol filters on this one
     /// and gets the day and nothing else.
     @inline(__always)
     static func calibrationLog(_ message: @autoclosure () -> String) {
@@ -550,7 +550,7 @@ public enum SharedStore {
     // MARK: - Attempts (shield renders; Mirror's chart)
 
     /// Records a shield render. Renders within 60s of the last one count as
-    /// the same attempt (docs/market/gaps.md #9) — otherwise the Sunday
+    /// the same attempt — otherwise the Sunday
     /// equation inflates into a scold.
     ///
     /// **The append goes to the tail, not to the blob.** This is called from
@@ -598,7 +598,7 @@ public enum SharedStore {
         // After the dedupe, never before it: `reaches` counts what was
         // APPENDED, and a burst of renders that collapses into one attempt
         // must read as one line here or the calibration day counts renders
-        // and calls them reaches. docs/qa/calibration-day.md.
+        // and calls them reaches.
         //
         // The count is the tail's, and the line says so: a merged count would
         // cost the very decode this function exists to stop paying.
@@ -933,7 +933,7 @@ public enum Wall {
             SharedStore.markCategoryShieldsMigrated()
         }
 
-        // Web domains never open with a grant (docs/market/gaps.md #2), which
+        // Web domains never open with a grant, which
         // is why they are no part of the plan: that decision is app tokens and
         // exceptions, and no door has ever opened a domain. The domains live
         // in the extras blob, and a corrupt one has no stand-in here (the

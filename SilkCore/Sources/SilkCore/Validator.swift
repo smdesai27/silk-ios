@@ -3,7 +3,7 @@ import Foundation
 /// The model (or the grammar) proposes; this disposes. Every command from any
 /// parser — deterministic or LLM — passes through here before anything touches
 /// the wall. Measured result of this architecture: 18/18 on the adversarial
-/// eval, both prompt injections killed by arithmetic. (docs/market/open-language.md)
+/// eval, both prompt injections killed by arithmetic.
 public enum Verdict: Equatable, Sendable {
     /// A grant, fully specified: door, minutes actually granted, re-lock time.
     case grant(door: Door, minutes: Int, relockAt: Date)
@@ -218,7 +218,7 @@ public enum Validator {
             // to refuse an over-ask with the balance ("stating the number is
             // not negotiating"); the handoff superseded that: "Requested
             // durations clamp to the minutes actually remaining"
-            // (docs/design/handoff/README.md:248-249, and the prototype's
+            // (the handoff mockup, and the prototype's
             // Math.min at Silk Mockup.dc.html:323). The readback then states
             // the clamped number, so she still hears what she actually got.
             //
@@ -432,8 +432,7 @@ public enum Validator {
             // and can come back with any Int at all. No adversary is required
             // for that; an adversary makes it worse, and the eval recorded both
             // halves — an injection landing on setBudget, and minutes invented
-            // "out of the budget I'd mentioned in the prompt"
-            // (docs/market/open-language.md).
+            // "out of the budget I'd mentioned in the prompt".
             //
             // The direction that hurts is the tighten: a raise parks as a
             // pending, is named on Now and can be undone, while a cut lands

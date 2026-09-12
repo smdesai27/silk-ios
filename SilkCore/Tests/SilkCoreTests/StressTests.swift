@@ -5,7 +5,7 @@ import Testing
 // Stress battery for the deterministic path: every intent, hostile phrasings,
 // clock edges, and one invariant that must hold for any string whatsoever —
 // Silk never loosens by accident. The model path is out of reach here (it
-// needs live Apple Intelligence); docs/market/parser-eval/ covers it.
+// needs live Apple Intelligence); the language-layer research covers it.
 
 // MARK: - Fixtures
 
@@ -1658,7 +1658,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     }
 
     /// **THE RESIDUALS OF THE CLOSING ROUND, PINNED WRONG SO A CHANGE IS LOUD.**
-    /// Each is disclosed in docs/design/per-app-caps.md §5.9 under "the closing
+    /// Each is disclosed in the per-app caps design under "the closing
     /// round" with its direction and the reason it is not fixed here. A pin on a
     /// known-wrong answer is not an endorsement of it; it is the only way a later
     /// change to any of them announces itself instead of arriving silently.

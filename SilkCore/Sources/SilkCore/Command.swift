@@ -8,7 +8,6 @@ public enum Command: Equatable, Sendable {
     /// Close a door, until a stated hour or (nil) the rest of today.
     /// "block tiktok until 9" carries the 9; "no more tiktok" carries nothing
     /// and rests to the day boundary. Tightening; instant either way.
-    /// (docs/design/handoff/README.md:243)
     case closeDoorToday(door: Door, until: TimeOfDay?)
     /// Close every door at once — "close everything", "close all". The same
     /// tighten, multiplied; the Validator expands it against the live door
@@ -27,7 +26,6 @@ public enum Command: Equatable, Sendable {
     case status
     /// A question about the night window, not a change to it: "down hours"
     /// with no time attached. Answered with the window as it stands.
-    /// (docs/design/handoff/README.md:244)
     case downHoursQuery
 }
 

@@ -119,7 +119,7 @@ public enum SilkStrings {
     /// Blocking's truth-telling row: authorization revoked, or a new phone
     /// holding tokens that no longer shield. Shown on Now the moment either is
     /// detected — a calm screen over dead blocking is the one lie Silk could
-    /// accidentally tell. (docs/market/gaps.md #5)
+    /// accidentally tell.
     ///
     /// The Spend intent says it too, on exactly the same signal and no other:
     /// a spend refused because no re-lock would arm answers with this sentence

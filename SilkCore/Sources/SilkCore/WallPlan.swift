@@ -214,9 +214,9 @@ public enum WallPlan {
                 // that renders them does not. So iOS draws its own default
                 // over the app — "TikTok is restricted." — with no Screen Time
                 // restriction anywhere to explain it and no app left that
-                // could take it down. That is the factory-reset review in
-                // docs/market/gaps.md #5, reached from inside a working
-                // install.
+                // could take it down. That is the factory-reset review the
+                // gaps list records under the wall's standing, reached from
+                // inside a working install.
                 //
                 // This is not the fail-closed rule bending. Rule 4 governs
                 // state that cannot be READ — the corrupt branch above. Here

@@ -5,7 +5,6 @@ import Foundation
 /// under the same verb shape — "add Reddit" loosens (a new door), "block
 /// YouTube too" tightens (a bigger wall) — so any verb-keyed classifier will
 /// eventually invert one, and a flipped loosen silently weakens the wall.
-/// (docs/market/language-layer.md §7)
 public enum Polarity: Equatable, Sendable {
     case tighten     // applies instantly, from anywhere
     case loosen      // applies tomorrow, unless the key is tapped

@@ -746,7 +746,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 // MARK: - FINDINGS
 //
 // The round's fourteen genuinely-failing probes — verified on main tip
-// 47993b4 and adjudicated against docs/design/per-app-caps.md and the rule
+// 47993b4 and adjudicated against the per-app caps design and the rule
 // comments — are all FIXED and PROMOTED into the armor above, each marked
 // "FINDING n, promoted" beside the rule seam it pins. One adjudication moved
 // during the fix pass: FINDING 7's draft expected the removal to land, and

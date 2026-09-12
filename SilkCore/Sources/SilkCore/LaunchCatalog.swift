@@ -2,7 +2,7 @@ import Foundation
 
 /// The curated door catalogue: name → how to open it. Keyed on the word the
 /// user chose, never on Apple's opaque token — that inversion is what makes
-/// "and it opens" possible at all (docs/market/positioning.md §5).
+/// "and it opens" possible at all.
 ///
 /// THE DATA IS HERE AND THE OPENING IS NOT. `LaunchCatalog.open(doorName:)`
 /// lives in the app target beside `UIApplication`; everything above it — the

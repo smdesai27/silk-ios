@@ -7,7 +7,7 @@
 # One door closes permanently and one already has:
 #   - bundle IDs lock at the FIRST build upload to App Store Connect
 #   - the FamilyControls (Distribution) entitlement was granted team-level,
-#     not per bundle ID (docs/market/shipping-roadmap.md, 2026-08-17) — one
+#     not per bundle ID (the shipping notes, 2026-08-17) — one
 #     submission covered all four identifiers, so renaming does not cost a
 #     re-request there
 # Rename before the App Store Connect upload, not after.

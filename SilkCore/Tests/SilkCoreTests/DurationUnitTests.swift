@@ -18,7 +18,7 @@ import Foundation
 //   SILENTLY WRONG — "give me 2 hours of tiktok" granted 2 MINUTES, debited the
 //   pool, unshielded the door and answered "TikTok is open for 2 minutes." The
 //   receipt was honest about what happened and the instruction was not what was
-//   asked. `docs/qa/fuzz-campaign-2026-08.md` met this sentence and filed it
+//   asked. The August 2026 fuzz campaign met this sentence and filed it
 //   NO_CRASH_ONLY, which is why the corpus stayed green over it for a campaign.
 //   Worse on the pool: "set my budget to 2 hours" cut the whole day's allowance
 //   to two minutes, and a tightening lands instantly, so nothing but the Undo

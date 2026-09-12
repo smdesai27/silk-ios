@@ -1,5 +1,5 @@
 // The Round-1 fuzz corpus: everyday / typos / numbers / hostile rows authored
-// in the August 2026 campaign (docs/qa/fuzz-campaign-2026-08.md). This Swift
+// in the August 2026 campaign. This Swift
 // file is the source of truth — the JSON corpora and generator script it was
 // first mechanized from were never checked in. Edit rows in place.
 import Foundation

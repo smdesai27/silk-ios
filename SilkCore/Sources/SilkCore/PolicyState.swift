@@ -1,7 +1,7 @@
 import Foundation
 
-/// A minute-of-day, 0..<1440. Down hours are wall-clock local by decision
-/// (docs/market/gaps.md #10); grants expire at absolute instants.
+/// A minute-of-day, 0..<1440. Down hours are wall-clock local by decision;
+/// grants expire at absolute instants.
 public struct TimeOfDay: Hashable, Codable, Sendable, Comparable {
     public let minutes: Int  // since midnight
 

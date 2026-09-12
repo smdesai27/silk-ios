@@ -15,7 +15,6 @@ import Foundation
 ///
 /// Drawing a door she just closed in the `.live` costume put the strongest signal
 /// on Now against the one thing she cannot use.
-/// (docs/design/handoff/Silk Mockup.dc.html:227-228, :330; README.md:90-91)
 public enum DoorState: Equatable, Sendable {
     case open(until: Date)   // a grant is running; the deadline it expires at
     case live                // in play today — askable within the shared budget
@@ -162,7 +161,6 @@ extension DoorState {
             // the canon is explicit that a grant states its duration once, in
             // the reply, and the door shows "· till 4:52" forever after —
             // deadlines, not countdowns; nothing ticks. The canon wins.
-            // (docs/design/canon.md, Screens/Interactive)
             return "· \(SilkStrings.till.lowercased()) \(Self.clock(until, calendar))"
         case .rest(let until):
             // A stated-hour close states when it lifts: "· till 9:00"

@@ -8,7 +8,7 @@ import Testing
 // minting minutes (`SpendShapeAdversarialTests`, five defects). Four commits
 // later the grammar has a new set of seams, and every one of them is a
 // widening — which is this repo's standing reason to attack it
-// (docs/qa/fuzz-campaign-2026-08.md): `doorAt` (one door primitive, a bigram
+// (the August 2026 fuzz campaign): `doorAt` (one door primitive, a bigram
 // fast path keyed on the roster), a determiner on the dative's recipient,
 // `asksForLess` at rules 6 and 8, `openingVerbStems` behind the negator guard,
 // the INTENTION frames ("i'll use", "i'm gonna open"), `contractedWould`, bare

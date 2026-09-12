@@ -42,7 +42,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     /// The night ground, and the one figure in this file that answers to a
     /// design change made after it was measured. The app's night ground is no
     /// longer `lacquer`: `Silk.Night` draws the canvas radial, #1C1913 → #0E0C08
-    /// (docs/design/README.md, Build status). `ShieldConfiguration` takes one
+    /// (recorded under Build status). `ShieldConfiguration` takes one
     /// flat colour and cannot draw a gradient, so this hands over that
     /// gradient's own middle — and the middle of #1C1913 and #0E0C08 is #15130E,
     /// one level of red off `lacquer`. The value did not move because it was
@@ -58,7 +58,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     /// the break-even from α ≈ 0.122 to α ≈ 0.149 and pushes `--silk-paper-16`
     /// under it — the capsule would read as a hole punched in the wall, or as
     /// nothing but prominent glass's blue rim. The mid value keeps every
-    /// measured figure in docs/design/screentime-ui.md valid.
+    /// measured figure in the Screen Time UI measurements valid.
     private var nightGround: UIColor { Self.lacquer }
 
     // The ink and paper ramps. The two MARK values are still the tokens
@@ -74,7 +74,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     // These are judged against the RENDERED wall, not the ground handed over —
     // title, subtitle and icon are all subviews of the effect view's
     // contentView, so like the button's fill they sit ABOVE the material and
-    // read against what it renders (docs/design/screentime-ui.md): #FAF8F5 by
+    // read against what it renders: #FAF8F5 by
     // day, #2F2F29 at night. That is also why the day floor here (α ≈ 0.613)
     // is not the app's (α ≈ 0.618) — the material lifts its wall.
     // The two mark values are static because the ensō bitmaps below are built
@@ -201,7 +201,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
         SharedStore.recordAttempt()
         let now = Date()
         // A wake is a wake whatever it was that hit the wall. A domain can
-        // never open with a grant (docs/market/gaps.md #2), so this render
+        // never open with a grant, so this render
         // reconciles nothing of its own — but it is still a live process with
         // the ledger in front of it, and some other door's expiry may be
         // sitting in it. Layer 4 is defined by the wake, not by the subject.
@@ -228,7 +228,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     // capsule blue and its fill must be an opaque blend, never an alpha. The
     // measurements behind both, the alpha floor a night fill must clear to stay
     // visible against its own wall, and the by-eye check that stands in for the
-    // test nobody can write here are in docs/design/screentime-ui.md.
+    // test nobody can write here are kept outside this repository.
 
     private func day(subtitle: String) -> ShieldConfiguration {
         ShieldConfiguration(
@@ -244,8 +244,8 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
             // the day wall, the size of step 0.16 buys on night and in the
             // direction a raised surface takes on a light ground. Escaping the
             // compression is the only reason it separates from a ground handed
-            // over as the same colour; docs/design/screentime-ui.md says what
-            // to do if a device ever shows otherwise.
+            // over as the same colour; the Screen Time UI measurements say
+            // what to do if a device ever shows otherwise.
             primaryButtonBackgroundColor: Self.linen
         )
     }

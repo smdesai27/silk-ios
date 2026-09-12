@@ -3,7 +3,7 @@ import Testing
 @testable import SilkCore
 
 // The wait's arithmetic, timed — because "buttery smooth is the core principle
-// in this app" is the one requirement in `docs/design/wait.md` that no other
+// in this app" is the one requirement in the wait doctrine that no other
 // test in either suite can fail on.
 //
 // Everything else about this feature is a fact: the door opens or it does not,

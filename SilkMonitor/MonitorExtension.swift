@@ -7,7 +7,7 @@ import os
 /// wall from the ledger. It runs under a 6 MB high-watermark limit and can be
 /// killed at any time — which is safe, because the ledger is the truth and
 /// every other wake also reconciles. If this never fires, doors close late,
-/// never never. (docs/market/gaps.md #1)
+/// never never.
 final class MonitorExtension: DeviceActivityMonitor {
 
     /// Every callback logs before it reconciles: the March 2026 forum failure

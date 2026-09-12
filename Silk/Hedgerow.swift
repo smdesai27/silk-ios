@@ -2,7 +2,7 @@ import SwiftUI
 
 // The hedgerow: every day since install, drawn as a border that only thickens.
 //
-// Ported from the design canvas (docs/design/canvas/Main.dc.html) rather than
+// Ported from the design canvas rather than
 // re-invented, so the two stay comparable — same seed, same noise, same ladder,
 // same clearing. What the border says is *duration*: it creeps further in,
 // stacks more of its five tone steps, and finally flowers. Nothing is ever

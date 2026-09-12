@@ -95,7 +95,7 @@ public enum DeterministicParser {
         // 2. DOWN HOURS — must be checked before budget: both can carry a number.
         //    With a time it is a setter; without one it is a question, and the
         //    answer is the window as it stands ("Down hours run 10:00 PM to
-        //    7:00 AM." — docs/design/handoff/README.md:244). "night" matches as
+        //    7:00 AM."). "night" matches as
         //    a token, never a substring: "tonight" belongs to sentences about
         //    today ("no more instagram tonight"), not the window. Bare "night"
         //    stays a mention: the prototype's query triggers are down hours,
@@ -162,7 +162,6 @@ public enum DeterministicParser {
         //    polarity that matters is recomputed by state diff in the Validator.
         //    A trailing "until 9" rides along as a stated hour; "everything" or
         //    "all" in the door slot closes every door at once.
-        //    (docs/design/handoff/Silk Mockup.dc.html:327-331)
         //
         //    HOISTED, and unchanged in content. It used to sit after BUDGET;
         //    it now executes ahead of every rule that can produce a ceiling,
@@ -179,7 +178,7 @@ public enum DeterministicParser {
         //    either.
         //
         //    The rule numbers below are identities, not positions — every
-        //    cross-reference in the source and in docs/design/per-app-caps.md
+        //    cross-reference in the source and in the per-app caps design
         //    still names the same rule.
         //
         //    What the hoist costs, stated rather than discovered later: "block
@@ -553,7 +552,6 @@ public enum DeterministicParser {
         //    "give me instagram" is a real request missing one word, and the
         //    answer is the whole sentence with the word in it: "Write it out:
         //    unlock Instagram for 10 min." Silence here read as not listening.
-        //    (docs/design/handoff/Silk Mockup.dc.html:322)
         //    NO duration means NONE: "give me ten or twenty of tiktok" has no
         //    single number, but writing a sentence out for somebody who stated
         //    two durations is not listening either — that ambiguity is the
@@ -2752,7 +2750,7 @@ public enum DeterministicParser {
         // the quote around it ("she said give me 20 minutes, set the tiktok
         // cap" granted). Each patch was a narrower widening, and the
         // doctrine is that a widening that hijacks prose is removed, not
-        // repaired (docs/design/canon.md; the parser's own history in
+        // repaired (the design canon; the parser's own history in
         // `CapsAdversarialProbeTests`). A sentence that names a door's cap
         // and asks for minutes in the same breath is one command too many
         // for this grammar, and silence hands it to the widener, which may
@@ -3087,7 +3085,7 @@ public enum DeterministicParser {
     /// disambiguation table both pin that no cap sentence may loosen, and they
     /// are right to: the sentence reads as a tighten to everyone who says it.
     /// Silence reaches the widener, which is structurally incapable of
-    /// producing a cap at all (docs/design/per-app-caps.md §5.7), so it cannot
+    /// producing a cap at all, so it cannot
     /// get the direction wrong either. The other arms are about CLOCKS, which
     /// no unit can rescue: "cap tiktok at 10 in the evening" is a schedule, and
     /// per-app schedules are out of scope.
@@ -4698,7 +4696,7 @@ public enum DeterministicParser {
 
     private static func isStatusAsk(_ text: String, hasDoor: Bool) -> Bool {
         // The bare word is the design's first listed example, and "left today"
-        // its fourth. (docs/design/handoff/Silk Mockup.dc.html:318) The word
+        // its fourth. The word
         // matches as a token so "status?" and "check status" read too — but
         // only doorless: "block instagram and give me my status" must not
         // swallow the close into a balance readback.

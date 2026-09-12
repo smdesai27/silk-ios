@@ -3,7 +3,7 @@ import Foundation
 @testable import Silk
 @testable import SilkCore
 
-// The Spend intent raises no wait — docs/design/wait.md §5, "Not waited on".
+// The Spend intent raises no wait — the wait doctrine's "Not waited on".
 //
 // Said plainly first, because it decides what this file is allowed to contain:
 // `SpendIntent` shares NO code with the wait. The wait lives in `AppModel`
