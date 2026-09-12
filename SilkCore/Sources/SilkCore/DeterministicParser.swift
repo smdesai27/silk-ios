@@ -3305,10 +3305,15 @@ public enum DeterministicParser {
             // repaired; the earned-abstinence preamble reaches the widener.
             if clause.contains(where: { i in
                 restrictionWords.contains(t[i])
-                    // "close TO my limit" is the degree adverb, not the verb:
+                    // "close TO my LIMIT" is the degree adverb, not the verb:
                     // "im close to my tiktok limit, give me 20 minutes" is the
-                    // pinned "im at my limit" with one word swapped.
-                    && !(t[i] == "close" && i + 1 < clause.upperBound && t[i + 1] == "to")
+                    // pinned "im at my limit" with one word swapped. The
+                    // ceiling noun after the "to" is what says so — without
+                    // it, "close to nothing on tiktok, give me 20 minutes"
+                    // and "keep tiktok close to zero, give me 20 minutes" wore
+                    // the carve and were funded.
+                    && !(t[i] == "close" && i + 1 < clause.upperBound && t[i + 1] == "to"
+                         && (i + 2..<clause.upperBound).contains { capNouns.contains(t[$0]) })
             }) { return true }
             if clause.contains(where: { i in
                 t[i] == "break" && i + 1 < clause.upperBound && t[i + 1] == "from"

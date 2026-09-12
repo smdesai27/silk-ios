@@ -156,6 +156,9 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("ive been off instagram since monday, unlock instagram for 10", "the same — silent, knowingly"),
         ("i kept tiktok closed all morning, give me 20 minutes", "the same — silent, knowingly"),
         ("tiktok was blocked and still is, give me 20 minutes", "the past with the present beside it"),
+        ("close to nothing on tiktok, give me 20 minutes", "\"close to\" without a ceiling noun is the close"),
+        ("keep tiktok close to zero, give me 20 minutes", "the same, as an imperative"),
+        ("close to tiktok, give me 20", "the same, bare"),
     ])
     func aClauseThatRestrictsTheDoorIsNoDonor(_ row: (text: String, why: String)) {
         expectSilence(row.text, row.why)
@@ -323,7 +326,9 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
 /// evidence; the frame is the fact.
 ///
 /// `aReportFramesTheAsk` reads a reporting speech verb, or a wish, standing in
-/// front of the ask's own verb in the ask's own breath.
+/// front of any opening verb, in that verb's own breath — every breath, not
+/// only the one that carries the minutes: a frame confined to the ask's breath
+/// was tried and attacked out, and the quote in a preamble is the price.
 @Suite struct AQuotedAskIsNotAnAsk {
 
     @Test(arguments: [
