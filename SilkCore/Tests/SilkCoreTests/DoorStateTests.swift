@@ -165,9 +165,9 @@ private func grant(_ door: Door, from: Date, to: Date) -> Grant {
     }
 
     @Test func aShutDoorStatesItsStatedHourAndOnlyThat() {
-        // "· till 9:00" — lowercase, following the separator
-        // (Silk Mockup.dc.html:330). A plain close says nothing: the resting
-        // costume is the whole message (README.md:90-91).
+        // "· till 9:00" — lowercase, following the separator.
+        // A plain close says nothing: the resting
+        // costume is the whole message.
         #expect(DoorState.rest(until: at(7, 29, 21)).displayTime(calendar: cal) == "· till 9:00")
         #expect(DoorState.rest(until: nil).displayTime(calendar: cal) == nil)
     }

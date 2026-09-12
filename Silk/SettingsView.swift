@@ -6,7 +6,7 @@ import SilkCore
 /// Settings: the few global values, plus per-door allowances. The third page.
 ///
 /// There is no page title and no section header above the first group — both
-/// were cut as unnecessary (handoff README.md §3): the wordmark already signs
+/// were cut as unnecessary: the wordmark already signs
 /// the screen, and three rows reading "Down hours / Budget / Undo" are their
 /// own heading. Only the doors group earns a title, because door names are
 /// user data and would otherwise read as more settings.
@@ -73,13 +73,13 @@ struct SettingsView: View {
     private var column: some View {
         VStack(spacing: 0) {
             // The wordmark's seat — the mockup mounts one mark above both pages
-            // (Silk Mockup.dc.html:77, margin-top 62) — is held empty by
+            // (the handoff mockup, margin-top 62) — is held empty by
             // `silkFittedColumn`, so the group's 64 below still measures from
             // the same place it always did.
             //
             // First group at 64, not the doors' usual 26: with no greeting and
             // no hero above it, the group takes a longer breath off the
-            // wordmark. (Silk Mockup.dc.html:150)
+            // wordmark.
             VStack(spacing: 0) {
                 SettingsRow(name: SilkStrings.downHours, value: downHours,
                             night: night, showsRule: true,
@@ -97,7 +97,7 @@ struct SettingsView: View {
             // Mirror's .silk-chart__title, borrowed whole: sans 12, .04em,
             // margins 44/46/14, and the same ink as Mirror's own "Week" —
             // ink-48 / paper-32 in the sheet, at the AA floor here.
-            // (ds-bundle/_ds_bundle.css:377-382; Silk Mockup.dc.html:48, :155)
+            // (ds-bundle/_ds_bundle.css:377-382)
             Text(SilkStrings.apps)
                 .font(Silk.sans(12))
                 .tracking(Silk.track(0.04, 12))
@@ -165,7 +165,7 @@ struct SettingsDoorItem: Identifiable {
 
 /// The doors idiom in a second costume: 52pt, hairline-ruled, sans name on
 /// the left — but the serif slot rides the far edge (`margin-left: auto` on
-/// the mockup's `__time`, Silk Mockup.dc.html:152) instead of trailing the
+/// the mockup's `__time`) instead of trailing the
 /// name, and there is no state dot. A settings row states a rule, and a rule
 /// has no today.
 private struct SettingsRow: View {

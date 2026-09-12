@@ -4,7 +4,7 @@ import SilkCore
 // The toast: every refusal, and every change still worth taking back. A "no"
 // weighs less than a decision, so it never earns a line on the page — it
 // arrives, it is read, it leaves, and the page is unchanged.
-// (CARDS.md, Principles: "Refusals are toast-weight" · Interactive.html:157-165, 393-402)
+// (the design principles: "Refusals are toast-weight" · Interactive.html:157-165, 393-402)
 
 /// Undo is leaf lifted until it reads on ink, and pine shadow when it sits on
 /// linen — deliberately not leaf itself: the page owns the screen's one pop, so

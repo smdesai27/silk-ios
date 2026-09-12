@@ -290,7 +290,7 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
     @Test func statedHourCloseRestsUntilThatHour() {
         // 3 PM, "block tiktok until 9" → the rest lifts at 9:00 PM today, and
         // the reply states it: "TikTok closed until 9:00." — not the day
-        // boundary the close used to default to. (README.md:243)
+        // boundary the close used to default to.
         let ninePM = cal.date(from: DateComponents(year: 2026, month: 7, day: 29, hour: 21))!
         #expect(parseAndValidate("block tiktok until 9") == .close(door: tiktok, until: ninePM))
     }

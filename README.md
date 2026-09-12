@@ -32,6 +32,26 @@ spend from one daily budget, and the door locks behind you. *The app you open in
   on-device model may widen what the grammar did not claim, and a deterministic validator has the
   last word on anything it proposes. No notification permission, ever.
 
+## The rules the code enforces
+
+The comments cite these by number.
+
+1. **Spend by asking.** Within budget a grant is granted, the balance read back, the app opened —
+   after a wait priced in seconds of watching, which passes only while Silk is on screen and stops
+   the moment it is not. Nothing is debited, unshielded or armed until the wait is paid, so leaving
+   costs nothing and the wall never comes down early. A spend is a whole sentence — an opening verb,
+   the app name, and the minutes — and a fragment gets back the one sentence to write instead.
+2. **Edges never yield.** Budget gone, a door's own ceiling spent, or down hours means no. Refusals
+   are four words and a time, and they name the door when the door is what ran out — "0 left today."
+   beside a hero reading 30 is a lie.
+3. **Loosening waits for tomorrow** — unless the held rule's one button, "Apply now.", is tapped.
+   Tightening is instant. Polarity is computed by state diff, never parsed from words.
+4. **The wall fails closed.** The ledger is the truth; a dead extension closes doors late, never
+   leaves them open. The model proposes; the validator disposes.
+5. **No notification permission, ever.** Every word the app says comes from
+   `SilkCore/Sources/SilkCore/Strings.swift` — 75 of them today, 65 constants and 10 that compose.
+   The file is the vocabulary, and nothing outside it may speak.
+
 ## Architecture
 
 | Path | What it is |
@@ -46,9 +66,6 @@ spend from one daily budget, and the door locks behind you. *The app you open in
 | `scripts/ci.sh` · `.githooks/` | Every suite, and the pre-push hook that runs the cheap one. See **Tests**. |
 | `silk-ds/` · `ds-bundle/` | The design language: warm paper, ink, the ensō, and a deliberately small vocabulary. |
 | `assets/screenshots/` | Device captures, and the App Store set composed from them. |
-
-Every word the app says comes from `SilkCore/Sources/SilkCore/Strings.swift` — 75 of them today,
-65 constants and 10 that compose. The file is the vocabulary, and nothing outside it may speak.
 
 ## Build
 

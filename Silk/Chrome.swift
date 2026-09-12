@@ -15,7 +15,7 @@ import SilkCore
 // ============================================================
 
 /// One dot per page — Now, Mirror, Settings in the handoff's order
-/// (README.md:54-56; the older "two screens deep" vision predates Settings
+/// (the older "two screens deep" vision predates Settings
 /// earning its seat). Replaces UIPageControl, which draws iOS grey on Silk's
 /// paper and cannot be told otherwise.
 ///
@@ -65,7 +65,7 @@ struct PageDots: View {
         .animation(Silk.motion(Silk.Motion.dots), value: index)
     }
 
-    /// The pages in the handoff's order (README.md:54-56). Anything past the
+    /// The pages in the handoff's order. Anything past the
     /// three — the two-page preview harness aside, there is nothing — falls
     /// back to its seat number, which is user data rather than a sentence.
     private static func name(of i: Int) -> String {
@@ -281,12 +281,12 @@ struct DoorRow: View {
 /// that focuses the input. It is an affordance for reaching the bar one-handed,
 /// so here it focuses the field too, and nothing about it records audio.
 ///
-/// The bar is also the conversation's handle — the "docked" choreography
-/// (handoff README.md:196-212). Focus with nothing said raises it to the
+/// The bar is also the conversation's handle — the "docked" choreography.
+/// Focus with nothing said raises it to the
 /// vertical middle over 450ms on the one curve; the first send glides it home
 /// in one continuous move and it stays docked while the thread lives. Both
 /// states are driven from outside: `hasTurns` is the prototype's `has-turns`
-/// class (Silk Mockup.dc.html:28, 389), and the two heights, because only the
+/// class, and the two heights, because only the
 /// container knows how tall the paper is and how much of it the keyboard took.
 ///
 /// **The bar owns its whole travel.** It used to own only the residual rise:
@@ -386,7 +386,7 @@ struct CommandBar: View {
                 // way it was said.
                 .textInputAutocapitalization(.never)
                 .onSubmit(onSubmit)
-                // 15 → 18 on focus (Silk Mockup.dc.html:23, 32) — and font
+                // 15 → 18 on focus — and font
                 // size is not animatable on a text field, so the field is set
                 // at 18 and scaled to 15/18 when idle. Down-scaling keeps the
                 // raised state, the one being read and typed into, pixel-true;
@@ -429,11 +429,11 @@ struct CommandBar: View {
         )
         // The rise, and the keyboard's lift under it. One translate on the one
         // curve, and the same curve back: the dock is not a second
-        // choreography, it is this one reversing (Silk Mockup.dc.html:22, 26, 28).
+        // choreography, it is this one reversing.
         .offset(y: -lift)
         .animation(Silk.motion(0.45), value: raised)
         // The grow rides focus, not the rise — the input holds 18 while the
-        // conversation is docked (Silk Mockup.dc.html:32 keys on `input:focus`).
+        // conversation is docked (the handoff mockup keys on `input:focus`).
         .animation(Silk.motion(0.45), value: isFocused)
         // The keyboard's arrival and departure move the same offset. Same
         // curve, same frame as `raised` flips, so the pair reads as one lift
@@ -618,7 +618,7 @@ extension View {
     ///
     /// THE WORDMARK'S SEAT IS PART OF THE SCAFFOLD, held empty. The mark itself
     /// lives on the root's own undimmed layer — the one thing that never yields
-    /// to the conversation (handoff README.md:203-205) — so a page that mounted
+    /// to the conversation — so a page that mounted
     /// its own would double it. The seat keeps the 13pt (and the 62 above it)
     /// so nothing below moves, which is why both pages' `columnHeight` still
     /// opens by counting them.

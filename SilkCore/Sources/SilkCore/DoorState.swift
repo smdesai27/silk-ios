@@ -21,7 +21,7 @@ public enum DoorState: Equatable, Sendable {
     /// Shut for the day. `until` is the stated hour that shortened the close
     /// ("block tiktok until 9") — nil when the close simply runs to the day
     /// boundary. The distinction is visible: a rule-bound rest states its
-    /// deadline, a plain rest says only the name (README.md:90-91) — so the
+    /// deadline, a plain rest says only the name — so the
     /// nil must survive into the state rather than being papered over with
     /// the boundary date it happens to equal.
     case rest(until: Date?)
@@ -165,7 +165,7 @@ extension DoorState {
         case .rest(let until):
             // A stated-hour close states when it lifts: "· till 9:00"
             // (Silk Mockup.dc.html:330). A plain close has nothing to add —
-            // the resting costume is the whole message (README.md:90-91).
+            // the resting costume is the whole message.
             guard let until else { return nil }
             return "· \(SilkStrings.till.lowercased()) \(Self.clock(until, calendar))"
         case .live:
@@ -206,8 +206,8 @@ extension DownHours {
     }
 
     /// The bar's answer to a bare "down hours" / "bedtime" / "quiet":
-    /// "Down hours run 10:00 PM to 7:00 AM." (README.md:244, Silk
-    /// Mockup.dc.html:334). Both ends carry the meridiem because the sentence
+    /// "Down hours run 10:00 PM to 7:00 AM." (Silk Mockup.dc.html:334). Both
+    /// ends carry the meridiem because the sentence
     /// spans the night — a bare "10:00 to 7:00" reads as a nine-hour morning.
     public var runText: String {
         SilkStrings.downHoursRun(from: start.displayWithMeridiem, to: end.displayWithMeridiem)

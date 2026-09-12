@@ -4,8 +4,7 @@ import SilkCore
 // The wheel picker — Silk's one editor. Three rows on Settings open it, and it
 // is a full-screen overlay rather than a sheet or a push: while a value is
 // being chosen it is the only thing in the world, and the page waits behind a
-// .97 ground it can just barely be felt through. (handoff README.md §4;
-// Silk Mockup.dc.html:166-182)
+// .97 ground it can just barely be felt through.
 //
 // Tapping the backdrop commits and closes. There is no OK button and no
 // Cancel: the value resting in the selection frame *is* the choice, and a
@@ -24,7 +23,7 @@ import SilkCore
 /// One wheel's worth of data: strings to spin, and where to open. The values
 /// arrive pre-formatted — the picker renders them verbatim and knows nothing
 /// about clocks or minutes, exactly as the prototype's wheels are handed
-/// finished labels (Silk Mockup.dc.html:249-256).
+/// finished labels.
 struct WheelColumn: Identifiable {
     /// Stable identity, so the down-hours pair keeps each wheel's scroll if
     /// the overlay is rebuilt mid-flight.
@@ -35,8 +34,8 @@ struct WheelColumn: Identifiable {
     var selected: Int
 }
 
-/// The five tables — four verbatim from the handoff (README.md:174-177 = Silk
-/// Mockup.dc.html:236-239), and the caps, which the handoff predates. They live
+/// The five tables — four verbatim from the handoff, and
+/// the caps, which the handoff predates. They live
 /// beside the picker so the strings are audited in one place; the model passes
 /// them in as columns and maps the committed indices back out.
 enum WheelValues {
@@ -59,7 +58,7 @@ enum WheelValues {
 // ============================================================
 
 /// The full-screen picker. Down hours passes two columns and gets two wheels
-/// side by side, gap 8 (Silk Mockup.dc.html:168); budget and undo pass one.
+/// side by side, gap 8; budget and undo pass one.
 ///
 /// Selections are held here, not written live: the prototype writes state on
 /// every settle, but everything behind the overlay is hidden while it is up,
@@ -106,7 +105,7 @@ struct WheelPickerOverlay: View {
         })
     }
 
-    /// The veil, both faces: the ground itself at .97 (Silk Mockup.dc.html:368).
+    /// The veil, both faces: the ground itself at .97.
     /// Day lays `paper` on paper, so the veil is invisible as a colour and only
     /// the page under it goes; night lays `Night.ground` on the night radial and
     /// does the same thing, dimming the ellipse's centre by the one step the
@@ -126,7 +125,7 @@ struct WheelPickerOverlay: View {
         ZStack {
             // The backdrop is the commit button — the whole screen, minus the
             // wheels themselves, which eat their taps the way the prototype's
-            // `w.eat` stops propagation (Silk Mockup.dc.html:287).
+            // `w.eat` stops propagation.
             Self.veil(night: night)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
@@ -149,7 +148,7 @@ struct WheelPickerOverlay: View {
                 // The sheet's ink-40 is the ramp's old floor (2.42:1); this is
                 // the AA floor, still the ramp's quietest step. Hit-testing
                 // off, so a tap on the word is a tap on the backdrop, as it is
-                // in the DOM. (Silk Mockup.dc.html:167, 369)
+                // in the DOM.
                 Text(title)
                     .textCase(.uppercase)
                     .font(Silk.sans(12))
@@ -177,7 +176,7 @@ struct WheelPickerOverlay: View {
                 }
                 // Drawn once for the whole overlay, not per wheel: with two
                 // wheels up, one 280pt frame spans the pair — the frame marks
-                // the reading line, not either wheel. (Silk Mockup.dc.html:179-182)
+                // the reading line, not either wheel.
                 .overlay { selectionFrame }
             }
         }
@@ -216,7 +215,7 @@ struct WheelPickerOverlay: View {
 /// unit: 312 − 2×130 of content margin leaves exactly one 52pt seat in the
 /// middle, so view-aligned snapping can only ever rest a row dead centre —
 /// the same arithmetic as the prototype's 130px spacers and
-/// `round(scrollTop / 52)` (Silk Mockup.dc.html:171-176, 268).
+/// `round(scrollTop / 52)`.
 private struct Wheel: View {
     var values: [String]
     @Binding var selection: Int
@@ -267,7 +266,7 @@ private struct Wheel: View {
             .scrollTargetLayout()
             // Only the selected row is full ink; the rest sit at ink-35 and
             // the handover crosses on the one curve, sharing it with the tap's
-            // ride to centre. (Silk Mockup.dc.html:173, :33)
+            // ride to centre.
             .animation(Silk.motion(0.35), value: selection)
         }
         .contentMargins(.vertical, 130, for: .scrollContent)
@@ -359,8 +358,8 @@ private struct Wheel: View {
     /// handles on one scroll is a thing to debug later, not a fix.
     ///
     /// Animations off, explicitly. The wheel "opens already resting on it, no
-    /// animation" (the prototype sets `scrollTop` directly on mount, Silk
-    /// Mockup.dc.html:264), and `onAppear` can be reached inside the transaction
+    /// animation" (the prototype sets `scrollTop` directly on mount), and
+    /// `onAppear` can be reached inside the transaction
     /// that raised the overlay — whose 0.4s would otherwise be handed to the
     /// seat and scroll it visibly into place from the wrong row.
     private func seat() {
@@ -386,7 +385,7 @@ private struct Wheel: View {
     private var fullInk: Color { night ? Silk.paperAlpha(0.85) : Silk.ink }
 
     /// Night dims to rgba(246,243,236,.26) — the handoff's night-mode audit
-    /// names this value directly (README.md:278). Day is ink-35.
+    /// names this value directly. Day is ink-35.
     ///
     /// Left on the sheet's values by the ramp audit, and not because they pass.
     /// The rows are serif 24, which is WCAG "large" and answers to 3:1 rather

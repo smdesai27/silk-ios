@@ -102,7 +102,7 @@ struct RootView: View {
                         // opaque, and the SILK mark read straight through the
                         // wall. The prototype's `backdrop-filter` sits on an
                         // element at `inset: 0; z-index: 20` and blurs everything
-                        // painted beneath it (Silk Mockup.dc.html:187), which is
+                        // painted beneath it, which is
                         // a stratum, not a sibling. This container is that
                         // stratum's floor: every layer the overlays cover lives
                         // inside it, and the three overlays live outside it.
@@ -125,7 +125,7 @@ struct RootView: View {
                             // bottom-anchored footnote jumps hundreds of points.
                             .ignoresSafeArea(.keyboard, edges: .bottom)
                             // The page yields to the conversation: .05, blur 7,
-                            // hit-dead, on the one curve (Silk Mockup.dc.html:24-25).
+                            // hit-dead, on the one curve.
                             // The stage goes while the veil stands — see
                             // `silkStage(dimmed:veiled:)`; nothing under a wait
                             // may show, least of all the budget ensō as a ring.
@@ -193,6 +193,13 @@ struct RootView: View {
                                     // put the keyboard down or close the thread.
                                     .accessibilityLabel(Text(SilkStrings.ok))
                                     .accessibilityAddTraits(.isButton)
+                                    // And last in the swipe order: a full-screen
+                                    // button ahead of the thread would be the
+                                    // first thing VoiceOver landed on when the
+                                    // thread opened, and activating it tears
+                                    // the thread down. The way out is offered
+                                    // after the thread and the bar, not before.
+                                    .accessibilitySortPriority(-1)
                             }
 
                             // The thread, over the dimmed stage, under the shield and
@@ -245,7 +252,7 @@ struct RootView: View {
                             .silkKeyboardHeight($keyboard)
                         }
                         // The shield's backdrop-filter: blur(20px) over a ground at
-                        // .92/.94 (README.md:181-183). SwiftUI has no backdrop
+                        // .92/.94. SwiftUI has no backdrop
                         // filter, but the grounds are opaque, so blurring the stage
                         // the shield covers is the same light arriving the same
                         // way. CSS's filter radius *is* the Gaussian sigma —
@@ -301,7 +308,7 @@ struct RootView: View {
                         }
 
                         // The wheel picker sits over even the shield
-                        // (README.md:154) — and, at 23, over the door editor as
+                        // — and, at 23, over the door editor as
                         // well. Equal zIndex in a ZStack resolves by declaration
                         // order, so while both stood at 22 the editor below drew
                         // on top.
@@ -524,7 +531,7 @@ private struct BarSlot: View {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         input = ""
         // Return on an empty bar is not a question, so it gets no answer — the
-        // prototype drops it before it becomes a turn (Silk Mockup.dc.html:339).
+        // prototype drops it before it becomes a turn.
         guard !text.isEmpty else { return }
         submittedAt = .now
         Task { await model.handle(text) }

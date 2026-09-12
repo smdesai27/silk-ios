@@ -355,8 +355,8 @@ final class OnboardingUITests: SilkWalk {
         let bar = completeSetup(app)
 
         // Ask for more than the budget. The Validator clamps the over-ask to
-        // the minutes actually remaining (handoff README.md:248-249, mirrored
-        // in Validator.swift's `min(minutes, remaining)`): sixty against a
+        // the minutes actually remaining (mirrored in Validator.swift's
+        // `min(minutes, remaining)`): sixty against a
         // 40 budget grants 40, and the read-back states the clamped number —
         // a grant sentence, never a refusal. The reply lands in the thread
         // after the deliberate ~480ms beat, so the wait is generous.

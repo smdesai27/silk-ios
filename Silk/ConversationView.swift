@@ -6,7 +6,7 @@ import SilkCore
 // appears once the bar has been spoken into.
 //
 // The choreography is the "docked" model, chosen over two rejected
-// alternatives (handoff README.md:196-212): the bar rises to invite, docks
+// alternatives: the bar rises to invite, docks
 // home on the first send, and stays docked for the rest of the conversation.
 // Rising means "say something"; docking means "we are talking now." Nothing
 // in this file may improvise on that.
@@ -16,14 +16,13 @@ import SilkCore
 // ============================================================
 
 /// The live conversation. Cleared on blur — a thread is a moment, not a log,
-/// and Silk keeps no transcript (README.md:292 `thread … cleared on blur`).
+/// and Silk keeps no transcript (the handoff notes: `thread … cleared on blur`).
 ///
 /// Turns are keyed by a stable id, never by index: replies land
 /// asynchronously, and an index-keyed update rewrites the wrong turn once a
 /// second question is asked before the first answer arrives. The handoff
-/// calls this out by name (README.md:301-303), and the prototype threads an
-/// `id` through `send`/`undoTurn` for exactly this reason
-/// (Silk Mockup.dc.html:341-352).
+/// calls this out by name, and the prototype threads an
+/// `id` through `send`/`undoTurn` for exactly this reason.
 @MainActor
 @Observable
 final class ConversationModel {
@@ -33,11 +32,11 @@ final class ConversationModel {
         var you: String
         /// nil while the reply is in flight; the slot renders "…" until the
         /// real words land (~480ms in previews) and fade in
-        /// (Silk Mockup.dc.html:342 seeds `msg: '…'`).
+        /// (the handoff mockup seeds `msg: '…'`).
         var reply: String?
         /// A turn that changed something carries the way back. The closure
         /// captures the prior state wholesale — the prototype captures the
-        /// previous `doors` array and restores it in one move (README.md:303-304)
+        /// previous `doors` array and restores it in one move
         /// — so undo needs no diffing and no knowledge of what the turn did.
         /// It reports whether the restore landed: an offer can expire under
         /// the pill (a later ledger mutation retires every earlier offer),
@@ -61,7 +60,7 @@ final class ConversationModel {
     /// Mirrored from the root's FocusState (`onChange`) — FocusState cannot
     /// live outside a view, so the model holds its shadow. Blur clears the
     /// thread here, in one place, exactly as the prototype's `onCmdBlur`
-    /// does (Silk Mockup.dc.html:387).
+    /// does.
     var focused = false {
         didSet { if !focused { clear() } }
     }
@@ -101,7 +100,7 @@ final class ConversationModel {
     }
 
     /// The `has-turns` class, as state: thread non-empty ⇒ the bar is docked
-    /// even while focused (Silk Mockup.dc.html:28, 389).
+    /// even while focused.
     var hasTurns: Bool { !turns.isEmpty }
 
     /// A turn still waiting on the pipeline — the one the thread is drawing as
@@ -130,18 +129,16 @@ final class ConversationModel {
     var raised: Bool { focused && !hasTurns }
 
     /// The page dims on focus alone, and stays dim while docked-in-conversation:
-    /// the CSS keys the stage on `input:focus`, not on `has-turns`
-    /// (Silk Mockup.dc.html:24-25).
+    /// the CSS keys the stage on `input:focus`, not on `has-turns`.
     var stageDimmed: Bool { focused }
 
-    /// Only the last three are kept in view (README.md:223,
-    /// Silk Mockup.dc.html:391 `slice(-3)`); older ones have already
-    /// dissolved into the top fade.
+    /// Only the last three are kept in view (the handoff mockup's
+    /// `slice(-3)`); older ones have already dissolved into the top fade.
     var visibleTurns: [Turn] { Array(turns.suffix(3)) }
 
     /// Appends a pending turn and returns its id, which the reply must quote
     /// back to `land`. Follow-ups append — a second send never replaces the
-    /// first turn (README.md:232-233).
+    /// first turn.
     @discardableResult
     func ask(_ you: String) -> Turn.ID {
         let turn = Turn(you: you, reply: nil, undo: nil)
@@ -179,7 +176,7 @@ final class ConversationModel {
     }
 
     /// Runs the turn's way back. When it lands, the reply is rewritten to
-    /// "Put back." and the pill drops (Silk Mockup.dc.html:348-352) — the
+    /// "Put back." and the pill drops — the
     /// change is its own receipt, no toast, no second sentence. When the
     /// offer expired under the pill (a later mutation beat the tap), only
     /// the pill goes: the reply keeps stating what actually happened, and
@@ -201,12 +198,12 @@ final class ConversationModel {
 // ============================================================
 
 /// The page yielding to the conversation: opacity .05, blur 7, hit-testing
-/// off, the opacity over 450ms on the one curve (Silk Mockup.dc.html:21,
-/// 24-25). The blur radius snaps rather than animating — an animating radius
+/// off, the opacity over 450ms on the one curve. The blur radius snaps rather
+/// than animating — an animating radius
 /// re-renders the whole stage offscreen every frame, and behind a fade to .05
 /// the difference cannot be seen. The root wraps the pager and the dots in
 /// this; the wordmark is never wrapped — it is the one thing that never
-/// yields (README.md:203-205).
+/// yields.
 struct SilkStage: ViewModifier {
     var dimmed: Bool
     /// Whether the wait's veil stands over this. See `silkStage(dimmed:veiled:)`.
@@ -286,7 +283,7 @@ struct ConversationThread: View {
     var night: Bool
 
     var body: some View {
-        VStack(spacing: 26) {                            // gap: 26px (README.md:215-216)
+        VStack(spacing: 26) {                            // gap: 26px, from the handoff notes
             ForEach(model.visibleTurns) { turn in
                 TurnCell(turn: turn,
                          newest: turn.id == model.visibleTurns.last?.id,
@@ -303,15 +300,14 @@ struct ConversationThread: View {
         .animation(Silk.motion(0.35), value: model.visibleTurns)
         // overflow: hidden + the top fade in one stroke: the mask is sized to
         // the box, so anything pushed past its top edge is already invisible —
-        // old turns dissolve into the paper rather than clipping
-        // (Silk Mockup.dc.html:30-31).
+        // old turns dissolve into the paper rather than clipping.
         .mask {
             LinearGradient(stops: [.init(color: .clear, location: 0),
                                    .init(color: .black, location: 0.24),
                                    .init(color: .black, location: 1)],
                            startPoint: .top, endPoint: .bottom)
         }
-        .padding(.horizontal, 40)                        // left/right: 40px (README.md:214)
+        .padding(.horizontal, 40)                        // left/right: 40px, from the handoff notes
         .padding(.top, 116)                              // top: 116px
         .padding(.bottom, 150)                           // bottom: 150px
         // The box is measured from the glass, not the safe area — and only
@@ -337,7 +333,7 @@ private struct TurnCell: View {
     @Environment(\.colorSchemeContrast) private var contrast
 
     /// Only the newest turn at full strength; the past drops to .4
-    /// (Silk Mockup.dc.html:52, 391-394 `ex-past`). Applied piecewise below
+    /// (the handoff mockup's `ex-past`). Applied piecewise below
     /// rather than once on the cell: a cell-wide `.opacity(0.4)` renders the
     /// dim but silently stops the Undo pill's taps — the press fell through
     /// to the tap-out catcher and tore the whole thread down.
@@ -350,7 +346,7 @@ private struct TurnCell: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // .ex-you — 13px sans, +.01em (Silk Mockup.dc.html:50, 54). The
+            // .ex-you — 13px sans, +.01em. The
             // mockup's ink-40 / paper-32 are the ramp's old floor and land at
             // 2.42:1 and 2.66:1; this is their AA-floored image (Silk.swift).
             Text(turn.you)
@@ -361,7 +357,7 @@ private struct TurnCell: View {
                 .allowsHitTesting(false)
 
             // .ex-silk — Silk's voice, so the serif, and never sans: 23px,
-            // -.01em, ink-84 day / paper-85 night (Silk Mockup.dc.html:51, 55).
+            // -.01em, ink-84 day / paper-85 night.
             // lineSpacing tops the serif's natural box up to the CSS's 1.35
             // (≈31pt at 23). `text-wrap: pretty` has no SwiftUI spelling;
             // centred two-liners are close enough at these lengths.
@@ -375,7 +371,7 @@ private struct TurnCell: View {
                 // same curve the turn arrived on.
                 .contentTransition(.opacity)
                 .animation(Silk.motion(0.35), value: turn.reply)
-                .padding(.top, 14)                       // margin-top: 14px (Silk Mockup.dc.html:200)
+                .padding(.top, 14)                       // margin-top: 14px, from the handoff mockup
                 .opacity(dim)
                 .allowsHitTesting(false)
                 .accessibilityIdentifier("silk.turn.reply")
@@ -406,12 +402,12 @@ private struct TurnCell: View {
                 // (nothing outside Strings.swift may speak).
                 .accessibilityHidden(turn.reply == nil)
 
-            // .ex-undo — a hairline pill, 13px, border ink-14 / paper-16 (Silk
-            // Mockup.dc.html:53, 56). The label's ink-52 / paper-40 are lifted
+            // .ex-undo — a hairline pill, 13px, border ink-14 / paper-16. The
+            // label's ink-52 / paper-40 are lifted
             // to the AA floor; the border is not text and keeps its token.
             // The prototype
             // preventDefault()s its mousedown so pressing it cannot blur the
-            // input and tear the thread down (README.md:229-230). SwiftUI
+            // input and tear the thread down. SwiftUI
             // buttons never steal first responder, so the equivalent here is
             // structural: the pill consumes its own tap, and only the texts
             // above pass touches through to the root's tap-out catcher.
@@ -494,7 +490,7 @@ private struct ConversationDemo: View {
 
             ConversationThread(model: convo, night: night)
 
-            // The wordmark never yields (README.md:204-205) — over the stage,
+            // The wordmark never yields — over the stage,
             // outside the dim, and transparent to touch so tapping through it
             // still reaches the catcher.
             VStack {
@@ -587,9 +583,9 @@ private struct ConversationDemo: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    /// The stub reply engine — the shapes come from the handoff's reply table
-    /// (README.md:239-247), the delay from the prototype's 480ms
-    /// (Silk Mockup.dc.html:346). The real engine is AppModel's; this one
+    /// The stub reply engine — the shapes come from the handoff's reply table,
+    /// the delay from the prototype's 480ms.
+    /// The real engine is AppModel's; this one
     /// exists so the preview can land replies and undo closures without it.
     private func submit() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -53,7 +53,7 @@ final class AppModel {
     /// Confirmations that are not part of a conversation: a Settings commit,
     /// the App Intent's dialog-less cousins.
     /// Everything the bar is asked lands in the thread instead — a toast
-    /// answers changes made elsewhere. (handoff README.md:251-252)
+    /// answers changes made elsewhere.
     let toasts = ToastCenter()
 
     /// The running exchange over the bar. `handle` asks here and lands here;
@@ -67,7 +67,7 @@ final class AppModel {
 
     /// Which wheel is up, if any. The three global rows on Settings set this,
     /// and now the door editor's cap row does too; the backdrop tap commits and
-    /// clears it. (handoff README.md §4)
+    /// clears it.
     var picker: PickerKind? {
         // A wheel up is a `tighten` coming: the backdrop tap commits in the
         // same gesture that dismisses, so this is the last moment with
@@ -547,7 +547,7 @@ final class AppModel {
     /// is a time, not an explanation.
     ///
     /// Down hours outrank both: the wall is up for everything, so the headline is
-    /// the hour it comes down. (Silk Mockup.dc.html:305-308)
+    /// the hour it comes down.
     private func shieldPreview(for door: Door) -> ShieldPreview? {
         if isDownHours {
             return ShieldPreview(title: "☾ \(policy.downHours.end.displayWithMeridiem)",
@@ -560,7 +560,7 @@ final class AppModel {
             if let until {
                 // Rule-bound: a stated hour holds the door, and the headline is
                 // that hour — "Until 5:00", the shield's own word, not the
-                // row's lowercase "till". (README.md:189)
+                // row's lowercase "till".
                 let t = Validator.timeOfDay(until, calendar: .current).display
                 return ShieldPreview(title: "\(SilkStrings.until) \(t)", app: door.name)
             }
@@ -776,8 +776,8 @@ final class AppModel {
     /// The turn is asked before the pipeline runs and landed after it — the
     /// thread shows "…" in between. The deterministic path answers in
     /// microseconds, which reads as the machine finishing your sentence, so
-    /// the reply waits out the balance of the handoff's ~480ms beat
-    /// (README.md:226-228); a slow model parse has already spent it.
+    /// the reply waits out the balance of the handoff's ~480ms beat; a slow
+    /// model parse has already spent it.
     func handle(_ utterance: String) async {
         // Every landing below — grant, tighten, refusal — fires a haptic at
         // least a beat after the send, and a cold Taptic Engine spins up tens
@@ -820,7 +820,7 @@ final class AppModel {
         let verdict = Validator.validate(outcome, utterance: utterance,
                                          state: policy, ledger: ledger, now: .now)
         // Down hours answer everything with the hour they end
-        // (Silk Mockup.dc.html:317, the first line of `reply`) — with two
+        // (the first line of `reply` in the handoff mockup) — with two
         // deliberate departures, both of which `deferredByDownHours` carries. A
         // tighten still lands, because "tightening is instant from anywhere" is
         // a product rule and refusing to let someone shut a door at night would
@@ -1170,7 +1170,7 @@ final class AppModel {
     ///
     /// Everything that changed state hands back the way back beside the words:
     /// the ledger is a value, so undo is the prior value restored wholesale —
-    /// no diffing, no knowledge of what the turn did (README.md:303-304). The
+    /// no diffing, no knowledge of what the turn did. The
     /// closure reports whether the restore landed: an offer can expire under
     /// the pill (any later ledger mutation retires it), and the thread must
     /// not write "Put back." over a restore that never happened.
@@ -1595,7 +1595,7 @@ final class AppModel {
     var settingsUndo: String { Self.undoText(seconds: undoSeconds) }
 
     /// "60 s" below two minutes, "2 min" from there — the wheel's own table
-    /// speaks this way (README.md:177), and the row must read back what the
+    /// speaks this way, and the row must read back what the
     /// wheel would show.
     static func undoText(seconds: Int) -> String {
         seconds < 120 ? "\(seconds) s" : "\(seconds / 60) \(SilkStrings.minutes)"
@@ -1654,7 +1654,7 @@ final class AppModel {
 
     /// The wheel tables' backing values, in the same order as the strings in
     /// `WheelValues` — the picker renders those verbatim, and these map the
-    /// committed indices back out. (README.md:174-177)
+    /// committed indices back out.
     private static let budgetTable = [15, 30, 45, 60, 75, 90, 120]        // minutes
     private static let undoTable = [15, 30, 60, 90, 120, 300]             // seconds
     private static let downStartTable = (0..<8).map { 20 * 60 + $0 * 30 } // 8:00 PM…11:30 PM
@@ -1684,7 +1684,7 @@ final class AppModel {
     func pickerColumns(for kind: PickerKind) -> [WheelColumn] {
         switch kind {
         case .down:
-            // Two wheels side by side — start then end (README.md:169).
+            // Two wheels side by side — start then end.
             [WheelColumn(id: "down.start", values: WheelValues.downStart,
                          selected: Self.nearestIndex(to: policy.downHours.start.minutes,
                                                      in: Self.downStartTable)),

@@ -2,8 +2,8 @@ import SwiftUI
 import SilkCore
 
 // The three pieces the current design added to Mirror, plus the shield the door
-// rows now raise. All ported from the handoff prototype (Silk Mockup.dc.html)
-// and the stylesheet it loads.
+// rows now raise. All ported from the handoff prototype and the stylesheet
+// it loads.
 
 // MARK: - The week band
 
@@ -89,7 +89,7 @@ struct ShieldOverlay: View {
     var body: some View {
         ZStack {
             // The spec's ground at the spec's alphas: .92 day, .94 night, under
-            // a backdrop-filter blur(20px) (README.md:181-183). The blur half
+            // a backdrop-filter blur(20px). The blur half
             // lives at the root — RootView blurs the stage the shield covers,
             // which over Silk's opaque grounds is the same light — so this
             // layer is the tinted veil alone. It replaced .ultraThinMaterial,
