@@ -151,8 +151,11 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("tiktok is kept blocked, give me 20 minutes", "the same, present"),
         ("im kept off tiktok by the app, give me 20 minutes", "the same, first person"),
         ("was the block on tiktok, give me 20 minutes", "a determiner between reads the noun"),
-        ("ive been off instagram since monday, unlock instagram for 10", "\"been\" is a participle too — silent, knowingly"),
-        ("i kept tiktok closed all morning, give me 20 minutes", "and \"kept\" — silent, knowingly"),
+        ("i stayed off tiktok all day, unlock tiktok for 20", "a report of the past — silent, knowingly"),
+        ("tiktok was blocked all day, unlock tiktok for 20", "the same — silent, knowingly"),
+        ("ive been off instagram since monday, unlock instagram for 10", "the same — silent, knowingly"),
+        ("i kept tiktok closed all morning, give me 20 minutes", "the same — silent, knowingly"),
+        ("tiktok was blocked and still is, give me 20 minutes", "the past with the present beside it"),
     ])
     func aClauseThatRestrictsTheDoorIsNoDonor(_ row: (text: String, why: String)) {
         expectSilence(row.text, row.why)
@@ -200,8 +203,6 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("give tiktok a 20 minute break", "TikTok", 20),
         ("i closed my laptop, give me 20 minutes of tiktok", "TikTok", 20),
         ("block the noise, give me 20 minutes of tiktok", "TikTok", 20),
-        ("i stayed off tiktok all day, unlock tiktok for 20", "TikTok", 20),
-        ("tiktok was blocked all day, unlock tiktok for 20", "TikTok", 20),
         ("im close to my tiktok limit, give me 20 minutes", "TikTok", 20),
     ])
     func theAsksBesideARestrictionStillLand(_ row: (String, String, Int)) {
@@ -252,7 +253,10 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("i dont need more tiktok, give me 20 minutes", "the same, comparative"),
         ("i never said unlock it, give me 20 minutes of tiktok", "a pronoun stands for the door"),
         ("i promised not to unlock it, give me 20 minutes of tiktok", "the same, through a promise"),
-        ("i dont want it, unlock tiktok for 20", "the pronoun's price — silent, knowingly"),
+        ("i dont want it, unlock tiktok for 20", "a preamble that negates something else — silent, knowingly"),
+        ("i dont want to give up, unlock tiktok for 20", "the same — silent, knowingly"),
+        ("i dont really have time, unlock tiktok for 20", "the same — silent, knowingly"),
+        ("i never said unlock the app, give me 20 minutes of tiktok", "the door by any other name"),
     ])
     func aNegatorAnywhereAheadOfTheVerbRefuses(_ row: (text: String, why: String)) {
         expectSilence(row.text, row.why)
@@ -272,8 +276,6 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("never mind, give me 20 minutes of tiktok", "TikTok", 20),
         ("i cant believe it, unlock tiktok for 20", "TikTok", 20),
         ("i dont care, just unlock tiktok for 20", "TikTok", 20),
-        ("i dont really have time, unlock tiktok for 20", "TikTok", 20),
-        ("i dont want to give up, unlock tiktok for 20", "TikTok", 20),
     ])
     func aNegatorGoverningSomethingElseLeavesTheAskAlone(_ row: (String, String, Int)) {
         expectSpend(row.0, door: row.1, minutes: row.2)
@@ -344,7 +346,9 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("she said give me tiktok, 20 minutes", "the quoted ask names the door, its minutes follow"),
         ("my mom said unlock tiktok, 20 minutes", "the same, with Silk's own verb"),
         ("she said use it, 20 minutes of tiktok", "a pronoun stands for the door"),
-        ("my mom said give it up, unlock tiktok for 20", "the pronoun's price — silent, knowingly"),
+        ("my mom said give it up, unlock tiktok for 20", "a quote in a preamble — silent, knowingly"),
+        ("the doctor told me to have lunch, unlock tiktok for 20", "the same — silent, knowingly"),
+        ("she said use the app, 20 minutes of tiktok", "the door by any other name"),
     ])
     func aFrameInFrontOfTheAsksVerbTerminates(_ row: (text: String, why: String)) {
         expectSilence(row.text, row.why)
@@ -390,7 +394,6 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("say less, give me 20 minutes of tiktok", "TikTok", 20),
         ("give me 20 minutes of tiktok, she said", "TikTok", 20),
         ("she said get ready, unlock tiktok for 20", "TikTok", 20),
-        ("the doctor told me to have lunch, unlock tiktok for 20", "TikTok", 20),
     ])
     func aFrameInAnotherBreathFramesNothing(_ row: (String, String, Int)) {
         expectSpend(row.0, door: row.1, minutes: row.2)

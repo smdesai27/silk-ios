@@ -435,7 +435,7 @@ public enum DeterministicParser {
         //    for her; the refusal below is rule 7's own, read here so the two
         //    halves of the spend grammar cannot disagree about "dont".
         if let d = door, hasPlaceBinding(text), numbers.isEmpty {
-            guard !aNegatorRefusesTheAsk(clauses(), state: state), !asksForLess(tokens) else { return .silence }
+            guard !aNegatorRefusesTheAsk(clauses()), !asksForLess(tokens) else { return .silence }
             return .writeItOut(door: d, minutes: nil)
         }
 
@@ -492,12 +492,12 @@ public enum DeterministicParser {
             // the noun scan above cannot see it — while the close rule vetoes
             // itself on the opener token, so nothing else claimed the sentence
             // and the refused app was opened for exactly the refused minutes.
-            guard !aNegatorRefusesTheAsk(clauses(), state: state) else { return .silence }
+            guard !aNegatorRefusesTheAsk(clauses()) else { return .silence }
             // AND A REPORTED ASK IS SOMEBODY ELSE'S SENTENCE. "she said unlock
             // tiktok for 20" opened TikTok — see `aReportFramesTheAsk` for the
             // eleven spellings and for why the quoted-speech arm one gate
             // below could not see any of them.
-            guard !aReportFramesTheAsk(clauses(), state: state) else { return .silence }
+            guard !aReportFramesTheAsk(clauses()) else { return .silence }
             // A STATED DEADLINE IS NOT A DURATION. "give me tiktok till 7"
             // asks for the app until a CLOCK; reading the 7 as seven minutes
             // debits the pool on a reading no human shares, and the re-ask
@@ -570,7 +570,7 @@ public enum DeterministicParser {
         //    one — on a refusal-only word list (`asksForLess`), where a word
         //    nobody thought of costs a hint and never a grant.
         if let d = door, numbers.isEmpty, hasOpeningVerb(tokens) {
-            guard !aNegatorRefusesTheAsk(clauses(), state: state), !asksForLess(tokens) else { return .silence }
+            guard !aNegatorRefusesTheAsk(clauses()), !asksForLess(tokens) else { return .silence }
             return .writeItOut(door: d, minutes: nil)
         }
 
@@ -3293,22 +3293,22 @@ public enum DeterministicParser {
                 if clause.contains(where: { capNouns.contains(t[$0]) }) { return true }
                 continue
             }
-            // A REPORT OF THE PAST RESTRICTS NOTHING. "i stayed off tiktok all
-            // day, unlock tiktok for 20", "tiktok was blocked all day, …", "ive
-            // been off instagram since monday, …" are the commonest preamble
-            // an ask has — earned abstinence — and every one was silenced for
-            // the restriction word it uses to describe the past. The past
-            // must GOVERN THE WORD (`governedByThePast`): the first cut
-            // pardoned the whole clause on any past marker in it, and "i had
-            // to block tiktok, give me 20 minutes" was funded — "had" is the
-            // past, "block" is the imperative beside it.
+            // AND A REPORT OF THE PAST IS NOT PARDONED. "i stayed off tiktok
+            // all day, unlock tiktok for 20" is the commonest preamble an ask
+            // has, and it is silent here for the "off" that describes the
+            // past. A pardon was tried three ways — any past word in the
+            // clause, then a past word on the restriction, then only the words
+            // that are past by their spelling — and each round found a live
+            // restriction wearing the pardon: "i had to block tiktok", "tiktok
+            // must be kept off", "tiktok was blocked and still is", every one
+            // funded. A widening that hijacks a restriction is removed, not
+            // repaired; the earned-abstinence preamble reaches the widener.
             if clause.contains(where: { i in
                 restrictionWords.contains(t[i])
                     // "close TO my limit" is the degree adverb, not the verb:
                     // "im close to my tiktok limit, give me 20 minutes" is the
                     // pinned "im at my limit" with one word swapped.
                     && !(t[i] == "close" && i + 1 < clause.upperBound && t[i + 1] == "to")
-                    && !governedByThePast(t, i, in: clause, state: state)
             }) { return true }
             if clause.contains(where: { i in
                 t[i] == "break" && i + 1 < clause.upperBound && t[i + 1] == "from"
@@ -3316,46 +3316,6 @@ public enum DeterministicParser {
         }
         return false
     }
-
-    /// Whether the restriction word at `i` describes the past: a past copula
-    /// or "stayed" stands directly on it ("was BLOCKED", "stayed OFF"), or one
-    /// token off with the door between ("was tiktok BLOCKED"). Nothing else
-    /// is the past. "had to BLOCK" and "did BLOCK" put an infinitive or a
-    /// bare stem on the word, the imperative's own spellings; "been" and
-    /// "kept" are participles and tense-neutral — "tiktok must be KEPT off,
-    /// give me 20 minutes" was funded as a report of the past — so neither
-    /// is a marker; and a determiner between marker and word reads the
-    /// NOUN, "was THE BLOCK on tiktok, give me 20", a question about a live
-    /// block, so only the door may stand between.
-    private static func governedByThePast(_ t: [String], _ i: Int, in clause: Range<Int>,
-                                          state: PolicyState) -> Bool {
-        if i - 1 >= clause.lowerBound, pastMarkers.contains(t[i - 1]) { return true }
-        return i - 2 >= clause.lowerBound && pastMarkers.contains(t[i - 2])
-            && doorAt(t, i - 1, within: i, state: state) != nil
-    }
-
-    /// The two past copulas and the one verb of having stayed away that is
-    /// past by its spelling alone. Read only by `governedByThePast`, and only
-    /// to let a preamble lend its door, so a word here can cost nothing but
-    /// a restriction spelled in the past tense — and one of those is a
-    /// report, not a rule.
-    private static let pastMarkers: Set<String> = ["was", "were", "stayed"]
-
-    /// Whether a breath ASKS: it states a number, names a door, or carries
-    /// an object pronoun standing for one. The distance and volition rules
-    /// of `aNegatorRefusesTheAsk` and the frame of `aReportFramesTheAsk` let
-    /// a breath that asks for nothing pass; "i never said unlock IT, give me
-    /// 20 minutes of tiktok" and "she said use IT, 20 minutes of tiktok"
-    /// asked for the door by its pronoun and passed. The pronoun costs the
-    /// preambles that carry one for something else — "i dont want it,
-    /// unlock tiktok for 20" is silent — which is the direction this file
-    /// fails in.
-    private static func breathAsks(_ t: [String], _ clause: Range<Int>, state: PolicyState) -> Bool {
-        clause.contains { NumberParser.readsAsNumber(t[$0]) || objectPronouns.contains(t[$0]) }
-            || clause.contains { doorAt(t, $0, within: clause.upperBound, state: state) != nil }
-    }
-
-    private static let objectPronouns: Set<String> = ["it", "that", "them", "this"]
 
     /// The words that RESTRICT a door rather than merely name a ceiling on it:
     /// `lessWords` with the ceiling nouns taken back out. Derived from that
@@ -3398,7 +3358,11 @@ public enum DeterministicParser {
     /// is the direction this file fails in: silence reaches the widener, and a
     /// grant out of a refusal cannot be taken back. The comma-ed spellings of
     /// both ("i dont care, just unlock tiktok for 20") still grant, because
-    /// there the negator's clause ends before the verb.
+    /// there the negator's clause ends before the verb. A pardon for the
+    /// breath that states no minutes was tried and attacked out: "i never
+    /// said unlock tiktok, give me 20 minutes" and "i never said unlock IT,
+    /// give me 20 minutes of tiktok" each wore it, so the window stays the
+    /// clause and the preamble stays the price.
     ///
     /// The one carve-out is the bounded ask, and it is pinned: "dont give me
     /// MORE THAN 10 of tiktok" negates the exceeding, not the giving, and the
@@ -3406,8 +3370,7 @@ public enum DeterministicParser {
     /// what says so.
     private static let bareNegators: Set<String> = ["no", "not", "never", "none"]
 
-    private static func aNegatorRefusesTheAsk(_ index: NumberParser.ClauseIndex,
-                                              state: PolicyState) -> Bool {
+    private static func aNegatorRefusesTheAsk(_ index: NumberParser.ClauseIndex) -> Bool {
         let t = index.tokens
         for i in t.indices where negators.contains(t[i]) {
             // The window is the negator's own clause, walked forward to the
@@ -3417,15 +3380,6 @@ public enum DeterministicParser {
             // inside the clause, and so is the speech verb ("i never SAID
             // give me…") and the promise ("i PROMISED NOT TO unlock…").
             guard let clause = index.clauseRange(containing: i) else { continue }
-            // A CLAUSE ASKS WHEN IT STATES THE MINUTES, NAMES A DOOR, OR
-            // STANDS A PRONOUN FOR ONE (`breathAsks`). The distance and
-            // volition rules below let a negator further off pass over a
-            // breath that asks for nothing — and "asks for nothing" read as
-            // "states no number" funded "i never said unlock TIKTOK, give me
-            // 20 minutes", and then "i never said unlock IT, give me 20
-            // minutes of tiktok": the refused breath named the very door the
-            // next one borrowed. The refusal stands.
-            let clauseAsks = breathAsks(t, clause, state: state)
             for verbAt in (i + 1)..<clause.upperBound {
                 // THE LEXICON IS THE ONE THE MINT USES. `askVerbs` predates the
                 // spend grammar's opening-verb authority and never learned its
@@ -3452,16 +3406,6 @@ public enum DeterministicParser {
                 if t[verbAt] == "go" || t[verbAt] == "get" {
                     guard verbAt + 1 < t.count, t[verbAt + 1] == "on" else { continue }
                 }
-                // DISTANCE NEEDS THE ASK'S OWN QUANTITY. Adjacency ("dont GIVE",
-                // "dont EVER open") keeps its whole-sentence reading; a negator
-                // further off refuses only a breath that states the minutes.
-                // Every refusal the widening was written for does — "i never
-                // said give me 20 MINUTES of tiktok", "i promised not to unlock
-                // tiktok for 20" — and the preambles it ate do not: "i dont
-                // want to give up, unlock tiktok for 20" negates the giving up
-                // in a breath with no number, and the ask stands in the next.
-                let adjacent = verbAt == i + 1 || (verbAt == i + 2 && t[i + 1] == "ever")
-                if !adjacent, !clauseAsks { continue }
                 // A DERIVED STEM REFUSES ONLY THE CLAUSE THAT CARRIES THE ASK.
                 // "i dont use instagram much, unlock instagram for 10 min" opens
                 // with a negated "use" in a clause that asks for nothing, and
@@ -3477,18 +3421,8 @@ public enum DeterministicParser {
                 // the noun and the imperative, and neither has a preamble to
                 // exempt. Only the verbal contractions ("dont", "shouldnt", …)
                 // open a preamble a real ask can follow.
-                // AND A NEGATED VOLITION IS A PREAMBLE UNTIL THE MINUTES ARE
-                // IN ITS BREATH. "want" and "need" are ask verbs because "i
-                // want 20 minutes of tiktok" is an ask; "i dont want to give
-                // up, unlock tiktok for 20" and "i dont want it, unlock tiktok
-                // for 20" negate the wanting in a breath that states no
-                // minutes, and were refused whole. They read as the derived
-                // stems do: the refusal needs the number beside the negator
-                // ("i dont want to unlock tiktok for 20" keeps its silence).
-                let volition = t[verbAt] == "want" || t[verbAt] == "need"
                 if !askVerbs.contains(t[verbAt]), !bareNegators.contains(t[i]),
                    !clause.contains(where: { NumberParser.readsAsNumber(t[$0]) }) { continue }
-                if volition, !bareNegators.contains(t[i]), !clauseAsks { continue }
                 // The bounded-ask carve is scoped to the immediate "dont": "dont
                 // give me more than 10 of tiktok" negates the exceeding. "NEVER
                 // open instagram for more than 20 minutes" is a standing rule, and
@@ -3835,30 +3769,19 @@ public enum DeterministicParser {
     /// and "get" mean the app only as "go on"/"get on", and without it "she
     /// said get ready, unlock tiktok for 20" would be read as a quoted ask on
     /// the strength of the word "get".
-    private static func aReportFramesTheAsk(_ index: NumberParser.ClauseIndex,
-                                            state: PolicyState) -> Bool {
+    private static func aReportFramesTheAsk(_ index: NumberParser.ClauseIndex) -> Bool {
         let t = index.tokens
-        // THE FRAME IS READ IN THE ASK'S OWN BREATH. The first cut read every
-        // opening verb in the sentence, so a quote in a preamble vetoed an
-        // unframed ask beside it: "my mom said give it up, unlock tiktok for
-        // 20", "the doctor told me to have lunch, unlock tiktok for 20". The
-        // breath that carries the quantity is the ask, and so is a breath
-        // that names a door or stands a pronoun for one (`breathAsks`) —
-        // "she said give me TIKTOK, 20 minutes", "she said use IT, 20 minutes
-        // of tiktok" quote the ask and leave its minutes to the next breath;
-        // a frame in a breath with none of those frames something else. When
-        // no token reads as a number — "my friend said give me an hour of
-        // tiktok" — there is no breath to prefer, and every clause is read
-        // as before.
-        let asked = t.indices.first { NumberParser.readsAsNumber(t[$0]) }
-            .flatMap { index.clauseRange(containing: $0) }
+        // EVERY BREATH IS READ. A frame confined to the ask's own breath was
+        // tried — so that "the doctor told me to have lunch, unlock tiktok
+        // for 20" could grant — and the quoted ask slipped past it by
+        // leaving its minutes to the next breath ("she said give me tiktok,
+        // 20 minutes") or by naming the door as "it". The quote in a preamble
+        // is the price, and it reaches the widener.
         for i in t.indices where askVerbs.contains(t[i]) || openingVerbStems.contains(t[i]) {
             if t[i] == "go" || t[i] == "get" {
                 guard i + 1 < t.count, t[i + 1] == "on" else { continue }
             }
-            guard let clause = index.clauseRange(containing: i),
-                  asked == nil || clause == asked || breathAsks(t, clause, state: state)
-            else { continue }
+            guard let clause = index.clauseRange(containing: i) else { continue }
             if (clause.lowerBound..<i).contains(where: {
                 reportingSpeechVerbs.contains(t[$0]) || wishVerbs.contains(t[$0])
             }) { return true }
