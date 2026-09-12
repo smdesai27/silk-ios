@@ -105,8 +105,8 @@ git config core.hooksPath .githooks
 
 ## Status
 
-1.0.0 is built and installed on a device. It is not on the App Store yet: distribution waits on
-the Family Controls distribution entitlement.
+1.0.0 is built and installed on a device. It is not on the App Store yet: the Family Controls
+distribution entitlement is granted, and distribution waits on the Apple Distribution certificate.
 
 ## License
 

@@ -157,14 +157,14 @@ extension DoorState {
         switch self {
         case .open(let until):
             // A grant answers in the deadline it expires at: "· till 4:52".
-            // The prototype's row shows "· 0:15" (Silk Mockup.dc.html:324), but
+            // The prototype's row shows "· 0:15", but
             // the canon is explicit that a grant states its duration once, in
             // the reply, and the door shows "· till 4:52" forever after —
             // deadlines, not countdowns; nothing ticks. The canon wins.
             return "· \(SilkStrings.till.lowercased()) \(Self.clock(until, calendar))"
         case .rest(let until):
-            // A stated-hour close states when it lifts: "· till 9:00"
-            // (Silk Mockup.dc.html:330). A plain close has nothing to add —
+            // A stated-hour close states when it lifts: "· till 9:00", as the
+            // handoff mockup does. A plain close has nothing to add —
             // the resting costume is the whole message.
             guard let until else { return nil }
             return "· \(SilkStrings.till.lowercased()) \(Self.clock(until, calendar))"
@@ -189,7 +189,7 @@ extension TimeOfDay {
     /// is for the two labels that stand alone with no sentence to lean on: the
     /// aperture and the night hero, where 7:00 must not be read as the evening.
     /// Non-breaking space before the meridiem, as the mockup sets it — "7:00 AM"
-    /// must never wrap. (Silk Mockup.dc.html:317)
+    /// must never wrap.
     public var displayWithMeridiem: String {
         "\(display)\u{00A0}\(hour < 12 ? "AM" : "PM")"
     }
@@ -206,9 +206,9 @@ extension DownHours {
     }
 
     /// The bar's answer to a bare "down hours" / "bedtime" / "quiet":
-    /// "Down hours run 10:00 PM to 7:00 AM." (Silk Mockup.dc.html:334). Both
-    /// ends carry the meridiem because the sentence
-    /// spans the night — a bare "10:00 to 7:00" reads as a nine-hour morning.
+    /// "Down hours run 10:00 PM to 7:00 AM." Both ends carry the meridiem
+    /// because the sentence spans the night — a bare "10:00 to 7:00" reads as
+    /// a nine-hour morning.
     public var runText: String {
         SilkStrings.downHoursRun(from: start.displayWithMeridiem, to: end.displayWithMeridiem)
     }

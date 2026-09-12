@@ -218,8 +218,8 @@ public enum Validator {
             // to refuse an over-ask with the balance ("stating the number is
             // not negotiating"); the handoff superseded that: "Requested
             // durations clamp to the minutes actually remaining"
-            // (the handoff mockup, and the prototype's
-            // Math.min at Silk Mockup.dc.html:323). The readback then states
+            // (the handoff mockup, and the prototype's own `Math.min`). The
+            // readback then states
             // the clamped number, so she still hears what she actually got.
             //
             // Three terms now: the pool binds, and so does the door's own

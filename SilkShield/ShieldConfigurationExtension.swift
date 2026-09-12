@@ -139,7 +139,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
         // There is nothing to go ask Silk for until then.
         //
         // `displayWithMeridiem`, as the handoff spells this line — "☾ 7:00 AM"
-        // (handoff README.md:242) — and as the in-app shield preview and the
+        // — and as the in-app shield preview and the
         // bar's refusal already say it. `display` is the meridiem-less form for
         // hours inside a sentence that carries the context, and this label has
         // no sentence: a bare "☾ 7:00" on a wall met at eleven at night is read

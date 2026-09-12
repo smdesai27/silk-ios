@@ -99,7 +99,7 @@ public enum DeterministicParser {
         //    a token, never a substring: "tonight" belongs to sentences about
         //    today ("no more instagram tonight"), not the window. Bare "night"
         //    stays a mention: the prototype's query triggers are down hours,
-        //    bedtime, quiet (Silk Mockup.dc.html:333), and "night" alone
+        //    bedtime, quiet (the handoff mockup), and "night" alone
         //    appears in too many sentences that are not about the window.
         let windowMention = says(text, downHour) || tokens.contains("night")
             || says(text, bedtime) || says(text, quiet)
@@ -435,7 +435,7 @@ public enum DeterministicParser {
         //    for her; the refusal below is rule 7's own, read here so the two
         //    halves of the spend grammar cannot disagree about "dont".
         if let d = door, hasPlaceBinding(text), numbers.isEmpty {
-            guard !aNegatorRefusesTheAsk(clauses()), !asksForLess(tokens) else { return .silence }
+            guard !aNegatorRefusesTheAsk(clauses(), state: state), !asksForLess(tokens) else { return .silence }
             return .writeItOut(door: d, minutes: nil)
         }
 
@@ -492,12 +492,12 @@ public enum DeterministicParser {
             // the noun scan above cannot see it — while the close rule vetoes
             // itself on the opener token, so nothing else claimed the sentence
             // and the refused app was opened for exactly the refused minutes.
-            guard !aNegatorRefusesTheAsk(clauses()) else { return .silence }
+            guard !aNegatorRefusesTheAsk(clauses(), state: state) else { return .silence }
             // AND A REPORTED ASK IS SOMEBODY ELSE'S SENTENCE. "she said unlock
             // tiktok for 20" opened TikTok — see `aReportFramesTheAsk` for the
             // eleven spellings and for why the quoted-speech arm one gate
             // below could not see any of them.
-            guard !aReportFramesTheAsk(clauses()) else { return .silence }
+            guard !aReportFramesTheAsk(clauses(), state: state) else { return .silence }
             // A STATED DEADLINE IS NOT A DURATION. "give me tiktok till 7"
             // asks for the app until a CLOCK; reading the 7 as seven minutes
             // debits the pool on a reading no human shares, and the re-ask
@@ -570,7 +570,7 @@ public enum DeterministicParser {
         //    one — on a refusal-only word list (`asksForLess`), where a word
         //    nobody thought of costs a hint and never a grant.
         if let d = door, numbers.isEmpty, hasOpeningVerb(tokens) {
-            guard !aNegatorRefusesTheAsk(clauses()), !asksForLess(tokens) else { return .silence }
+            guard !aNegatorRefusesTheAsk(clauses(), state: state), !asksForLess(tokens) else { return .silence }
             return .writeItOut(door: d, minutes: nil)
         }
 
@@ -3297,19 +3297,18 @@ public enum DeterministicParser {
             // day, unlock tiktok for 20", "tiktok was blocked all day, …", "ive
             // been off instagram since monday, …" are the commonest preamble
             // an ask has — earned abstinence — and every one was silenced for
-            // the restriction word it uses to describe the past. A past
-            // auxiliary or a past verb of staying in the clause makes it a
-            // report; the imperative and the wish ("block tiktok", "i want
-            // less tiktok", "i should quit tiktok") carry none. A verb that
-            // merely ends in -ed is not enough: "i decided to block tiktok,
-            // give me 20 minutes" is a decision stated, not the past.
-            if clause.contains(where: { pastMarkers.contains(t[$0]) }) { continue }
+            // the restriction word it uses to describe the past. The past
+            // must GOVERN THE WORD (`governedByThePast`): the first cut
+            // pardoned the whole clause on any past marker in it, and "i had
+            // to block tiktok, give me 20 minutes" was funded — "had" is the
+            // past, "block" is the imperative beside it.
             if clause.contains(where: { i in
                 restrictionWords.contains(t[i])
                     // "close TO my limit" is the degree adverb, not the verb:
                     // "im close to my tiktok limit, give me 20 minutes" is the
                     // pinned "im at my limit" with one word swapped.
                     && !(t[i] == "close" && i + 1 < clause.upperBound && t[i + 1] == "to")
+                    && !governedByThePast(t, i, in: clause, state: state)
             }) { return true }
             if clause.contains(where: { i in
                 t[i] == "break" && i + 1 < clause.upperBound && t[i + 1] == "from"
@@ -3318,15 +3317,28 @@ public enum DeterministicParser {
         return false
     }
 
-    /// The words that place a clause in the past: the auxiliaries and the
-    /// copulas, and the four verbs of having stayed away. Read only by the
-    /// donor scan above, and only to let a preamble lend its door, so a word
-    /// here can cost nothing but a restriction spelled in the past tense —
-    /// and one of those is a report, not a rule.
-    private static let pastMarkers: Set<String> = [
-        "was", "were", "been", "had", "did", "ive", "i've", "since",
-        "stayed", "kept", "spent", "went",
-    ]
+    /// Whether the restriction word at `i` describes the past: a past copula
+    /// or a verb of having stayed away stands directly on it ("was BLOCKED",
+    /// "stayed OFF", "been OFF"), or one token off with the door or its
+    /// determiner between ("kept tiktok CLOSED", "kept my tiktok CLOSED").
+    /// Nothing else is the past: "had to BLOCK" and "did BLOCK" put an
+    /// infinitive or a bare stem on the word, and those are the imperative's
+    /// own spellings.
+    private static func governedByThePast(_ t: [String], _ i: Int, in clause: Range<Int>,
+                                          state: PolicyState) -> Bool {
+        if i - 1 >= clause.lowerBound, pastMarkers.contains(t[i - 1]) { return true }
+        if i - 2 >= clause.lowerBound, pastMarkers.contains(t[i - 2]),
+           determiners.contains(t[i - 1]) || doorAt(t, i - 1, within: i, state: state) != nil {
+            return true
+        }
+        return false
+    }
+
+    /// The past copulas and the two verbs of having stayed away. Read only by
+    /// `governedByThePast`, and only to let a preamble lend its door, so a
+    /// word here can cost nothing but a restriction spelled in the past
+    /// tense — and one of those is a report, not a rule.
+    private static let pastMarkers: Set<String> = ["was", "were", "been", "stayed", "kept"]
 
     /// The words that RESTRICT a door rather than merely name a ceiling on it:
     /// `lessWords` with the ceiling nouns taken back out. Derived from that
@@ -3377,7 +3389,8 @@ public enum DeterministicParser {
     /// what says so.
     private static let bareNegators: Set<String> = ["no", "not", "never", "none"]
 
-    private static func aNegatorRefusesTheAsk(_ index: NumberParser.ClauseIndex) -> Bool {
+    private static func aNegatorRefusesTheAsk(_ index: NumberParser.ClauseIndex,
+                                              state: PolicyState) -> Bool {
         let t = index.tokens
         for i in t.indices where negators.contains(t[i]) {
             // The window is the negator's own clause, walked forward to the
@@ -3387,6 +3400,16 @@ public enum DeterministicParser {
             // inside the clause, and so is the speech verb ("i never SAID
             // give me…") and the promise ("i PROMISED NOT TO unlock…").
             guard let clause = index.clauseRange(containing: i) else { continue }
+            // A CLAUSE ASKS WHEN IT STATES THE MINUTES OR NAMES A DOOR. The
+            // distance and volition rules below let a negator further off
+            // pass over a breath that asks for nothing — and "asks for
+            // nothing" read as "states no number" funded "i never said unlock
+            // TIKTOK, give me 20 minutes" and "i dont want any TIKTOK, unlock
+            // tiktok for 20": the refused breath named the very door the next
+            // one borrowed. A door in the breath is the ask's object, and the
+            // refusal stands.
+            let clauseAsks = clause.contains { NumberParser.readsAsNumber(t[$0]) }
+                || clause.contains { doorAt(t, $0, within: clause.upperBound, state: state) != nil }
             for verbAt in (i + 1)..<clause.upperBound {
                 // THE LEXICON IS THE ONE THE MINT USES. `askVerbs` predates the
                 // spend grammar's opening-verb authority and never learned its
@@ -3422,9 +3445,7 @@ public enum DeterministicParser {
                 // want to give up, unlock tiktok for 20" negates the giving up
                 // in a breath with no number, and the ask stands in the next.
                 let adjacent = verbAt == i + 1 || (verbAt == i + 2 && t[i + 1] == "ever")
-                if !adjacent, !clause.contains(where: { NumberParser.readsAsNumber(t[$0]) }) {
-                    continue
-                }
+                if !adjacent, !clauseAsks { continue }
                 // A DERIVED STEM REFUSES ONLY THE CLAUSE THAT CARRIES THE ASK.
                 // "i dont use instagram much, unlock instagram for 10 min" opens
                 // with a negated "use" in a clause that asks for nothing, and
@@ -3449,8 +3470,9 @@ public enum DeterministicParser {
                 // stems do: the refusal needs the number beside the negator
                 // ("i dont want to unlock tiktok for 20" keeps its silence).
                 let volition = t[verbAt] == "want" || t[verbAt] == "need"
-                if !askVerbs.contains(t[verbAt]) || volition, !bareNegators.contains(t[i]),
+                if !askVerbs.contains(t[verbAt]), !bareNegators.contains(t[i]),
                    !clause.contains(where: { NumberParser.readsAsNumber(t[$0]) }) { continue }
+                if volition, !bareNegators.contains(t[i]), !clauseAsks { continue }
                 // The bounded-ask carve is scoped to the immediate "dont": "dont
                 // give me more than 10 of tiktok" negates the exceeding. "NEVER
                 // open instagram for more than 20 minutes" is a standing rule, and
@@ -3797,16 +3819,19 @@ public enum DeterministicParser {
     /// and "get" mean the app only as "go on"/"get on", and without it "she
     /// said get ready, unlock tiktok for 20" would be read as a quoted ask on
     /// the strength of the word "get".
-    private static func aReportFramesTheAsk(_ index: NumberParser.ClauseIndex) -> Bool {
+    private static func aReportFramesTheAsk(_ index: NumberParser.ClauseIndex,
+                                            state: PolicyState) -> Bool {
         let t = index.tokens
         // THE FRAME IS READ IN THE ASK'S OWN BREATH. The first cut read every
         // opening verb in the sentence, so a quote in a preamble vetoed an
         // unframed ask beside it: "my mom said give it up, unlock tiktok for
         // 20", "the doctor told me to have lunch, unlock tiktok for 20". The
-        // breath that carries the quantity is the ask; a frame elsewhere
-        // frames something else. When no token reads as a number — "my
-        // friend said give me an hour of tiktok" — there is no breath to
-        // prefer, and every clause is read as before.
+        // breath that carries the quantity is the ask, and so is a breath
+        // that names a door — "she said give me TIKTOK, 20 minutes" quotes
+        // the ask and leaves its minutes to the next breath; a frame in a
+        // breath with neither frames something else. When no token reads as
+        // a number — "my friend said give me an hour of tiktok" — there is no
+        // breath to prefer, and every clause is read as before.
         let asked = t.indices.first { NumberParser.readsAsNumber(t[$0]) }
             .flatMap { index.clauseRange(containing: $0) }
         for i in t.indices where askVerbs.contains(t[i]) || openingVerbStems.contains(t[i]) {
@@ -3814,7 +3839,9 @@ public enum DeterministicParser {
                 guard i + 1 < t.count, t[i + 1] == "on" else { continue }
             }
             guard let clause = index.clauseRange(containing: i),
-                  asked == nil || clause == asked else { continue }
+                  asked == nil || clause == asked
+                      || clause.contains(where: { doorAt(t, $0, within: clause.upperBound, state: state) != nil })
+            else { continue }
             if (clause.lowerBound..<i).contains(where: {
                 reportingSpeechVerbs.contains(t[$0]) || wishVerbs.contains(t[$0])
             }) { return true }

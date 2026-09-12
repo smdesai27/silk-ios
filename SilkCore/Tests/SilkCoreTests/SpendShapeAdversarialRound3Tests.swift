@@ -144,6 +144,9 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("no more tiktok, give me 20 minutes", "a close spelled with the negator is a close"),
         ("im done with tiktok, give me 20 minutes", "the same, another closing phrase"),
         ("i decided to block tiktok, give me 20 minutes", "a decision stated is not the past"),
+        ("i had to block tiktok, give me 20 minutes", "an infinitive on the word is the imperative"),
+        ("i was going to block tiktok, give me 20 minutes", "the same, through a plan"),
+        ("block tiktok since i was weak, give me 20 minutes", "the past stands after the word"),
     ])
     func aClauseThatRestrictsTheDoorIsNoDonor(_ row: (text: String, why: String)) {
         expectSilence(row.text, row.why)
@@ -238,6 +241,11 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("dont say give me 20 minutes of tiktok", "a negated speech act"),
         ("i dont want 20 minutes of tiktok", "a negated volition with the minutes in its breath"),
         ("i dont want to unlock tiktok for 20", "the same, through an infinitive"),
+        ("i never said unlock tiktok, give me 20 minutes", "the refused breath names the door"),
+        ("i promised not to unlock tiktok, give me 20 minutes", "the same, through a promise"),
+        ("i told you not to unlock tiktok, give me 20 minutes", "the same, told"),
+        ("i dont want any tiktok, unlock tiktok for 20", "a negated volition naming the door"),
+        ("i dont need more tiktok, give me 20 minutes", "the same, comparative"),
     ])
     func aNegatorAnywhereAheadOfTheVerbRefuses(_ row: (text: String, why: String)) {
         expectSilence(row.text, row.why)
@@ -328,6 +336,8 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("i hate that i say give me 20 minutes of tiktok", "the quote as a complement"),
         ("the tiktok cap exists because i say give me 20 minutes", "the quote as a reason"),
         ("i wish i could unlock tiktok for 20", "a wish reports as surely as a said"),
+        ("she said give me tiktok, 20 minutes", "the quoted ask names the door, its minutes follow"),
+        ("my mom said unlock tiktok, 20 minutes", "the same, with Silk's own verb"),
     ])
     func aFrameInFrontOfTheAsksVerbTerminates(_ row: (text: String, why: String)) {
         expectSilence(row.text, row.why)
