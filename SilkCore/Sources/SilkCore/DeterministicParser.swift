@@ -3318,27 +3318,44 @@ public enum DeterministicParser {
     }
 
     /// Whether the restriction word at `i` describes the past: a past copula
-    /// or a verb of having stayed away stands directly on it ("was BLOCKED",
-    /// "stayed OFF", "been OFF"), or one token off with the door or its
-    /// determiner between ("kept tiktok CLOSED", "kept my tiktok CLOSED").
-    /// Nothing else is the past: "had to BLOCK" and "did BLOCK" put an
-    /// infinitive or a bare stem on the word, and those are the imperative's
-    /// own spellings.
+    /// or "stayed" stands directly on it ("was BLOCKED", "stayed OFF"), or one
+    /// token off with the door between ("was tiktok BLOCKED"). Nothing else
+    /// is the past. "had to BLOCK" and "did BLOCK" put an infinitive or a
+    /// bare stem on the word, the imperative's own spellings; "been" and
+    /// "kept" are participles and tense-neutral — "tiktok must be KEPT off,
+    /// give me 20 minutes" was funded as a report of the past — so neither
+    /// is a marker; and a determiner between marker and word reads the
+    /// NOUN, "was THE BLOCK on tiktok, give me 20", a question about a live
+    /// block, so only the door may stand between.
     private static func governedByThePast(_ t: [String], _ i: Int, in clause: Range<Int>,
                                           state: PolicyState) -> Bool {
         if i - 1 >= clause.lowerBound, pastMarkers.contains(t[i - 1]) { return true }
-        if i - 2 >= clause.lowerBound, pastMarkers.contains(t[i - 2]),
-           determiners.contains(t[i - 1]) || doorAt(t, i - 1, within: i, state: state) != nil {
-            return true
-        }
-        return false
+        return i - 2 >= clause.lowerBound && pastMarkers.contains(t[i - 2])
+            && doorAt(t, i - 1, within: i, state: state) != nil
     }
 
-    /// The past copulas and the two verbs of having stayed away. Read only by
-    /// `governedByThePast`, and only to let a preamble lend its door, so a
-    /// word here can cost nothing but a restriction spelled in the past
-    /// tense — and one of those is a report, not a rule.
-    private static let pastMarkers: Set<String> = ["was", "were", "been", "stayed", "kept"]
+    /// The two past copulas and the one verb of having stayed away that is
+    /// past by its spelling alone. Read only by `governedByThePast`, and only
+    /// to let a preamble lend its door, so a word here can cost nothing but
+    /// a restriction spelled in the past tense — and one of those is a
+    /// report, not a rule.
+    private static let pastMarkers: Set<String> = ["was", "were", "stayed"]
+
+    /// Whether a breath ASKS: it states a number, names a door, or carries
+    /// an object pronoun standing for one. The distance and volition rules
+    /// of `aNegatorRefusesTheAsk` and the frame of `aReportFramesTheAsk` let
+    /// a breath that asks for nothing pass; "i never said unlock IT, give me
+    /// 20 minutes of tiktok" and "she said use IT, 20 minutes of tiktok"
+    /// asked for the door by its pronoun and passed. The pronoun costs the
+    /// preambles that carry one for something else — "i dont want it,
+    /// unlock tiktok for 20" is silent — which is the direction this file
+    /// fails in.
+    private static func breathAsks(_ t: [String], _ clause: Range<Int>, state: PolicyState) -> Bool {
+        clause.contains { NumberParser.readsAsNumber(t[$0]) || objectPronouns.contains(t[$0]) }
+            || clause.contains { doorAt(t, $0, within: clause.upperBound, state: state) != nil }
+    }
+
+    private static let objectPronouns: Set<String> = ["it", "that", "them", "this"]
 
     /// The words that RESTRICT a door rather than merely name a ceiling on it:
     /// `lessWords` with the ceiling nouns taken back out. Derived from that
@@ -3400,16 +3417,15 @@ public enum DeterministicParser {
             // inside the clause, and so is the speech verb ("i never SAID
             // give me…") and the promise ("i PROMISED NOT TO unlock…").
             guard let clause = index.clauseRange(containing: i) else { continue }
-            // A CLAUSE ASKS WHEN IT STATES THE MINUTES OR NAMES A DOOR. The
-            // distance and volition rules below let a negator further off
-            // pass over a breath that asks for nothing — and "asks for
-            // nothing" read as "states no number" funded "i never said unlock
-            // TIKTOK, give me 20 minutes" and "i dont want any TIKTOK, unlock
-            // tiktok for 20": the refused breath named the very door the next
-            // one borrowed. A door in the breath is the ask's object, and the
-            // refusal stands.
-            let clauseAsks = clause.contains { NumberParser.readsAsNumber(t[$0]) }
-                || clause.contains { doorAt(t, $0, within: clause.upperBound, state: state) != nil }
+            // A CLAUSE ASKS WHEN IT STATES THE MINUTES, NAMES A DOOR, OR
+            // STANDS A PRONOUN FOR ONE (`breathAsks`). The distance and
+            // volition rules below let a negator further off pass over a
+            // breath that asks for nothing — and "asks for nothing" read as
+            // "states no number" funded "i never said unlock TIKTOK, give me
+            // 20 minutes", and then "i never said unlock IT, give me 20
+            // minutes of tiktok": the refused breath named the very door the
+            // next one borrowed. The refusal stands.
+            let clauseAsks = breathAsks(t, clause, state: state)
             for verbAt in (i + 1)..<clause.upperBound {
                 // THE LEXICON IS THE ONE THE MINT USES. `askVerbs` predates the
                 // spend grammar's opening-verb authority and never learned its
@@ -3827,11 +3843,13 @@ public enum DeterministicParser {
         // unframed ask beside it: "my mom said give it up, unlock tiktok for
         // 20", "the doctor told me to have lunch, unlock tiktok for 20". The
         // breath that carries the quantity is the ask, and so is a breath
-        // that names a door — "she said give me TIKTOK, 20 minutes" quotes
-        // the ask and leaves its minutes to the next breath; a frame in a
-        // breath with neither frames something else. When no token reads as
-        // a number — "my friend said give me an hour of tiktok" — there is no
-        // breath to prefer, and every clause is read as before.
+        // that names a door or stands a pronoun for one (`breathAsks`) —
+        // "she said give me TIKTOK, 20 minutes", "she said use IT, 20 minutes
+        // of tiktok" quote the ask and leave its minutes to the next breath;
+        // a frame in a breath with none of those frames something else. When
+        // no token reads as a number — "my friend said give me an hour of
+        // tiktok" — there is no breath to prefer, and every clause is read
+        // as before.
         let asked = t.indices.first { NumberParser.readsAsNumber(t[$0]) }
             .flatMap { index.clauseRange(containing: $0) }
         for i in t.indices where askVerbs.contains(t[i]) || openingVerbStems.contains(t[i]) {
@@ -3839,8 +3857,7 @@ public enum DeterministicParser {
                 guard i + 1 < t.count, t[i + 1] == "on" else { continue }
             }
             guard let clause = index.clauseRange(containing: i),
-                  asked == nil || clause == asked
-                      || clause.contains(where: { doorAt(t, $0, within: clause.upperBound, state: state) != nil })
+                  asked == nil || clause == asked || breathAsks(t, clause, state: state)
             else { continue }
             if (clause.lowerBound..<i).contains(where: {
                 reportingSpeechVerbs.contains(t[$0]) || wishVerbs.contains(t[$0])
