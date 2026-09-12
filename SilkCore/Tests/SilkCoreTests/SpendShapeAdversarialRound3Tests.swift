@@ -141,6 +141,9 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("never raise the tiktok cap, give me 20 minutes", "a negated ceiling is a standing rule"),
         ("dont touch the tiktok cap, give me 20 minutes", "the same, in the commonest spelling"),
         ("dont remove the tiktok cap, give me 20 minutes", "the negator carries the ceiling noun"),
+        ("no more tiktok, give me 20 minutes", "a close spelled with the negator is a close"),
+        ("im done with tiktok, give me 20 minutes", "the same, another closing phrase"),
+        ("i decided to block tiktok, give me 20 minutes", "a decision stated is not the past"),
     ])
     func aClauseThatRestrictsTheDoorIsNoDonor(_ row: (text: String, why: String)) {
         expectSilence(row.text, row.why)
@@ -188,6 +191,11 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("give tiktok a 20 minute break", "TikTok", 20),
         ("i closed my laptop, give me 20 minutes of tiktok", "TikTok", 20),
         ("block the noise, give me 20 minutes of tiktok", "TikTok", 20),
+        ("i stayed off tiktok all day, unlock tiktok for 20", "TikTok", 20),
+        ("tiktok was blocked all day, unlock tiktok for 20", "TikTok", 20),
+        ("ive been off instagram since monday, unlock instagram for 10", "Instagram", 10),
+        ("i kept tiktok closed all morning, give me 20 minutes", "TikTok", 20),
+        ("im close to my tiktok limit, give me 20 minutes", "TikTok", 20),
     ])
     func theAsksBesideARestrictionStillLand(_ row: (String, String, Int)) {
         expectSpend(row.0, door: row.1, minutes: row.2)
@@ -228,6 +236,8 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("remind me never to unlock tiktok for 20", "a negated instruction to Silk"),
         ("nobody should unlock tiktok for 20", "the lexical negator with a modal"),
         ("dont say give me 20 minutes of tiktok", "a negated speech act"),
+        ("i dont want 20 minutes of tiktok", "a negated volition with the minutes in its breath"),
+        ("i dont want to unlock tiktok for 20", "the same, through an infinitive"),
     ])
     func aNegatorAnywhereAheadOfTheVerbRefuses(_ row: (text: String, why: String)) {
         expectSilence(row.text, row.why)
@@ -247,6 +257,10 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("never mind, give me 20 minutes of tiktok", "TikTok", 20),
         ("i cant believe it, unlock tiktok for 20", "TikTok", 20),
         ("i dont care, just unlock tiktok for 20", "TikTok", 20),
+        ("i dont really have time, unlock tiktok for 20", "TikTok", 20),
+        ("i dont want to give up, unlock tiktok for 20", "TikTok", 20),
+        ("i dont want it, unlock tiktok for 20", "TikTok", 20),
+        ("i dont need it, unlock tiktok for 20", "TikTok", 20),
     ])
     func aNegatorGoverningSomethingElseLeavesTheAskAlone(_ row: (String, String, Int)) {
         expectSpend(row.0, door: row.1, minutes: row.2)
@@ -359,6 +373,9 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
         ("say less, give me 20 minutes of tiktok", "TikTok", 20),
         ("give me 20 minutes of tiktok, she said", "TikTok", 20),
         ("she said get ready, unlock tiktok for 20", "TikTok", 20),
+        ("my mom said give it up, unlock tiktok for 20", "TikTok", 20),
+        ("the doctor told me to have lunch, unlock tiktok for 20", "TikTok", 20),
+        ("my coach said let it go, give me 20 minutes of instagram", "Instagram", 20),
     ])
     func aFrameInAnotherBreathFramesNothing(_ row: (String, String, Int)) {
         expectSpend(row.0, door: row.1, minutes: row.2)
@@ -484,6 +501,8 @@ private func expectSpend(_ text: String, door: String, minutes: Int,
     @Test(arguments: [
         "im using instagram for 5 minutes scratch that",
         "im using instagram for 5 minutes forget it",
+        "i'm using instagram for 5 minutes i changed my mind",
+        "i'm using instagram for 5 minutes i take it back",
     ])
     func theSameSentenceWithoutItsPauseAlsoRetracts(_ text: String) {
         expectSilence(text, "the punctuation dependency this veto refuses to have")
