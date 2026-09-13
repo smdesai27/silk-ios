@@ -9,11 +9,10 @@ import Foundation
 /// listing's Support URL is the listing's alone; nothing in the build opens
 /// it, so nothing here names it.
 ///
-/// **The host is not yet chosen.** The policy page itself is written and
-/// unhosted, kept outside this repository, and the domain below is the
-/// placeholder the submission runbook tells you to replace before the
-/// archive. A link that 404s is a rejection of its own, so the runbook gates
-/// on it.
+/// **The host:** GitHub Pages on the public repository. The page is served
+/// from the `gh-pages` branch, which holds the two site files and nothing
+/// else, so a change to the policy is a commit there and no build. The same
+/// URL goes in the App Store Connect version page's Privacy Policy field.
 enum SilkLinks {
-    static let privacyPolicy = URL(string: "https://silkapp.example/privacy")!
+    static let privacyPolicy = URL(string: "https://smdesai27.github.io/silk-ios/privacy.html")!
 }
