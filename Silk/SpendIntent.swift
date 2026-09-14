@@ -99,10 +99,14 @@ struct SpendIntent: AppIntent {
             return answer(SpendDialog.restated(door: door.name, until: time))
         }
 
-        // The same validator as the bar: the budget binds here too.
+        // The same validator as the bar: the budget binds here too. The
+        // utterance is the whole sentence this intent stands for — the one
+        // the bar teaches — because the Validator holds every spend to it:
+        // the door named, the minutes said, and the opening verb. A bare
+        // "\(doorName) \(minutes)" is the fragment the bar writes out.
         let verdict = Validator.validate(
             .command(.spend(door: door, minutes: minutes)),
-            utterance: "\(doorName) \(minutes)",   // provenance holds by construction
+            utterance: "unlock \(doorName) for \(minutes) \(SilkStrings.minutes)",
             state: policy, ledger: ledger, now: now
         )
 

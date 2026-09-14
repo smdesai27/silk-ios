@@ -182,7 +182,12 @@ public enum Validator {
             return .downHours(state.downHours)
 
         case .closeDoorToday(let door, let until):
-            // Tightening. Always allowed, always instant.
+            // Tightening. Always allowed, always instant — of a door on the
+            // roster. The widener's close arrived here with no check at all.
+            // The door need not be in the sentence: "im done letting myself
+            // open that thing" is a close the model is trusted to aim, since
+            // the direction is tighten and the receipt carries Undo.
+            guard state.doors.contains(where: { $0.id == door.id }) else { return .silence }
             return .close(door: door, until: restLift(until: until, now: now,
                                                       dayStart: dayStart, calendar: calendar))
 
@@ -288,6 +293,23 @@ public enum Validator {
                     door: door,
                     until: ledger.closedUntil[door.id]
                         ?? DayBoundary.nextDayStart(after: dayStart, calendar: calendar))
+            }
+            // P4 — THE SENTENCE. A spend is an opening verb, a door she named
+            // and the minutes, and the grammar's spend rule keeps every gate of
+            // that on every sentence it can read. The widener is handed the
+            // ones it could not — and the ones the rule REFUSED, since refusal
+            // is silence — and its proposal used to reach the grant with a
+            // number that was said and nothing else checked. The rule's gates
+            // are asked here, of the sentence, of every spend from every
+            // source: a door not named or a gate that fires is silence, the
+            // grammar's own answer; the door and the minutes without the ask
+            // is the written-out sentence. After the edges, as the write-out
+            // arm above orders them, so the sentence taught is one the next
+            // turn can grant.
+            switch DeterministicParser.judgeSpend(utterance, door: door, minutes: minutes, state: state) {
+            case .asks: break
+            case .doorNotNamed, .refused: return .silence
+            case .fragment: return .refuseWriteItOut(door: door, minutes: minutes)
             }
             // Past the ceiling branch `doorRemaining` is at least 1 and the pool
             // is at least 1, so `asked` is at least 1 and the clamp above can

@@ -535,7 +535,10 @@ public enum DeterministicParser {
             // would last exactly as long as it took to reach the fallback.
             // `.writeItOut` terminates the turn on a POSITIVE answer that
             // debits nothing and shows the sentence that would grant, so the
-            // next thing typed is a sentence this rule can mint from.
+            // next thing typed is a sentence this rule can mint from. The
+            // fragment this rule cannot read — a door spelled as dictation
+            // spells it — does reach the widener, and the Validator holds the
+            // model's spend to the same sentence (`asksToOpen`).
             //
             // The commitment frame counts as the verb. "im using instagram for
             // 5 minutes" carries "using" on the list; "i'm going on instagram
@@ -4271,6 +4274,67 @@ public enum DeterministicParser {
     /// tokenization here is both wasted work on the hot path and a second
     /// answer to "what are the words of this sentence" — the mistake this
     /// file's clause index exists to refuse.
+    /// What the spend rule would have said to THIS spend of THIS door for
+    /// THESE minutes, asked of the sentence alone — the rule's own gates, in
+    /// the rule's own order, over one tokenization and one clause index.
+    ///
+    /// Read by the Validator on every spend from every source, and the reason
+    /// is the widener: grammar silence is exactly what the on-device model is
+    /// handed, and every gate below ANSWERS silence — "dont unlock tiktok for
+    /// 20 min", "she said unlock tiktok for 20", "give me 30 seconds of
+    /// instagram", "give me 10 or 20 minutes of tiktok", "give me 20 minutes
+    /// of tiktok before bedtime" — so each was read by the model as the spend
+    /// refused, and reached a Validator that checked the number alone. A
+    /// fragment the grammar could not read ("tik tok for 5 mins", as
+    /// dictation spells the door) unlocked TikTok that way while its typed
+    /// twin wrote itself out. The Validator has the last word on what the
+    /// model proposes, and the grammar's gates are that word: a proposal
+    /// passes exactly when the grammar would have minted it.
+    enum SpendJudgement: Equatable {
+        /// The sentence asks for this door and these minutes in full.
+        case asks
+        /// The door is not one the sentence names, by the grammar's matcher —
+        /// the widener resolves the model's string against the roster and
+        /// never against the sentence, so "give me ten minutes on the bird
+        /// app" could come back as a real door.
+        case doorNotNamed
+        /// A gate of the spend rule refuses it: a veto, a second number, a
+        /// window word, a number that is not these minutes.
+        case refused
+        /// The door and the minutes, and no opening verb or commitment: the
+        /// fragment, which gets the sentence written out.
+        case fragment
+    }
+
+    static func judgeSpend(_ utterance: String, door d: Door, minutes: Int,
+                           state: PolicyState) -> SpendJudgement {
+        let text = utterance.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return .refused }
+        let index = NumberParser.ClauseIndex(text)
+        let t = index.tokens
+        guard !t.isEmpty else { return .refused }
+        guard t.indices.contains(where: { doorAt(t, $0, within: t.count, state: state)?.door.id == d.id })
+        else { return .doorNotNamed }
+        // The rule's preconditions: exactly one number, and it is these
+        // minutes; no window word, since window sentences never ask.
+        guard NumberParser.allNumbers(in: text) == [minutes] else { return .refused }
+        let windowMention = says(text, downHour) || t.contains("night")
+            || says(text, bedtime) || says(text, quiet)
+        guard !windowMention else { return .refused }
+        // The rule's vetoes, in its order.
+        guard spendClauseFunds(d, index, state: state),
+              !aRefusalNamesTheDoor(d, index, state: state),
+              !aRestrictionLendsTheDoor(d, index, state: state),
+              !aNegatorRefusesTheAsk(index),
+              !aReportFramesTheAsk(index),
+              !theNumberIsADeadline(index),
+              !theNumberStatesSeconds(index)
+        else { return .refused }
+        let commits = statesACommitment(index, state: state)
+        guard !reportsRatherThanSpends(index, state: state, commitment: commits) else { return .refused }
+        return hasOpeningVerb(t) || commits ? .asks : .fragment
+    }
+
     private static func hasOpeningVerb(_ tokens: [String]) -> Bool {
         carries(openingVerbPhrases, heads: openingVerbHeads, in: tokens, skippingNounReadings: true)
     }

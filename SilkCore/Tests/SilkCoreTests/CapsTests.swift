@@ -473,7 +473,7 @@ private func spent(_ door: Door, _ minutes: Int, from: Date) -> GrantLedger {
                                              dayStart: dayStart(now), calendar: cal)
             let ask = max(a, 1)          // at zero, ask for something and be refused
             let verdict = Validator.validate(.command(.spend(door: reddit, minutes: ask)),
-                                             utterance: "\(ask) minutes of reddit",
+                                             utterance: "unlock reddit for \(ask) minutes",
                                              state: p, ledger: l, now: now, calendar: cal)
             if a > 0 {
                 guard case .grant(_, let minutes, _) = verdict else {

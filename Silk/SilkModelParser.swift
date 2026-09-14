@@ -46,8 +46,9 @@ import FoundationModels
 /// sentences measured, three returned a name no door answers to — "all",
 /// "snapchat" and the empty string — and the Snapchat one is load-bearing,
 /// because its "10" IS in the utterance and so passes the Validator's
-/// provenance check. The door match is the only thing standing between that
-/// sentence and a real grant.
+/// provenance check. The door match and the Validator's sentence check —
+/// a spend must carry an opening verb or a commitment, or it is written
+/// out — are what stand between that sentence and a real grant.
 ///
 /// An actor, and not the enum it used to be, for one reason: it now owns a
 /// `LanguageModelSession` between calls. That object is not `Sendable`, and the

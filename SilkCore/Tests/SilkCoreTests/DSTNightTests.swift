@@ -31,7 +31,7 @@ private func dstState(budget: Int = 40, downHours: DownHours = night) -> PolicyS
 /// Validator, with an utterance that carries the number so provenance passes.
 private func spend(_ minutes: Int, state: PolicyState, at now: Date) -> Verdict {
     Validator.validate(.command(.spend(door: instagram, minutes: minutes)),
-                       utterance: "instagram \(minutes)", state: state,
+                       utterance: "unlock instagram for \(minutes) min", state: state,
                        ledger: GrantLedger(), now: now, calendar: cal)
 }
 
