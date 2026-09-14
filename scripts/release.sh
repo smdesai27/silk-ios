@@ -22,8 +22,17 @@
 #      inside SRCROOT, -file-prefix-map makes dsymutil emit ~26 module-cache
 #      warnings that train a reader to ignore warnings), warnings counted.
 #   6. Export with scripts/ExportUpload.plist — destination=upload, automatic
-#      signing, symbols on. Signing needs the Apple ID Xcode is logged in
-#      with (-allowProvisioningUpdates); nothing here holds a credential.
+#      signing, symbols on. Authentication is either the Apple ID Xcode is
+#      signed in with (-allowProvisioningUpdates alone), or — because that
+#      session expires and then xcodebuild answers "Failed to Use Accounts" —
+#      an App Store Connect API key named by three environment variables:
+#
+#        SILK_ASC_KEY_PATH   the .p8 file (keep it outside the repo)
+#        SILK_ASC_KEY_ID     the key ID from Users and Access → Integrations
+#        SILK_ASC_ISSUER_ID  the issuer ID from the same page
+#
+#      Nothing here holds a credential; the values live in the shell that
+#      runs this script.
 #   7. Only then a tag v<MARKETING_VERSION>-build<CURRENT_PROJECT_VERSION> on
 #      HEAD, so a failed archive leaves nothing to clean up before a retry.
 #
@@ -105,11 +114,24 @@ warnings=$(grep -c "warning:" "build/archive-${tag}.log" || true)
 echo "archived $archive — $warnings warning line(s) in build/archive-${tag}.log"
 
 rule "Upload"
+auth=()
+if [ -n "${SILK_ASC_KEY_PATH:-}" ]; then
+  [ -n "${SILK_ASC_KEY_ID:-}" ] && [ -n "${SILK_ASC_ISSUER_ID:-}" ] \
+    || fail "release.sh: SILK_ASC_KEY_PATH is set, so SILK_ASC_KEY_ID and SILK_ASC_ISSUER_ID are needed too."
+  [ -r "$SILK_ASC_KEY_PATH" ] || fail "release.sh: cannot read SILK_ASC_KEY_PATH."
+  auth=(-authenticationKeyPath "$SILK_ASC_KEY_PATH"
+        -authenticationKeyID "$SILK_ASC_KEY_ID"
+        -authenticationKeyIssuerID "$SILK_ASC_ISSUER_ID")
+  echo "authenticating with App Store Connect key $SILK_ASC_KEY_ID"
+else
+  echo "authenticating with the Apple ID signed in to Xcode (set SILK_ASC_KEY_PATH to use a key)"
+fi
 xcodebuild -exportArchive \
   -archivePath "$archive" \
   -exportOptionsPlist scripts/ExportUpload.plist \
   -exportPath "build/export-${tag}" \
   -allowProvisioningUpdates \
+  ${auth[@]+"${auth[@]}"} \
   > "build/upload-${tag}.log" 2>&1 || { tail -40 "build/upload-${tag}.log"; fail "release.sh: export/upload failed (build/upload-${tag}.log)"; }
 grep -E "EXPORT SUCCEEDED|Upload succeeded|uploaded" "build/upload-${tag}.log" | head -3 || true
 
