@@ -180,13 +180,20 @@ final class WallController {
     @discardableResult
     func arm(door: Door, until relockAt: Date) -> Bool {
         #if DEBUG
-        // Simulator `startMonitoring` throws without Screen Time authorization,
-        // so the honest path always rolls the grant back. Tests that need the
-        // grant-record to stand — a write seen at wait-landing, the success
-        // dialog, the no-launch pin — force the answer; everyone else leaves
-        // this nil and the simulator keeps taking the rollback.
+        // Tests force the answer either way: `true` to let a grant stand,
+        // `false` to walk the rollback leg on demand.
         if let forced = Self.testForceArmed { return forced }
         #endif
+        #if targetEnvironment(simulator)
+        // The simulator has no real wall: `startMonitoring` throws there
+        // without Screen Time authorization, which nothing in a simulator can
+        // grant. `standing` already answers `.up` for the same reason. Now that
+        // BOTH spend paths roll a grant back when arming fails, an honest
+        // throw here would take back every grant the walks and the hosted
+        // tests land — so the simulator answers armed, and the rollback leg is
+        // reached through `testForceArmed = false`.
+        return true
+        #else
         // One clock read for both ends and the threshold. The ledger keeps the
         // true expiry; every move RelockWindow makes is late, never early.
         let now = Date.now
@@ -263,6 +270,7 @@ final class WallController {
             center.stopMonitoring([primary, backup])
         }
         return armed
+        #endif
     }
 
     private static let log = Logger(subsystem: SharedStore.logSubsystem, category: "wall")

@@ -19,6 +19,41 @@ private func dayStart(_ now: Date) -> Date {
     /// The rollback refunds exactly its own debit and nothing else: the
     /// neighbouring grant keeps its minutes, and the pool reads as if the
     /// removed grant had never been recorded.
+    /// `endGrants(for:at:)` is the other failure-path primitive: the bar's
+    /// landing, when a re-lock will not arm over a door that already had a
+    /// grant running. It ends that door's live grants and writes nothing
+    /// else — a close some other writer landed keeps its lift hour, the
+    /// minutes stay spent, a neighbouring door's grant stands, and an already
+    /// ended grant is left alone.
+    @Test func endingGrantsShutsTheDoorAndRecordsNoClose() {
+        let now = at(8, 4, 10)
+        let start = dayStart(now)
+        var ledger = GrantLedger()
+        let running = Grant(door: tiktok, minutes: 20, issuedAt: at(8, 4, 9, 55),
+                            expiresAt: at(8, 4, 10, 15))
+        let bystander = Grant(door: instagram, minutes: 15, issuedAt: at(8, 4, 9),
+                              expiresAt: at(8, 4, 9, 15))
+        ledger.record(bystander)
+        ledger.record(running)
+        // Somebody else's close on the bystander's door, with a stated lift.
+        ledger.closeDoor(instagram, at: at(8, 4, 9, 30), until: at(8, 4, 11))
+
+        ledger.endGrants(for: tiktok, at: now)
+
+        #expect(ledger.openDoors(at: now, dayStart: start).isEmpty)
+        #expect(ledger.activeGrant(for: tiktok, at: now) == nil)
+        #expect(ledger.grants.map(\.id) == [bystander.id, running.id])
+        #expect(ledger.spentMinutes(dayStart: start) == 35)
+        // No close of its own, and the other close untouched.
+        #expect(ledger.closedToday[tiktok.id] == nil)
+        #expect(ledger.closedUntil[tiktok.id] == nil)
+        #expect(ledger.closedUntil[instagram.id] == at(8, 4, 11))
+        // Idempotent.
+        let again = ledger
+        ledger.endGrants(for: tiktok, at: now.addingTimeInterval(60))
+        #expect(ledger == again)
+    }
+
     @Test func removesExactlyTheNamedGrant() {
         let now = at(8, 4, 10)
         let start = dayStart(now)

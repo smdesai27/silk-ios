@@ -8,7 +8,10 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    # main, and any branch a build is cut from. 1.0.0 (2) was archived off a
+    # branch this list did not name, so even with Actions billing in place the
+    # release commit would never have been gated here.
+    branches: [main, 'release/**', 'fable-*', 'claude/**']
 
 # A second push to the same branch retires the first run. This repo is private,
 # where macOS runners bill at ten times the Linux rate, and a superseded commit

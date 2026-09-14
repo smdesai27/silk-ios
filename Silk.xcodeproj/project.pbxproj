@@ -14,6 +14,7 @@
 		188433E54C022E80D070356F /* BarRefusalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675C6C4CEBBB87CAFF248286 /* BarRefusalTests.swift */; };
 		192AA7C5AEA91053B6345E24 /* WallController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFF8CA4B6D8F6E393B396D1B /* WallController.swift */; };
 		20EA517C5D0C89EE8CCAD663 /* DoorRetirementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 954C198ADDFFAC1184470A4D /* DoorRetirementTests.swift */; };
+		23102473F6C39FA8FEA13B93 /* RelockArmFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 783133DB08F3891F0CE14F14 /* RelockArmFailureTests.swift */; };
 		2580302DF762798F7E8BB26F /* ApertureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B533DAEE56A4E18702C13CB /* ApertureView.swift */; };
 		295613EC78F9ACE4C039B43B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D7DA55B6A7DFC87D922C181E /* PrivacyInfo.xcprivacy */; };
 		29D791169E236E4BB1294C01 /* SilkCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8C8E4D9BB944356CB0771523 /* SilkCore */; };
@@ -155,6 +156,7 @@
 		6D0F6128C43C9EDDB8228BBD /* WaitIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitIntentTests.swift; sourceTree = "<group>"; };
 		6ED1664BC1F72D50F45C0343 /* MonitorExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonitorExtension.swift; sourceTree = "<group>"; };
 		704D0FDD76C4A32996253007 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		783133DB08F3891F0CE14F14 /* RelockArmFailureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelockArmFailureTests.swift; sourceTree = "<group>"; };
 		7A15D91F5D0F1DB70D57FE88 /* LaunchCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchCatalog.swift; sourceTree = "<group>"; };
 		81BEF0341C8000B1562BB3C4 /* SilkTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SilkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		835D0F9CAADC49CEF71DDEC8 /* WaitTransactionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitTransactionTests.swift; sourceTree = "<group>"; };
@@ -276,6 +278,7 @@
 				954C198ADDFFAC1184470A4D /* DoorRetirementTests.swift */,
 				A88C620EBDD7A30F5C31D633 /* LedgerUndoTests.swift */,
 				226A0A53A050BB48E8A50DA3 /* NoModelTurnTests.swift */,
+				783133DB08F3891F0CE14F14 /* RelockArmFailureTests.swift */,
 				C3511FBC450CBBFB5B4C398D /* SpendIntentTests.swift */,
 				AAA10C5D5113991E6BCEFA99 /* StageTests.swift */,
 				22906130AF370BA57B4A643C /* TestSupport.swift */,
@@ -661,6 +664,7 @@
 				20EA517C5D0C89EE8CCAD663 /* DoorRetirementTests.swift in Sources */,
 				9B91C13018275FD24DD3448D /* LedgerUndoTests.swift in Sources */,
 				F7F7202894C14F114D22F305 /* NoModelTurnTests.swift in Sources */,
+				23102473F6C39FA8FEA13B93 /* RelockArmFailureTests.swift in Sources */,
 				7F785A486DF97251D6C757EC /* SpendIntentTests.swift in Sources */,
 				0DEDB5D2807CF3295967D515 /* StageTests.swift in Sources */,
 				398F8FCDC4186D68F8EC0D6E /* TestSupport.swift in Sources */,
@@ -777,7 +781,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 85Y5HLW3RN;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -997,7 +1001,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 85Y5HLW3RN;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

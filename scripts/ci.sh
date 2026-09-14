@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 #
 # All three suites, locally — the same commands .github/workflows/ci.yml runs on
-# a runner. CI is the authority; this is how you get the same answer without
-# waiting on a round trip, and how .githooks/pre-push catches the cheap
-# failures before they leave the machine.
+# a runner. CI is the intended authority; until Actions is enabled for the
+# repository it has never run, and `scripts/ci.sh all` green on the exact tree
+# is the gate every build has actually passed (scripts/release.sh enforces
+# it). .githooks/pre-push catches the cheap failures before they leave the
+# machine.
 #
 #   scripts/ci.sh              all three suites + the Release build (~25 min)
 #   scripts/ci.sh spine        SilkCore only (~15 s, no simulator, runs on Linux)
@@ -197,10 +199,13 @@ if ! command -v xcodebuild >/dev/null 2>&1; then
   case "$what" in
     spine) ;;
     all)
-      echo "No xcodebuild here — running the spine and stopping."
-      echo "SilkTests, SilkUITests and the Release build need macOS."
-      what=spine
-      darwin_only_skipped=1
+      # Refused rather than quietly narrowed: `all` is what scripts/release.sh
+      # asks for, and an exit 0 that ran the spine alone would archive a build
+      # nothing else had looked at. Ask for `spine` by name on a machine that
+      # can only answer that.
+      echo "scripts/ci.sh all needs xcodebuild, which exists only on macOS." >&2
+      echo "Only 'spine' can run here — ask for it by name; 'all' is not green." >&2
+      exit 2
       ;;
     *)
       echo "scripts/ci.sh $what needs xcodebuild, which exists only on macOS." >&2

@@ -26,22 +26,24 @@ import Foundation
 //
 // A wait bolted onto this path breaks one or the other.
 //
-// One honest limitation, stated rather than papered over, and measured rather
-// than guessed. The grant branch ends in `WallController.arm`, and the intent
-// takes its own grant back out of the ledger when the re-lock will not
-// schedule. `DeviceActivityCenter` will not schedule without Screen Time
-// authorization, which no test can grant itself — so **on the simulator this
-// path always takes the rollback leg**, verified by instrumenting it once. That
-// is not a reason to assert only the leg that runs: the same test on hardware,
-// authorized, takes the other one, and a rollback-only assertion would pass
-// there for the wrong reason. Both legs are written; the fork is named where it
-// happens. The one branch with no such dependency — the idempotency guard,
-// which answers before the Validator and before the wall is touched at all —
-// is asserted exactly.
+// One honest limitation, stated rather than papered over. The grant branch
+// ends in `WallController.arm`, and the intent takes its own grant back out of
+// the ledger when the re-lock will not schedule. `DeviceActivityCenter` will
+// not schedule without Screen Time authorization, which no test can grant
+// itself — so the simulator cannot walk the armed leg for real. It used to
+// walk the rollback leg by accident of that, until the bar's own landing
+// learned to roll back too and `arm` began answering "armed" on the simulator
+// (see `WallController.arm`), because an honest throw there would take back
+// every grant the walks land. So the rollback is now forced where it is
+// wanted — `WallController.testForceArmed = false`, in the transaction test —
+// rather than left to which machine runs the suite. Both legs are still
+// written; the fork is named where it happens. The one branch with no such
+// dependency — the idempotency guard, which answers before the Validator and
+// before the wall is touched at all — is asserted exactly.
 //
-// So what the simulator actually proves here is the rollback: exact, surgical,
-// and finished before the dialog. Which is worth having — nothing else in
-// either suite reaches that path at all.
+// So what the transaction test proves is the rollback: exact, surgical, and
+// finished before the dialog. Which is worth having — nothing else in either
+// suite reaches that path at all.
 
 /// Performed the way Shortcuts performs it: off the main actor, in a process
 /// with no scene and no `AppModel` in it.
@@ -120,6 +122,10 @@ private func performSpend(door: String, minutes: Int) async throws {
     @Test func theWholeTransactionIsFinishedWhenPerformReturns() async throws {
         let door = freshPolicy()
         defer { WallController().stopMonitoring(door: door) }
+        // The wall refuses on purpose: this is the leg nothing else reaches,
+        // and the simulator no longer takes it by accident (file comment).
+        WallController.testForceArmed = false
+        defer { WallController.testForceArmed = nil }
 
         // A grant on a door this intent will not touch, standing before it runs.
         let other = Door(name: "TikTok")

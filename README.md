@@ -49,7 +49,7 @@ The comments cite these by number.
 4. **The wall fails closed.** The ledger is the truth; a dead extension closes doors late, never
    leaves them open. The model proposes; the validator disposes.
 5. **No notification permission, ever.** Every word the app says comes from
-   `SilkCore/Sources/SilkCore/Strings.swift` — 75 of them today, 65 constants and 10 that compose.
+   `SilkCore/Sources/SilkCore/Strings.swift` — 76 of them today, 66 constants and 10 that compose.
    The file is the vocabulary, and nothing outside it may speak.
 
 ## Architecture
@@ -91,8 +91,10 @@ scripts/ci.sh release            # Release compiles at all, ~4 min, no simulator
 
 `cd SilkCore && swift test` is the spine on its own, and it answers on Linux as well as on macOS.
 
-`.github/workflows/ci.yml` runs the same lanes on every pull request and every push to `main`.
-That is the gate; a red PR is the answer.
+`.github/workflows/ci.yml` runs the same lanes on every pull request and every push to `main` or a
+release branch. That is the intended gate. Until GitHub Actions is enabled for this repository it
+has never run, so the gate that has actually held every build so far is `scripts/ci.sh all` green
+on the exact tree, which `scripts/release.sh` refuses to archive without.
 
 The hook is the fast half. Turn it on once per clone:
 
@@ -105,8 +107,8 @@ git config core.hooksPath .githooks
 
 ## Status
 
-1.0.0 is built and installed on a device. It is not on the App Store yet: the Family Controls
-distribution entitlement is granted, and distribution waits on the Apple Distribution certificate.
+1.0.0 is uploaded to App Store Connect with the Family Controls distribution entitlement on all
+four bundles, and the listing is prepared. It has not been submitted for review yet.
 
 ## License
 

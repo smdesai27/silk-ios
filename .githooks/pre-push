@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
-# The fast half of the gate. GitHub Actions runs both suites on every pull
-# request and every push to main, and that is the authority — this hook exists
-# to catch the cheap failures before they cost a round trip, not to duplicate
-# CI.
+# The fast half of the gate. GitHub Actions is meant to run every suite on
+# every pull request and push to main — but until Actions is enabled for the
+# repository it has never run, and `scripts/ci.sh all` on the exact tree is the
+# gate that has held (scripts/release.sh enforces it). This hook exists to
+# catch the cheap failures before they cost a round trip, not to be the gate.
 #
 # So it runs the spine and stops. The spine's tests run in about eight seconds
 # and catch most of what breaks; the simulator walks take five minutes locally

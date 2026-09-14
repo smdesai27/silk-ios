@@ -698,6 +698,10 @@ final class OnboardingUITests: SilkWalk {
         let privacyRow = element(app, "silk.settings.privacy")
         tap(app.buttons["silk.dot.2"], "the Settings dot", raising: privacyRow, "the Privacy row")
         expect(privacyRow, labelContains: "Privacy", "the Privacy row did not read its name")
+        // And the way to a person beside it (Guideline 1.5: the app itself,
+        // not only the listing's Support URL).
+        let supportRow = element(app, "silk.settings.support")
+        expect(supportRow, labelContains: "Support", "the Support row did not read its name")
     }
 
     /// The feature end to end, from the only surface that has it: set a ceiling

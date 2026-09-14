@@ -14,6 +14,12 @@ import SilkCore
 /// `SpendDialog`.
 struct SpendIntent: AppIntent {
     static let title: LocalizedStringResource = "Spend"
+    /// The phone has to be unlocked. A spend debits the budget and drops the
+    /// wall behind an app, and `openAppWhenRun` is false — so without this a
+    /// Shortcut could do both from the lock screen, with nobody watching the
+    /// wait Silk's own bar makes her pay. Stated rather than left to the
+    /// framework's default, whichever way that default reads.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
     static let description = IntentDescription(
         "Spends minutes from today's budget on one of your apps. The app unlocks now and locks again at a stated time."
     )

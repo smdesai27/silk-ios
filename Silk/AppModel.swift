@@ -1288,18 +1288,56 @@ final class AppModel {
             let grant = Grant(door: door, minutes: minutes, issuedAt: .now, expiresAt: relockAt)
             let record: (inout GrantLedger) -> Void = { $0.record(grant) }
             record(&ledger)
-            // The door is open in memory here, and this is the landing frame —
-            // the veil starts its fall and the phone is handed to the granted
-            // app. The tap goes with the opening, ahead of the write and the
-            // arming, for the reason `.close` gives: `persist` re-applies the
-            // closure over any reload, so nothing between here and the return
-            // can leave the haptic describing a grant that did not land.
-            Silk.Haptic.grant()
             commit(reapplying: record)
             // Off the committed ledger, not off `relockAt`: `commit` may have
             // reloaded and re-applied over another process's write, and a door
             // that already had a longer grant running keeps ITS deadline.
-            restateRelockLayers(for: door)
+            //
+            // The door does not open unless the re-lock armed. Rule 4: a
+            // grant recorded with no schedule behind it is a door that stays
+            // open until Silk is next opened by hand or the daily heartbeat
+            // fires — the fail-OPEN this path used to ship, and the one
+            // `SpendIntent` already refuses. The rollback is surgical, exactly
+            // as the intent's is: take out this one grant over what stands
+            // now (`commit` may have folded in another writer's close), so no
+            // minutes are debited for it.
+            //
+            // Then the door is asked again. The bar, unlike the intent, lets
+            // an ask larger than a running grant land beside it — so the door
+            // may still hold an EARLIER live grant, and `arm`'s failure branch
+            // has just disarmed both of the door's schedule names. Restating
+            // re-arms for that grant if the refusal was a passing one. If the
+            // wall refuses that too, the earlier grant is ended here and now:
+            // a door with minutes running and no layer behind it is the one
+            // thing this path may not leave standing, and ending it is what
+            // the reconcile on the next line needs to shield it again.
+            //
+            // The sentence: "Blocking is off." when Now can show it (the
+            // wall's own reading, the same test the intent makes), otherwise
+            // the silence an unreadable sentence gets — Silk owns no truer
+            // words for a schedule that would not take. No way back is
+            // offered, because nothing was done.
+            guard restateRelockLayers(for: door) else {
+                let withdraw: (inout GrantLedger) -> Void = { $0.removeGrant(id: grant.id) }
+                withdraw(&ledger)
+                commit(reapplying: withdraw)
+                if !restateRelockLayers(for: door) {
+                    // `endGrants`, not `closeDoor`: the door must shut, but
+                    // this landing has no close of its own to record, and a
+                    // close another writer landed during the commit above
+                    // must keep its lift hour.
+                    let end: (inout GrantLedger) -> Void = { $0.endGrants(for: door, at: .now) }
+                    end(&ledger)
+                    commit(reapplying: end)
+                }
+                let words = wall.standing == .up ? SilkStrings.didntGetThat : SilkStrings.blockingOff
+                return (refuse(words), nil)
+            }
+            // The door is open, written, and armed — this is the landing
+            // frame: the veil starts its fall and the phone is handed to the
+            // granted app. The tap belongs to that moment and to no earlier
+            // one, now that the arm above can refuse the grant.
+            Silk.Haptic.grant()
             // The key journal used to take an entry here — every unlock is an
             // exception spent — and the write is gone with the journal itself.
             // `SharedStore` carries the argument where the key used to live:
@@ -2118,12 +2156,22 @@ final class AppModel {
     /// store read and a settings-store write to arrive at the union the commit
     /// a line earlier already wrote — would land on the one frame the veil is
     /// falling and the granted app is being handed the phone.
-    private func restateRelockLayers(for door: Door) {
+    ///
+    /// Answers whether the door has its re-lock layers: `true` when nothing
+    /// needed arming or the arm took, `false` when `startMonitoring` refused
+    /// — in which case `arm` has already disarmed both names, and the door is
+    /// open with no schedule, no threshold and no shield to render. Only the
+    /// grant landing acts on the answer (it takes the grant back, as
+    /// `SpendIntent` does); the restatements after an undo, a restore or a
+    /// reload have no grant of their own to withdraw, and the daily heartbeat
+    /// is the backstop they have always had.
+    @discardableResult
+    private func restateRelockLayers(for door: Door) -> Bool {
         guard let grant = ledger.activeGrant(for: door, at: .now) else {
             wall.stopMonitoring(door: door)
-            return
+            return true
         }
-        wall.arm(door: door, until: grant.expiresAt)
+        return wall.arm(door: door, until: grant.expiresAt)
     }
 
     /// Add: the chip tap makes the door (name-only, exactly as setup allows),

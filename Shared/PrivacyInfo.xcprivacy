@@ -17,6 +17,19 @@
 				<string>1C8F.1</string>
 			</array>
 		</dict>
+		<!-- The wait's clock is `ContinuousClock` (Wait.swift, Monotonic),
+		     which reads system uptime. 35F9.1 — measuring elapsed time inside
+		     the app, never sent off it. Declared so the upload cannot be
+		     refused for the API family (ITMS-91053); over-declaring costs
+		     nothing. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>35F9.1</string>
+			</array>
+		</dict>
 	</array>
 	<!-- Silk has no network layer at all — no URLSession, no backend, no
 	     analytics. Nothing leaves the device, so nothing is collected. -->

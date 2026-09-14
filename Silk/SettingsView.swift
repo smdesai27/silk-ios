@@ -40,6 +40,9 @@ struct SettingsView: View {
     /// The privacy policy, opened in Safari. A quiet row at the foot of the
     /// page: not a rule, so it wears the add-row's affordance costume.
     var onTapPrivacy: () -> Void
+    /// The support page, the same way. Guideline 1.5 wants a way to reach a
+    /// person from inside the app, not only from the listing.
+    var onTapSupport: () -> Void = {}
 
     var body: some View {
         // The same defence NowView mounts, and now literally the same code:
@@ -62,12 +65,12 @@ struct SettingsView: View {
     /// 62 + wordmark 13 + 64, then 52 a row, then the title block 44 + 15 + 14.
     /// The first two are the scaffold's seat, mounted by `silkFittedColumn` and
     /// counted here because they are part of the height being fitted.
-    /// The add row is a row like any other: 52 when it shows. The Privacy row
-    /// at the foot is 34 of air and one more row.
+    /// The add row is a row like any other: 52 when it shows. The foot is 34
+    /// of air and two more rows, Privacy and Support.
     private var columnHeight: CGFloat {
         62 + 13 + 64 + 3 * 52 + 44 + 15 + 14
             + CGFloat(doors.count + (showsAddRow ? 1 : 0)) * 52
-            + 34 + 52
+            + 34 + 2 * 52
     }
 
     private var column: some View {
@@ -143,11 +146,18 @@ struct SettingsView: View {
             // (5.1.1(i)); it opens the hosted page (`SilkLinks`). Quiet, at the
             // foot, off the rules' group: it states nothing about the day.
             SettingsRow(name: SilkStrings.privacy, value: "",
-                        night: night, showsRule: false, quiet: true,
+                        night: night, showsRule: true, quiet: true,
                         axID: "silk.settings.privacy",
                         action: onTapPrivacy)
                 .padding(.horizontal, 46)
                 .padding(.top, 34)
+            // Support, in the same costume, directly under it: the pair is one
+            // quiet group at the foot, so only the last row drops its rule.
+            SettingsRow(name: SilkStrings.support, value: "",
+                        night: night, showsRule: false, quiet: true,
+                        axID: "silk.settings.support",
+                        action: onTapSupport)
+                .padding(.horizontal, 46)
         }
     }
 }

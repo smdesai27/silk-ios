@@ -170,6 +170,19 @@ public struct GrantLedger: Codable, Sendable, Equatable {
         // any earlier stated hour — the newer sentence wins whole.
         closedUntil[door.id] = until
         // Closing also ends any live grant on that door, with no refund.
+        endGrants(for: door, at: now)
+    }
+
+    /// End every live grant on a door at `now`, and touch nothing else: no
+    /// close is recorded, no lift hour is written, and the minutes stay on
+    /// the books (a grant ended early refunds nothing, exactly as a close
+    /// does). The bar's landing reaches for this when a re-lock will not arm
+    /// over a door that already had a grant running: the door has to shut,
+    /// and it has to shut without overwriting a close some other writer may
+    /// have landed on the same ledger in the meantime — `closeDoor` here
+    /// would put its own lift hour over theirs. Idempotent: a grant already
+    /// ended is not active and is left alone.
+    public mutating func endGrants(for door: Door, at now: Date) {
         grants = grants.map { g in
             guard g.doorID == door.id, g.isActive(at: now) else { return g }
             return Grant(id: g.id, door: door, minutes: g.minutes, issuedAt: g.issuedAt, expiresAt: now)
