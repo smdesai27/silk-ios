@@ -88,12 +88,13 @@
 
   <h3>An app locked later than the time it showed. Why?</h3>
   <p>The block is re-applied by whichever of Silk's re-lock layers wakes next, not by a running
-  clock, so it can return a little after the stated time. For a grant of fifteen minutes or
+  clock, so it can return a little after the stated time. For a grant of sixteen minutes or
   more, that is usually under a minute. For a shorter grant, iOS will not schedule a re-lock
-  sooner than fifteen minutes after the grant began, so the layer that closes the door on
-  time is the one that counts the minutes you actually spend in the app; if you open the app
-  and then put the phone down, the door can stay open until that fifteen-minute mark, or
-  until you next open Silk. It is never re-locked early. Silk has several independent layers
+  sooner than about fifteen and a half minutes after the grant began, so the layer that locks
+  the app on time is a usage signal: iOS counts the minutes the app is in use and tells Silk
+  when they reach the grant. Silk never sees the count. If you open the app and then put the
+  phone down, it can stay open for about sixteen minutes, or until you next open Silk or
+  another blocked app. It is never re-locked early. Silk has several independent layers
   so that one failing does not leave an app open. If an app stayed open well past that,
   write in and say which app and roughly when.</p>
 

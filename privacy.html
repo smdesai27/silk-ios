@@ -68,7 +68,7 @@
 <body>
 <main>
   <h1>Privacy Policy</h1>
-  <p class="effective">Effective September 14, 2026</p>
+  <p class="effective">Effective September 19, 2026</p>
 
   <p>Silk is a Screen Time app. It blocks apps you choose on your iPhone and lets you spend a
   daily budget of minutes to open them. This policy lists what Silk stores and what it does
@@ -81,11 +81,11 @@
     <li>The apps you chose to block, and the ones you named for spending.</li>
     <li>Your daily minute budget, any per-app ceiling, and your down-hours window.</li>
     <li>A record of the grants Silk has issued: how many minutes, for which app, and when.</li>
-    <li>A log of the times a blocked app's wall was shown, kept to the most recent 2,000. Silk
+    <li>A log of the times a blocked app's screen was shown, kept to the most recent 2,000. Silk
     uses it to score the day. It records a time and nothing else: not which app, and not what
     you did next.</li>
-    <li>A summary for each past day, kept to the most recent 2,000: how many times a wall was
-    shown and how many of those fell in down hours, the minutes granted, and how many grants
+    <li>A summary for each past day, kept to the most recent 2,000: how many times a blocked
+    app's screen was shown and how many of those fell in down hours, the minutes granted, and how many grants
     were spent. The day's score is worked out from these when Mirror shows it; it is not
     stored.</li>
     <li>The times Silk's own daily check-in ran, kept to the most recent 2,200, so Silk can
@@ -103,9 +103,11 @@
   <p>You choose the apps to block in Apple's own picker. Silk receives an opaque token for
   each one. It does not learn the name, bundle identifier, or icon of any app you block that
   way, because Apple's API does not expose them. The apps you name for spending are different:
-  you pick their names from Silk's own short list, and that name is what Silk stores with the
-  door and with each grant, so the bar can answer "Instagram is open for 10 min." Silk does
-  not read your Screen Time usage data and has no access to how long you spent in any app.
+  you pick their names from Silk's own short list, and that name is what Silk stores with
+  that app's settings and with each grant, so the bar can answer "Instagram is open for 10 min." Silk does
+  not read your Screen Time usage data and never sees how long you spent in any app.
+  To lock an app again, Silk asks iOS to signal when the app has been used for the minutes
+  granted; iOS keeps the count, and Silk never sees it.
   The minute figures Silk shows are computed from the grants it issued, not from your device
   usage.</p>
 
