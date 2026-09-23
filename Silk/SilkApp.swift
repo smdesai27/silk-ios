@@ -391,9 +391,10 @@ struct RootView: View {
                     }
                     // The one animation the stage still stamps whole, and the one
                     // that must be: the day↔night wash is atmosphere, so every
-                    // layer crosses together on the 0.8s (canon.md, sanctioned
-                    // exceptions). The three overlay curves that used to stand
-                    // here moved to their mutation sites in `AppModel`.
+                    // layer crosses together on the 0.8s — `Silk.Motion.crossing`
+                    // is the one sanctioned exception. The three overlay curves
+                    // that used to stand here moved to their mutation sites in
+                    // `AppModel`.
                     .animation(Silk.motion(Silk.Motion.crossing), value: night)
                     // The onboarded tree's ONE picker sheet: it serves both the
                     // wall re-arm (Now's row) and a door binding (Settings'

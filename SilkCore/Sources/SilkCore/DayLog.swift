@@ -36,7 +36,8 @@ public struct DayRecord: Codable, Hashable, Sendable {
     /// at 09:00 and re-opens fifteen times has one unlock here. What this
     /// prices is repeat *buying* after a window closes, which is the shape of
     /// "five more, five more, five more" — and it is honestly less than the
-    /// whole of what fragmentation feels like. score-weighting §4.2.
+    /// whole of what fragmentation feels like. The score-weighting research
+    /// defines `S` the same narrow way.
     ///
     /// Zero on a record written before this field existed. That decodes to the
     /// same score those days already had, because the term is zero below two.
@@ -94,13 +95,13 @@ public enum DayLog {
     /// than granted after it goes wrong. A granted minute costs one; a reach
     /// costs one; a reach inside down hours costs one more — the coefficients
     /// the shipped score already uses. 180 is the one number here that is not
-    /// derived from anything; see mirror-continuity §8.5. Provisional until
-    /// calibrated against a real device day.
+    /// derived from anything, and it stays provisional until it is calibrated
+    /// against a real device day.
     public static let allowance: Double = 180
 
     /// `switchCost`'s `c` — equivalent minutes charged per grant after the
-    /// first. score-weighting §4.4, and that section is worth reading before
-    /// touching this number: **it is a calibration constant, not an effect
+    /// first. The score-weighting research is worth reading before this
+    /// number is touched: **it is a calibration constant, not an effect
     /// size, and no citation supports it.** The direct experimental test of
     /// the premise is null (Powers & Scerbo 2023: interruption *frequency* had
     /// no effect once timing was held), and consolidation carries a measured
@@ -111,8 +112,9 @@ public enum DayLog {
     private static let switchCost: Double = 2
 
     /// The switch term's ceiling, as a share of the day's granted minutes.
-    /// §4.4 sets it against *weighted* minutes; with no time-of-day curve
-    /// shipped every multiplier is 1.0, so the two are the same number here.
+    /// The score-weighting research sets it against *weighted* minutes; with
+    /// no time-of-day curve shipped every multiplier is 1.0, so the two are
+    /// the same number here.
     private static let switchCap: Double = 0.5
 
     /// What fragmentation costs: `c` per grant after the first, never more
@@ -121,17 +123,19 @@ public enum DayLog {
     /// The cap is what stops a thin, choppy day from being all switch term —
     /// four two-minute grants would otherwise cost three times what they
     /// bought. It binds only below ~28 granted minutes; above that the term is
-    /// flat in the session count, which is the shape §4.4 asks for.
+    /// flat in the session count, which is the shape the score-weighting
+    /// research asks for.
     ///
-    /// **What does not transfer from §4.4.** That section derives its form
-    /// inside `score = 100 × M / W`, where the cap yields a structural floor —
+    /// **What does not transfer.** That research derives its form inside
+    /// `score = 100 × M / W`, where the cap yields a structural floor —
     /// fragmentation alone can never take a score below 66.7. Silk scores by
-    /// subtraction from an allowance (`growth-decision` verdict 3), so the
-    /// floor is a property of the ratio form and is *not* inherited here. What
-    /// survives is the ordering the floor existed to encode: the switch term
-    /// is bounded against the minutes, so fragmentation can add at most half
-    /// again to what the grants already cost, and can never be the whole of a
-    /// day's number. Stated rather than quietly assumed.
+    /// subtraction from an allowance instead — a deliberate choice, not an
+    /// accident of form — so the floor is a property of the ratio form and is
+    /// *not* inherited here. What survives is the ordering the floor existed
+    /// to encode: the switch term is bounded against the minutes, so
+    /// fragmentation can add at most half again to what the grants already
+    /// cost, and can never be the whole of a day's number. Stated rather than
+    /// quietly assumed.
     static func fragmentation(unlocks: Int, grantedMinutes: Int) -> Double {
         guard unlocks > 1 else { return 0 }
         return min(switchCost * Double(unlocks - 1),
@@ -168,7 +172,7 @@ public enum DayLog {
     }
 
     /// The cap `recordAttempt` enforces on the attempts blob. Mirrored here
-    /// because §3.5's observability rule turns on the blob being *at* it.
+    /// because the observability rule turns on the blob being *at* it.
     static let attemptsCap = 2000
 
     /// How many attempts the render path's append buffer holds before it has
@@ -185,7 +189,7 @@ public enum DayLog {
     /// shield extension may not re-encode a 2000-entry `[Date]` on the path
     /// that draws the wall, so a reach is appended to a small tail key and the
     /// app folds it later. That split is only safe while a reader cannot tell
-    /// the two states apart, and §3.5's observability rule is the reader that
+    /// the two states apart, and the observability rule is the reader that
     /// could: `summarise` calls a day unobservable when the blob is AT its cap
     /// and the day starts before the blob's oldest entry, so a merge that
     /// trimmed differently from the fold would move a day's verdict simply by
@@ -222,22 +226,22 @@ public enum DayLog {
     /// A Silk day shorter or longer than this is a boundary that moved under
     /// the user — a timezone change, not a day. It draws a ring rather than a
     /// fill, because `observed` has a span term even though `fraction` does
-    /// not (§3.3).
+    /// not.
     static let sameSpan = (min: 20.0 * 3600, max: 28.0 * 3600)
 
-    /// The largest backfill a single walk will emit. A 90-day absence is
-    /// expected (§3.7); this exists so a boundary that has moved absurdly far
-    /// cannot spin. It matches the record cap, so a walk can never produce
-    /// more records than the store keeps.
+    /// The largest backfill a single walk will emit. A 90-day absence is an
+    /// expected case rather than a pathological one; this exists so a boundary
+    /// that has moved absurdly far cannot spin. It matches the record cap, so
+    /// a walk can never produce more records than the store keeps.
     static let maxWalk = 2000
 
     // MARK: Summarising one day
 
     /// Summarise one closed Silk day.
     ///
-    /// `attempts` must be the **whole** blob, not a pre-filtered slice: §3.5
-    /// decides observability partly from whether the blob is at its cap, and
-    /// a slice cannot answer that. Filtering to the day happens here.
+    /// `attempts` must be the **whole** blob, not a pre-filtered slice:
+    /// observability is decided partly from whether the blob is at its cap,
+    /// and a slice cannot answer that. Filtering to the day happens here.
     ///
     /// `wallStanding` is the caller's verdict on the two facts Core cannot
     /// see — `policy.wallEnabled` and `WallController.standing == .up`. It is
@@ -347,12 +351,12 @@ public enum DayLog {
     /// (pinned by `DSTNightTests`).
     ///
     /// **Bootstrapping.** With no records at all there is no anchor to walk
-    /// from — §3.6 deletes `firstRun`, so nothing stamps the install. This
-    /// emits the single day immediately before `currentDayStart` and lets the
-    /// chain continue from there. On a real first run that day was not
+    /// from — the model carries no `firstRun`, so nothing stamps the install.
+    /// This emits the single day immediately before `currentDayStart` and lets
+    /// the chain continue from there. On a real first run that day was not
     /// observed (the wall is not up during onboarding), so it writes a ring
-    /// and the hero reads 0 on day 1, which is what §2.6 specifies. This is
-    /// the one place the implementation had to decide something the document
+    /// and the hero reads 0 on day 1, which is what the design asks for. This
+    /// is the one place the implementation had to decide something the design
     /// does not state.
     ///
     /// **Only fully-elapsed days are owed.** A boundary is emitted only when

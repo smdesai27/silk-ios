@@ -33,13 +33,13 @@ public enum SharedStore {
     /// `SilkShield` had no `Logger` at all — so the term the gate exists to
     /// judge was the one term nothing could see.
     ///
-    /// **Why DEBUG and not `.private`.** `c49bc17` settled the doctrine for the
-    /// shipping log: keep the event, redact the payload, speak plainly only to
+    /// **Why DEBUG and not `.private`.** The shipping-log doctrine (`c9842dc`)
+    /// settled this: keep the event, redact the payload, speak plainly only to
     /// a watching debugger. These lines are payload — when someone reached, how
     /// often, and what a day cost — so under that doctrine they would all be
     /// `.private`, which is unreadable in Console without a logging profile.
     /// Compiling them out of Release instead keeps the shipped privacy surface
-    /// exactly where `c49bc17` left it while leaving the numbers plainly
+    /// exactly where that commit left it while leaving the numbers plainly
     /// readable on the dev build the device protocols already install.
     /// `scripts/ci.sh release` is what proves the Release side still compiles
     /// with every one of these gone.
@@ -747,8 +747,8 @@ public enum Wall {
     /// and the category `WallController` already writes the app-side wall
     /// events to — a refusal to write from a shield extension and the app's
     /// own arming read as one story under a single Console filter. Payload
-    /// never goes in a line here; see `calibrationLog`'s note on the c49bc17
-    /// doctrine for why.
+    /// never goes in a line here; see `calibrationLog`'s note on the
+    /// shipping-log doctrine for why.
     private static let log = Logger(subsystem: SharedStore.logSubsystem, category: "wall")
 
     /// What a reconcile read on its way to a verdict, handed back so the one
@@ -792,11 +792,11 @@ public enum Wall {
     /// what does — four cross-process writes per render was the battery cost
     /// of this app. The app's foreground and the monitor's wakes are the
     /// restatements: a handful a day, and each one writes the wall whether or
-    /// not the store reads back equal, because README rule 4's wall is
-    /// restated on the assumption that the daemon may not be enforcing what
-    /// its store reports (a revoked-and-regranted authorization, a restore).
-    /// The category clears ride the same switch: guarded once-per-install on
-    /// the render path, unconditional on a restatement, so a migration flag
+    /// not the store reads back equal, because rule 4's wall is restated on
+    /// the assumption that the daemon may not be enforcing what its store
+    /// reports (a revoked-and-regranted authorization, a restore). The
+    /// category clears ride the same switch: guarded once-per-install on the
+    /// render path, unconditional on a restatement, so a migration flag
     /// restored ahead of the settings it describes can never wedge them.
     @discardableResult
     public static func reconcile(now: Date = Date(), restating: Bool = false) -> Reconciled {
@@ -873,8 +873,8 @@ public enum Wall {
             // nothing else records: the wall stands exactly as it stood, which
             // from outside is indistinguishable from a reconcile that had
             // nothing to do. Which key, and what was in it, is exactly what
-            // the shipping log does not say (the c49bc17 doctrine: keep the
-            // event, redact the payload).
+            // the shipping log does not say (the doctrine: keep the event,
+            // redact the payload).
             if doors.isCorrupt {
                 log.error("reconcile: the door selections would not decode; wall left as it stands")
             }

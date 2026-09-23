@@ -99,10 +99,11 @@ import UIKit
         #expect(model.ledger.grants.isEmpty)
         #expect(SharedStore.loadLedger() == untouched)
         // The wall's own derivation, asked directly. (`arm`'s two schedules are
-        // the third thing §5 says is not touched yet, and they are the one part
-        // no test can see — they exist only inside DeviceActivity. They ride
-        // `wall.arm`, reached through `restateRelockLayers` after a commit,
-        // so an empty ledger is as close to that assertion as this gets.)
+        // the third thing the wait doctrine says is not touched yet, and they
+        // are the one part no test can see — they exist only inside
+        // DeviceActivity. They ride `wall.arm`, reached through
+        // `restateRelockLayers` after a commit, so an empty ledger is as close
+        // to that assertion as this gets.)
         #expect(!model.ledger.openDoors(at: .now, dayStart: model.dayStart)
             .contains(door.id))
         #expect(model.state(of: door) == .live)
@@ -132,8 +133,8 @@ import UIKit
 
         // Record-after restated as arithmetic. The grant is stamped when the
         // ink landed, not when the sentence was said, so none of its twenty
-        // minutes was spent standing in Silk — which is the "the re-lock gets
-        // more honest" bullet of §5. Under the record-before ordering
+        // minutes was spent standing in Silk — which is the wait doctrine's
+        // "the re-lock gets more honest". Under the record-before ordering
         // `issuedAt` would sit ~480 ms after `said`: the beat alone.
         #expect(grant.issuedAt.timeIntervalSince(said) >= Self.waitSeconds)
         #expect(abs(grant.expiresAt.timeIntervalSince(grant.issuedAt) - 20 * 60) < 1)
@@ -207,8 +208,8 @@ import UIKit
 
     // MARK: - (i) A door deleted while the ink is drawing
 
-    /// The last row of §7's table: the door is deleted mid-wait, so the turn is
-    /// dropped.
+    /// The last row of the wait doctrine's lifecycle table: the door is deleted
+    /// mid-wait, so the turn is dropped.
     ///
     /// Checked in `landWait` rather than left to the Validator, which would
     /// answer a deleted door with "Didn't get that." — true of the sentence and

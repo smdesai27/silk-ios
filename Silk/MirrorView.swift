@@ -167,7 +167,7 @@ struct MirrorView: View {
     /// pages. Every other visit finds the border already standing.
     /// UserDefaults, not the App Group store: this is the screen's own memory
     /// of having been seen, no other process has any claim on it, and losing it
-    /// costs one extra ceremony. Sanil's call (2026-08-25).
+    /// costs one extra ceremony.
     ///
     /// Asking and spending are two calls, not one. The leave path has to ask
     /// whether the *next* arrival will earn a ceremony so it can go bare in
@@ -255,9 +255,9 @@ struct MirrorView: View {
     /// element on this page is one day, and a total since install was the only
     /// thing here that could not be acted on.
     ///
-    /// The canon's second glyph is ⚿ (U+269F). No font iOS ships draws it, and it
-    /// lands as tofu in the design's own prototype too — visible in the handoff
-    /// render. The SF Symbol is the same key at the same optical size.
+    /// The canon's second glyph is ⚿ (U+269F). No font iOS ships draws it, and
+    /// it lands as tofu in the design's own prototype too. The SF Symbol is the
+    /// same key at the same optical size.
     ///
     /// Spoken as a sentence because it cannot be read as one: a glyph beside a
     /// numeral reaches VoiceOver as "key, 2".

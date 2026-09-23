@@ -1,8 +1,14 @@
 # Mirror
 
-Silk's second and final screen — the reflection. Now is about what's left;
-Mirror is about what happened. It is where the week is shown and where Silk
-proposes changes.
+> **Note, 19 September 2026.** The app's Mirror is the score, the week band and
+> today's unlocks, standing in a hedgerow. The equation, the attempts chart and
+> the proposal card were all dropped; the sections below that prescribe them are
+> marked where they stand. What follows is the mockup's record, not something to
+> build from.
+
+Silk's second screen and, in the mockups, its last — the reflection. Now is
+about what's left; Mirror is about what happened. It is where the week is
+shown, and where the mockups have Silk propose changes.
 
 ## Composition
 
@@ -35,9 +41,11 @@ proposes changes.
 </div>
 ```
 
-Order: **score → equation → chart → proposal → footnote**. Note there is no
-wordmark and no greeting — Mirror opens straight on the number, and it starts
-lower (`margin-top:96px`) to make room for that silence.
+Order: **score → equation → chart → proposal → footnote**. The app keeps the
+first and the last of those and drops the middle three; what it stacks is score
+→ week band → footnote. Note there is no wordmark and no greeting — Mirror
+opens straight on the number, and it starts lower (`margin-top:96px`) to make
+room for that silence.
 
 The second page dot is the active one.
 
@@ -50,6 +58,10 @@ same ink as the rest of the page — the live leaf belongs to Now.
 The label under the score is the **day name** (`Sunday`), not a unit.
 
 ## The equation
+
+> **Retired.** The app prints no equation: how the score is calculated is not
+> something it carries on the page (`Silk/MirrorView.swift`). The rule below is
+> the mockup's, and it no longer binds.
 
 ```html
 <div class="silk-eq silk-serif">82 = 100 − 12 attempts − 6 late</div>
@@ -64,6 +76,9 @@ don't show the score.
 
 ## The proposal
 
+> **Retired.** Nothing in the app draws a proposal card, on Mirror or anywhere
+> else.
+
 Mirror is the **only** place a proposal card appears. Silk noticed something in
 the week's data, and here is where it asks. One card, never a stack.
 
@@ -71,6 +86,9 @@ the week's data, and here is where it asks. One card, never a stack.
 
 `⚿ 1 · Jul 12` — the count of rules currently held and the date they were last
 changed. Serif, ink `.45`, centred, quiet.
+
+> **Changed.** The app's footnote is today's unlocks — how many times a door was
+> opened since the day began — not a count of rules.
 
 > **Known issue:** `⚿` (U+269F) is missing from most system fonts and renders as
 > a tofu box. Substitute a key or lock glyph that your target font actually has.
@@ -80,4 +98,5 @@ changed. Serif, ink `.45`, centred, quiet.
 - Don't add a date range picker, a month view, or history navigation. Mirror is
   the last seven days, full stop.
 - Don't add per-app breakdowns, pie charts, or "time saved" estimates.
-- Don't show the score without the equation.
+- Don't show the score without the equation. Retired with it: the app shows the
+  score alone.

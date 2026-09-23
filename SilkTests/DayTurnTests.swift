@@ -250,7 +250,7 @@ private func daysAgo(_ n: Int) -> Date {
 // through. What cannot be asserted there is the BINDING: that
 // `SharedStore.recordAttempt` really appends to the tail key, that every
 // reader really routes through the merge, and that the compaction gate's
-// `attemptsBlob()` — the array §3.5 takes its "at cap" reading from — really
+// `attemptsBlob()` — the array the "at cap" reading is taken from — really
 // sees the tail before anything has folded it.
 //
 // Hosted by the app, so `SharedStore` resolves against the real App Group;
@@ -301,9 +301,9 @@ private func daysAgo(_ n: Int) -> Date {
         #expect(SharedStore.attemptsMerged() == before, "a second fold double-counted a reach")
     }
 
-    /// §3.5's reading, taken through the live store. The compaction gate reads
-    /// the whole array to decide whether the blob is at its cap; that reading
-    /// must not depend on whether a fold has happened yet.
+    /// The observability reading, taken through the live store. The compaction
+    /// gate reads the whole array to decide whether the blob is at its cap;
+    /// that reading must not depend on whether a fold has happened yet.
     @Test func theObservabilityReadingIsTheSameBeforeAndAfterFolding() {
         SharedStore.wipeAll()
         let base = Date().addingTimeInterval(-7200)

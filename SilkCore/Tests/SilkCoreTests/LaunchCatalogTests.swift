@@ -108,8 +108,9 @@ import Testing
         #expect(LaunchCatalog.entry(named: "") == nil)
     }
 
-    /// The owner's five, pinned by name. The list is a product decision, and a
-    /// silent deletion of one of them is exactly the kind of thing a diff hides.
+    /// The five that widened the setup list, pinned by name. The list is a
+    /// product decision, and a silent deletion of one of them is exactly the
+    /// kind of thing a diff hides.
     @Test func theFiveTheOwnerChoseAreInIt() {
         let displays = Set(LaunchCatalog.entries.map(\.display))
         for name in ["Discord", "Tinder", "Hinge", "Temu", "Amazon"] {

@@ -1,7 +1,15 @@
 # Command bar
 
+> **Note, 19 September 2026.** This describes the July-2026 mockup, not the app
+> as it ships now — see the note at the top of [`README.md`](../../../README.md).
+> The shipped bar carries no placeholder — an empty hairline asks nothing —
+> and it doubles as the conversation's handle, rising on focus and docking
+> once a thread is live (`Silk/Chrome.swift`).
+
 The single input in Silk. Everything the user wants to change — rules, budgets,
-down hours, grants — is said here in words. There is no settings screen behind it.
+down hours, grants — is said here in words. The shipped app also has a Settings
+page that sets the same few values on a wheel; in the mockups the bar is the
+only way in.
 
 ## Markup
 
@@ -43,7 +51,8 @@ The command bar is usually accompanied by page dots, which sit below it:
 </div>
 ```
 
-Two dots — Now and Mirror. Silk is two screens deep and should stay that way.
+Two dots in the mockups — Now and Mirror. The shipped app has three: Settings
+sits after Mirror.
 
 ## Don't
 

@@ -266,8 +266,9 @@ struct DoorRow: View {
 // Command bar
 // ============================================================
 
-/// The only input in Silk: budgets, down hours, grants — all of it is said
-/// here, in a sentence. There is no settings screen behind it.
+/// The one place a rule is spoken: budgets, down hours, grants — all of it is
+/// said here, in a sentence. Settings sets a few of the same values on a wheel
+/// instead of saying them.
 ///
 /// A hairline on the paper, never a filled field: a filled input would make
 /// this a chat app, which is exactly what it isn't. It should recede until

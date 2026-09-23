@@ -151,9 +151,10 @@ public enum SilkStrings {
     /// Why it replaces the bare constant everywhere it can: "Applies tomorrow."
     /// names nothing. It is byte-identical after a budget raise, a shortened
     /// night and a cleared ceiling, and a gesture that visibly changes nothing —
-    /// which every loosening is, by rule 3 — answered by a sentence carrying no
-    /// user data at all is indistinguishable from a dropped command. Every other
-    /// receipt in the app states what moved; this one now does too.
+    /// which every loosening is, by README rule 3 — answered by a sentence
+    /// carrying no user data at all is indistinguishable from a dropped
+    /// command. Every other receipt in the app states what moved; this one now
+    /// does too.
     ///
     /// The constant stays, and this falls back to it, because a loosening can
     /// still be one no surface can summarise (the wall itself). Saying "Tomorrow:"

@@ -17,11 +17,11 @@ private let dayEnd = at(6, 11, 7)
 /// `switchCost`: the term that lets the score tell "fifteen minutes" from
 /// "five more, five more, five more".
 ///
-/// The coefficient is score-weighting §4.4's, and §4.4 is candid that it is a
-/// calibration constant with no citation behind it. These tests pin the
-/// *shape* — ordering, the cap, and the zero cases — rather than defending the
-/// number, because the number is expected to move once `allowance` is
-/// calibrated against a real device day (growth-decision verdict 6).
+/// The coefficient is the score-weighting research's, and that research is
+/// candid that it is a calibration constant with no citation behind it. These
+/// tests pin the *shape* — ordering, the cap, and the zero cases — rather than
+/// defending the number, because the number is expected to move once
+/// `allowance` is calibrated against a real device day.
 @Suite struct FragmentationTests {
 
     /// The headline. Same door, same fifteen minutes, same day — bought once
@@ -76,9 +76,10 @@ private let dayEnd = at(6, 11, 7)
                                     lateReaches: 0, unlocks: 4) == 74)
     }
 
-    /// §4.4 sets `c` so fragmentation's realistic range is about a third of
-    /// the term it is ordered against. On the median day it names — 40 granted
-    /// minutes, eight sessions — it lands there against the minutes term.
+    /// The score-weighting research sets `c` so fragmentation's realistic range
+    /// is about a third of the term it is ordered against. On the median day it
+    /// names — 40 granted minutes, eight sessions — it lands there against the
+    /// minutes term.
     /// This is the one assertion that would notice `c` being changed without
     /// the reasoning behind it being revisited.
     @Test func theCoefficientKeepsItsStatedOrdering() {

@@ -84,16 +84,15 @@ public enum Caps {
     /// `doorCaps`' order is nondeterministic across launches.
     ///
     /// **The live grant outranks the ceiling, and that ordering is the whole
-    /// point.** `state(of:)` puts a running grant ahead of cap exhaustion (§2.6
-    /// rule 1) and the Validator's `.spend` arm does the same (§4.2 Correction
-    /// 2), for the same reason: the wall really is down, `openDoors` holds the
-    /// door, the row draws `· till 10:30` and the bar answers `.restated`. A
-    /// receipt that said "closed until 7:00" in that second would be the fourth
-    /// surface, contradicting the other three, and it would be the only one the
-    /// user is actually shown. So the closed sentence is spoken only when the
-    /// ceiling is what shuts the door *right now*; otherwise the receipt names
-    /// the ceiling, which is what actually moved and what the door will hold
-    /// from the next ask.
+    /// point.** `state(of:)` puts a running grant ahead of cap exhaustion and
+    /// the Validator's `.spend` arm does the same, for the same reason: the wall
+    /// really is down, `openDoors` holds the door, the row draws `· till 10:30`
+    /// and the bar answers `.restated`. A receipt that said "closed until 7:00"
+    /// in that second would be the fourth surface, contradicting the other three,
+    /// and it would be the only one the user is actually shown. So the closed
+    /// sentence is spoken only when the ceiling is what shuts the door *right
+    /// now*; otherwise the receipt names the ceiling, which is what actually
+    /// moved and what the door will hold from the next ask.
     public static func receipt(for proposed: PolicyState, movedFrom previous: PolicyState,
                                ledger: GrantLedger, now: Date, dayStart: Date,
                                calendar: Calendar = .current) -> String? {

@@ -1,5 +1,21 @@
 # Building with Silk
 
+> **Note, 19 September 2026.** This bundle is Silk's design language as
+> extracted from the `silk-ds/` mockups on 28 July 2026. It is what the mockups
+> contain, not what the app ships now. The app has since moved on in four
+> places:
+>
+> - Now, Mirror and Settings are three pager pages, not two screens.
+> - The aperture left Now. Setup is the one place left that draws it, as the
+>   pane the time wheels sit on; Settings carries the down-hours window as a
+>   row that opens a wheel.
+> - Mirror dropped the equation, the attempts chart and the proposal card, and
+>   gained a hedgerow and a today's-unlocks footnote.
+> - The night text ramp was lifted onto a WCAG AA floor — paper `.55`, ink `.65`
+>   by day — so the low end of the ramps below is not a text colour.
+>
+> `Silk/DesignSystem.swift` and the views beside it are the current truth.
+
 Silk is a **CSS design language, not a component library.** There is no
 `_ds_bundle.js` and nothing to import — you build with plain HTML and the
 `silk-*` classes defined in `styles.css`. Every class below is real and
@@ -60,8 +76,8 @@ paper ramps run `--silk-ink-92 … --silk-ink-055` and `--silk-paper-92 … --si
 4. **Nothing is pure white or black,** and there is no semantic colour — no red
    error, no amber warning. Things recede down the ramp instead.
 
-Silk has no bold (nothing above weight 500), no icons in lists, no tab bar, and
-only two screens. When something new needs a home, it goes on Mirror.
+Silk has no bold (nothing above weight 500), no icons in lists, and no tab bar.
+It is three pages deep — Now, Mirror and Settings — reached by swiping.
 
 ## Where the truth lives
 

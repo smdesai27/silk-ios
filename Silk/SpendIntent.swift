@@ -124,7 +124,7 @@ struct SpendIntent: AppIntent {
             // `perform` returns, and the opened door is unshielded, so its own
             // shield never renders — a grant recorded here with no schedule
             // behind it keeps Instagram open past 22:00 until Silk is opened
-            // by hand. That is the fail-OPEN invariant 4 forbids.
+            // by hand. That is the fail-OPEN rule 4 forbids.
             //
             // Write the ledger first and take the grant back out on failure,
             // rather than arming first, because this ordering has no stale

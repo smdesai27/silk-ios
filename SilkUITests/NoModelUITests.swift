@@ -115,8 +115,8 @@ final class NoModelUITests: SilkWalk {
 
     /// Any element whose spoken label begins with `prefix` — the door rows carry
     /// their whole sentence as one accessibility label on the button
-    /// (NowView.swift:258), and a query that guessed the element type would miss
-    /// it on the releases where a styled Button reads as something else.
+    /// (`NowView.doorLabel`), and a query that guessed the element type would
+    /// miss it on the releases where a styled Button reads as something else.
     @MainActor
     private func labelled(_ app: XCUIApplication, beginsWith prefix: String) -> XCUIElement {
         app.descendants(matching: .any)

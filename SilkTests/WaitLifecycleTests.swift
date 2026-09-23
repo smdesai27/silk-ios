@@ -75,7 +75,8 @@ import UIKit
     // MARK: - (e) A door already open is not made to pay again
 
     /// `.restated` raises no wait — "the door is already open, she can reach it
-    /// from the home screen, so a wait there gates nothing" (wait.md §5).
+    /// from the home screen, so a wait there gates nothing", in the wait
+    /// doctrine's words.
     ///
     /// The wait is pinned at thirty seconds for the second ask, which is the
     /// whole point of the case: if `.restated` fell through to `raiseWait` the
@@ -411,9 +412,9 @@ import UIKit
     // check and would keep passing if `startClock()` were deleted from it.
     //
     // The minimal change that makes it testable is one word — drop `private`
-    // from
+    // from `AppModel`'s own declaration
     //
-    //     @ObservationIgnored private var clock: Task<Void, Never>?   // :102
+    //     @ObservationIgnored private var clock: Task<Void, Never>?
     //
     // after which the honest pair is observable synchronously, and neither half
     // restates the other:

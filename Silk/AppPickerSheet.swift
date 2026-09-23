@@ -149,8 +149,8 @@ struct AppPickerSheet: View {
     }
 
     /// The numeral is locked — New York serif, tabular — and that is not a rule
-    /// about hero numbers, it is a rule about digits (canon.md, Form). This line
-    /// was setting "2 picked — tap one to remove." and "4 apps" wholly in sans,
+    /// about hero numbers, it is the canon's rule about digits. This line was
+    /// setting "2 picked — tap one to remove." and "4 apps" wholly in sans,
     /// which is the only place in Silk a count is drawn in the sans face.
     ///
     /// Fixed by composition rather than by a second string: both counting forms

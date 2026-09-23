@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
 # All three suites, locally — the same commands .github/workflows/ci.yml runs on
-# a runner. CI is the intended authority; until Actions is enabled for the
-# repository it has never run, and `scripts/ci.sh all` green on the exact tree
-# is the gate every build has actually passed (scripts/release.sh enforces
-# it). .githooks/pre-push catches the cheap failures before they leave the
-# machine.
+# a runner. The workflow is the authority: it runs on every pull request and
+# every push to main. This script is the same lanes on your own machine, and
+# `scripts/ci.sh all` green on the exact tree is what scripts/release.sh refuses
+# to archive without. .githooks/pre-push catches the cheap failures before they
+# leave the machine.
 #
 #   scripts/ci.sh              all three suites + the Release build (~25 min)
-#   scripts/ci.sh spine        SilkCore only (~15 s, no simulator, runs on Linux)
+#   scripts/ci.sh spine        SilkCore only (~4 s, no simulator, runs on Linux)
 #   scripts/ci.sh unit         SilkTests only — the app's own logic (~1 min)
 #   scripts/ci.sh ui           SilkUITests only (~5 min)
 #   scripts/ci.sh release      Release compiles at all (~4 min, no simulator)
@@ -19,11 +19,19 @@
 # pixel and whose windows are minutes long. SilkTests is hosted by the app, so it
 # reaches them in milliseconds. Ordered by what a failure costs to learn.
 #
-# The spine's "three seconds" became fifteen when the wait's frame-budget bounds
-# arrived: a timing test has to run its loops enough times for a clock to see
-# them. That is the price of the only assertions in the repo that can fail on
-# "buttery smooth" — the wait doctrine's frame budget says what they hold and,
-# just as importantly, what they cannot.
+# The spine is seconds rather than milliseconds because of how much text it
+# parses. Its two most expensive tests are ratios, and a ratio has to run both
+# its arms enough times for a clock to see them: `hugeInputStaysCheapAndSilent`
+# in StressTests and `aHugePasteIsSilentAndCheap` in SpendShapeAdversarialTests
+# each parse ten thousand words per arm, seven rounds over. Skipping those two
+# takes about a third off the run; the thousand tests behind them are the rest.
+# The wait's own frame-budget bounds are about one percent of it, and worth
+# knowing about anyway: they and HotPathCostTests are the assertions here that
+# can fail on "buttery smooth", and PerformanceMeasurement.swift says what a
+# bound like that holds and, just as importantly, what it cannot.
+#
+# The seconds above are with SilkCore/.build warm; a fresh clone pays the
+# SwiftPM compile first, which is minutes.
 #
 # If you change what runs here, change .github/workflows/ci.yml to match.
 
@@ -144,9 +152,10 @@ run_release() {
   # build, test, run and analyze, and neither test invocation above passes
   # -configuration — so without this, the Release-only settings are first
   # exercised by an App Store archive, which is the worst possible place to
-  # learn one is wrong. Specifically unguarded otherwise: CODE_SIGN_IDENTITY =
-  # Apple Distribution, the Release-only -file-prefix-map, wholemodule -O, and
-  # every `#if DEBUG` block — which compile *out* here and nowhere else.
+  # learn one is wrong. Specifically unguarded otherwise: every setting under
+  # `configs: Release` in project.yml — -file-prefix-map, ENABLE_TESTABILITY NO,
+  # the asset-catalog optimization — plus wholemodule -O and every `#if DEBUG`
+  # block, which compile *out* here and nowhere else.
   #
   # Build, not test: the suites already ran under Debug. The question this asks
   # is only whether Release still compiles and links.
@@ -185,11 +194,11 @@ fi
 # Three of the four lanes are built out of xcodebuild, which exists only on a
 # Mac. The spine is not: SilkCore is a plain SwiftPM package importing
 # Foundation and nothing else, so `swift test` answers for it on Linux exactly
-# as it does here — 1,059 of the repo's 1,196 cases, one short of the spine's whole
-# 1,060 because a single Darwin-shaped ratio names itself and skips. That is
-# deliberate, and .github/workflows/ci.yml has a job holding it true: it is what
-# lets the tests that matter most run in a container or a cloud session instead
-# of waiting on a runner.
+# as it does here — 1,060 of the repo's 1,200 tests, one short of the spine's
+# whole 1,061 because a single Darwin-shaped ratio names itself and skips. That
+# is deliberate, and .github/workflows/ci.yml has a job holding it true: it is
+# what lets the tests that matter most run in a container or a cloud session
+# instead of waiting on a runner.
 #
 # Without this check those three fail as `xcodebuild: command not found` inside
 # a redirected log, which reads like a broken script rather than a machine that
@@ -197,7 +206,7 @@ fi
 darwin_only_skipped=0
 if ! command -v xcodebuild >/dev/null 2>&1; then
   case "$what" in
-    spine) ;;
+    spine) darwin_only_skipped=1 ;;
     all)
       # Refused rather than quietly narrowed: `all` is what scripts/release.sh
       # asks for, and an exit 0 that ran the spine alone would archive a build
@@ -221,7 +230,7 @@ case "$what" in
   ui)      run_ui ;;
   release) run_release ;;
   all)
-    # Cheapest answer first, every time. The spine is three seconds, the unit
+    # Cheapest answer first, every time. The spine is four seconds, the unit
     # suite about a minute (most of it the app build the walks need anyway),
     # the walks five. A red one already refuses the push, so nothing below it
     # is worth paying for.

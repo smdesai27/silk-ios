@@ -1,5 +1,10 @@
 # Type
 
+> **Note, 19 September 2026.** The sans/serif split still holds, and the
+> greeting is still serif. The other two sentences named below — the proposal
+> ask and the equation — went with the components that carried them, as did
+> the chart's title and its ticks; those four rows are marked in the table.
+
 Two voices, and the split between them is the strongest signal in Silk.
 
 - **Sans** (`--silk-font-sans`, SF Pro) is the *interface*: app names, labels,
@@ -20,15 +25,15 @@ so digits hold their width as a number ticks down. Never set serif via
 | Hero numeral | serif | 92px / lh 1 | `-.045em` | `--silk-ink` |
 | Shield numeral | serif | 40px | `-.02em` | `--silk-ink` |
 | Greeting | serif | 21px | `-.005em` | `--silk-ink-90` |
-| Ask (proposal) | serif | 17px | — | `--silk-ink-92` |
+| Ask (proposal), retired | serif | 17px | — | `--silk-ink-92` |
 | Body / door name | sans | 15px | `-.005em` | `--silk-ink-84` |
-| Equation | serif | 14.5px | `.005em` | `--silk-ink-58` |
+| Equation, retired | serif | 14.5px | `.005em` | `--silk-ink-58` |
 | Door time | serif | 14px | — | `--silk-ink-50` |
 | Observation | sans | 13.5px | — | `--silk-ink-70` |
 | Label | sans | 12.5px | `.015em` | `--silk-ink-52` |
-| Chart title | sans | 12px | `.04em` | `--silk-ink-48` |
+| Chart title, retired | sans | 12px | `.04em` | `--silk-ink-48` |
 | Wordmark | sans 500 | 11px | `.34em` | `--silk-ink-62` |
-| Chart tick | sans | 10px | `.02em` | `--silk-ink-42` |
+| Chart tick, retired | sans | 10px | `.02em` | `--silk-ink-42` |
 
 Two patterns run through the whole table: **display type tightens**
 (`-.045em` on the hero) and **small type opens** (`.34em` on the wordmark). Type

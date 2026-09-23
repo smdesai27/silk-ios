@@ -69,12 +69,12 @@ final class ToastCenter {
     private static let plainLifetime: Duration = .milliseconds(2200)
 
     /// An action buys longer because it asks for a decision, not just a glance.
-    /// The prototype's 4.5s stands as the default, but the window is a
-    /// setting now — the third row on Settings — so the owner sets it here
-    /// and every action-bearing toast lives exactly that long. It is the undo
-    /// window's own number, and the second thing it now bounds — "Apply now."
-    /// — deserves it for the identical reason: it is a decision on screen, and
-    /// the receipt is the only place it is offered at the point of the gesture.
+    /// The prototype's 4.5s stands as the default, but the window is a setting
+    /// now — the third row on Settings — so it is set there, and every
+    /// action-bearing toast lives exactly that long. It is the undo window's own
+    /// number, and the second thing it now bounds — "Apply now." — deserves it
+    /// for the identical reason: it is a decision on screen, and the receipt is
+    /// the only place it is offered at the point of the gesture.
     var undoLifetime: Duration = .milliseconds(4500)
 
     /// The general form: words, one labelled action, and the name that action

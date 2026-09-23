@@ -343,12 +343,12 @@ private struct Wheel: View {
     /// below it on the stored value, because the ink is keyed on `selection` and
     /// only the scroll was wrong.
     ///
-    /// That disagreement is the second cause of a bug the owner reported. A door
-    /// capped at 10 min opened with the frame over "No cap"; the backdrop was
-    /// tapped by someone who could see she had chosen No cap; and because no
-    /// seat had actually moved the overlay correctly reported a dismissal, so
-    /// nothing committed and nothing was said. "I set a cap it works, but when I
-    /// try to go back to no cap it doesn't work."
+    /// That disagreement is the second cause of a reported bug. A door capped at
+    /// 10 min opened with the frame over "No cap"; the backdrop was tapped by
+    /// someone who could see she had chosen No cap; and because no seat had
+    /// actually moved the overlay correctly reported a dismissal, so nothing
+    /// committed and nothing was said. "I set a cap it works, but when I try to
+    /// go back to no cap it doesn't work."
     ///
     /// nil → selection IS a change, so the opening seat now rides the one
     /// mechanism that always worked: the same `centred` write the row tap and

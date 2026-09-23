@@ -1,5 +1,11 @@
 # Now (down hours)
 
+> **Note, 19 September 2026.** This describes the July-2026 mockup, not the app
+> as it ships now — see the note at the top of [`README.md`](../../../README.md).
+> Neither of the two swaps below survived intact: the hero goes on counting
+> after dark and ☾ moved into the greeting, and there is no aperture on Now to
+> step up (`Silk/NowView.swift`).
+
 The same screen as [Now (day)](../NowDay/NowDay.prompt.md), after the down-hours
 window opens. Identical structure — add `.silk-night` to `.silk-screen` and swap
 two things.
@@ -34,9 +40,14 @@ Everything else — greeting ("Good evening."), aperture, doors, command bar, do
 
 ## The inversion
 
-Every other element steps down: door names to paper `.36`, times to `.26`,
-rules to `.05`, the ensō from leaf to dusk blue. The **aperture steps up** — it
-becomes the screen's single lit object, glowing open-sky onto the lacquer.
+> **Changed.** Now has no aperture, so nothing on the night screen steps up.
+> The text still steps down and the ensō still crosses from leaf to dusk blue,
+> but the inversion this section is named for is not something the app does.
+
+Every other element steps down: door names to paper `.36`, times to `.26` in
+the mockup — the app lifts both onto the AA floor, `.61` and `.56` — rules to
+`.05`, the ensō from leaf to dusk blue. The **aperture steps up** — it becomes
+the screen's single lit object, glowing open-sky onto the lacquer.
 
 That is the whole idea of the night screen. During the day the aperture is a
 recess you barely notice; at night it is the only thing awake, and it is the
@@ -47,8 +58,9 @@ Because both states share the same markup and the aperture transitions over
 
 ## Don't
 
-- Don't brighten anything to "keep it usable". Night is deliberately harder to
-  read; that is the feature.
+- Don't push night text below the AA floor to make it quieter. Night recedes,
+  but text holds paper `.55` (ink `.65` by day); non-text marks — rules,
+  hairlines, the dots — keep their token alphas.
 - Don't add a "wake up" or override control. The command bar still works — that
   is enough.
 - Don't switch on `prefers-color-scheme`. Silk's night follows the user's

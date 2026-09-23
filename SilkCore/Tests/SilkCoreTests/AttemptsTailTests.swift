@@ -8,7 +8,7 @@ import Testing
 // A shield render may not re-encode a 2000-entry `[Date]` to add one
 // timestamp, so `SharedStore.recordAttempt` appends to a small tail key and
 // the app folds it back later. That split is only safe while "the attempts"
-// means the same array whether or not the fold has run — and §3.5's
+// means the same array whether or not the fold has run — and the
 // observability rule is the reader that could tell, because it turns on the
 // blob sitting AT its cap and on which instant is oldest in it. A merge that
 // trimmed differently from the fold would move a real day's verdict by nothing
@@ -76,7 +76,8 @@ private func attempts(_ count: Int, from offset: Int = 0) -> [Date] {
         #expect(DayLog.foldedAttempts(blob: blob, tail: []) == blob)
     }
 
-    /// The reading §3.5 actually makes, taken on both sides of a fold.
+    /// The reading the observability rule actually makes, taken on both sides
+    /// of a fold.
     ///
     /// A blob at its cap whose oldest entry is newer than the day being
     /// summarised makes `reaches` a floor rather than a count, and the day is

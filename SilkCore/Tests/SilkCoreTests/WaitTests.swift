@@ -395,8 +395,8 @@ private let noon = Date(timeIntervalSinceReferenceDate: 800_000_000)
         #expect(granted == 15)   // 40 − 25, not the 40 the first pass found
     }
 
-    /// §8.1 of the design doc, the thing it names as most likely to hurt: she
-    /// can pay the wait and be refused at the end of it. Written down there and
+    /// The risk the wait doctrine names as most likely to hurt: she can pay
+    /// the wait and be refused at the end of it. Written down there and
     /// asserted nowhere until now.
     @Test func downHoursThatBeganDuringTheWaitRefuseTheAskShePaidFor() {
         let door = Door(name: "Reddit")
@@ -686,9 +686,10 @@ private struct SeededRNG {
 
     /// The window measures the LAST park, not the first, because `watch` clears
     /// `pausedAt`. Two ninety-second absences with a glance between them put the
-    /// ask three minutes from its birth and still not stale — which is §7's rule
-    /// ("back within 2 min resumes from exactly where it stopped") applied per
-    /// departure, and the widest the trap it closes can really open.
+    /// ask three minutes from its birth and still not stale — which is the wait
+    /// doctrine's rule ("back within 2 min resumes from exactly where it
+    /// stopped") applied per departure, and the widest the trap it closes can
+    /// really open.
     @Test func theWindowRunsFromTheLastParkAndNotTheFirst() {
         var w = ask()
         w.watch(from: 0)

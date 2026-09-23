@@ -17,8 +17,8 @@ import XCTest
 /// different place from `NoModelUITests`') and carried none of the comments
 /// naming the failures each helper exists for. The capture-specific parts — the
 /// slider drag, the settle, the PNG attachment — are still this file's alone.
-//  Re-running the whole set, end to end. Nothing here is inferred from the
-//  conversation that first produced the images; this is the recipe.
+//  Re-running the whole set, end to end — the recipe, not a reconstruction of
+//  how the shipped images were first made.
 //
 //    W=$(git rev-parse --show-toplevel)
 //    U=$(xcrun simctl create "Silk Shots 6.9" \

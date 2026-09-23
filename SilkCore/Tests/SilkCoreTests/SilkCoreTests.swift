@@ -819,13 +819,13 @@ private func parseAndValidate(_ text: String, state: PolicyState = makeState(),
         // Settings' two wheels seat eight starts and eight ends: 64 windows,
         // 4032 moves between them. Under the length test 280 of those vanished
         // as .unchanged and another 644 applied instantly though they handed
-        // minutes back. The seats below mirror `downStartTable` and
-        // `downEndTable` in the app target (Silk/AppModel.swift:544-545,
-        // specified by the handoff mockup), which SilkCore
-        // cannot import — move those tables and this sweep stops covering the
-        // picker it names, so it has to be brought back into line by hand. The
-        // oracle is the day itself, the literal set of blocked minutes, so it
-        // cannot go wrong in the same direction as the arc arithmetic it judges.
+        // minutes back. The seats below mirror `AppModel.downStartTable` and
+        // `AppModel.downEndTable` in the app target (specified by the handoff
+        // mockup), which SilkCore cannot import — move those tables and this
+        // sweep stops covering the picker it names, so it has to be brought
+        // back into line by hand. The oracle is the day itself, the literal set
+        // of blocked minutes, so it cannot go wrong in the same direction as
+        // the arc arithmetic it judges.
         let windows = (0..<8).flatMap { s in
             (0..<8).map { e in
                 DownHours(start: TimeOfDay(minutesSinceMidnight: 20 * 60 + s * 30),

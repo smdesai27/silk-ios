@@ -9,11 +9,12 @@ import Foundation
 // `SpendIntent` shares NO code with the wait. The wait lives in `AppModel`
 // (`raiseWait` … `landWait`), the intent never builds one, and there is no
 // shared instance for it to reach — `AppModel()` is written exactly once in the
-// whole app, at `SilkApp.swift:7`, inside the scene. So the assertion of the
-// obvious shape — perform the intent, expect `model.waiting == nil` — is a
-// tautology. It would be asked of a model the intent cannot touch, it would
-// pass for a reason unrelated to the thing it claims to check, and no plausible
-// change could ever make it fail. It is deliberately not written here.
+// whole app, in `SilkApp`'s `@State` property, inside the scene. So the
+// assertion of the obvious shape — perform the intent, expect
+// `model.waiting == nil` — is a tautology. It would be asked of a model the
+// intent cannot touch, it would pass for a reason unrelated to the thing it
+// claims to check, and no plausible change could ever make it fail. It is
+// deliberately not written here.
 //
 // What can fail is written instead, and it is the observable content of "never
 // raises a wait" from outside the model:

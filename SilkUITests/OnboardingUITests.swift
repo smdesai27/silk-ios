@@ -914,8 +914,8 @@ final class OnboardingUITests: SilkWalk {
     /// proved by `testBudgetWheelDismissedUntouchedKeepsAnOffGridValue`, where
     /// the value is off-grid and a commit would visibly move it, and by
     /// `CapWheelSeatTests` in the spine. Nothing off-grid is reachable on the
-    /// cap wheel until the grammar lands (PR 2), so the cap analogue of the
-    /// budget walk belongs to that PR.
+    /// cap wheel until the cap grammar lands, so the cap analogue of the budget
+    /// walk belongs to whatever change lands it.
     ///
     /// The app is put down and brought back so no earlier toast is left standing
     /// to confuse the absence being asserted — which is what pins the storage

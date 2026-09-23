@@ -383,11 +383,11 @@ final class AppModel {
     /// The closed-day records, decoded and sorted once and then held — the
     /// same bargain `weekAttemptBuckets` strikes with the attempts blob, under
     /// the counter `SharedStore.daysRevision` keeps for exactly this. Mirror's
-    /// body reached `closedWeekScores` — and `lastClosedScore` and `daysHeld`
-    /// through it — several times a pass, and each one was a full decode and
-    /// sort of the whole blob. (The body now takes the band once and hands it
-    /// down; this cache is what makes the *first* of those calls cheap, and the
-    /// two answer different halves of the same waste.)
+    /// body reached `closedWeekScores` — and the last closed day's score and
+    /// `daysHeld` through it — several times a pass, and each one was a full
+    /// decode and sort of the whole blob. (The body now takes the band once
+    /// and hands it down; this cache is what makes the *first* of those calls
+    /// cheap, and the two answer different halves of the same waste.)
     ///
     /// The revision is read BEFORE the blob, as the attempts cache reads its
     /// own: a record written between the two reads then shows as a mismatch on
@@ -419,10 +419,9 @@ final class AppModel {
     /// **Days held** — the accumulating hero, over closed observed days only.
     ///
     /// Not yet on screen. `MirrorView` still draws the last closed day's score
-    /// (the last element of `closedWeekScores`), and the
-    /// swap is deliberately not made here: growth-metaphor §10 puts the
-    /// re-lock device test and the daily heartbeat ahead of every drawing,
-    /// and mirror-continuity §9.5 calls `DayLog.allowance` provisional until
+    /// (the last element of `closedWeekScores`), and the swap is deliberately
+    /// not made here: the re-lock device test and the daily heartbeat come
+    /// ahead of every drawing, and `DayLog.allowance` stays provisional until
     /// it is calibrated from a real device day. Reading it now means the
     /// records accumulate from this build forward, so the calibration has
     /// data to read when the gate opens.
@@ -450,7 +449,7 @@ final class AppModel {
                                                            from: dayStart, to: dayEnd))
     }
 
-    /// The shipped equation (canon.md: "82 = 100 − 12 attempts − 6 late"),
+    /// The shipped equation, 100 less a point per attempt and a point per late,
     /// kept ONLY as the fallback for a closed day that has no record — a day
     /// from before the day log shipped, or one whose monitor never vouched.
     /// It has no term for granted minutes ("the shipped inversion"); a day
@@ -530,14 +529,14 @@ final class AppModel {
     private(set) var shield: ShieldPreview?
     struct ShieldPreview: Equatable { var title: String; var app: String }
 
-    /// The wall fades in and never slams (canon.md), and the curve is set here
-    /// rather than by an `.animation(_:value:)` on the root's stage. That
-    /// modifier is not scoped to the child whose value changed: it stamps
-    /// `transaction.animation` onto every descendant for the update pass, so
-    /// raising the shield handed the same 0.45 to the UIPageViewController-backed
-    /// pager, both GeometryReader-scaled page columns, the bar, the dots and the
-    /// thread on the frame the veil was inserted. Raising an overlay is a thing
-    /// the model does, so the model states what it costs.
+    /// The wall fades in and never slams, and the curve is set here rather than
+    /// by an `.animation(_:value:)` on the root's stage. That modifier is not
+    /// scoped to the child whose value changed: it stamps `transaction.animation`
+    /// onto every descendant for the update pass, so raising the shield handed
+    /// the same 0.45 to the UIPageViewController-backed pager, both
+    /// GeometryReader-scaled page columns, the bar, the dots and the thread on
+    /// the frame the veil was inserted. Raising an overlay is a thing the model
+    /// does, so the model states what it costs.
     func raiseShield(for door: Door) {
         let raised = shieldPreview(for: door)
         withAnimation(Silk.motion(Silk.Motion.shield)) { shield = raised }
@@ -1541,8 +1540,7 @@ final class AppModel {
             // be parked and no gesture chained them; caps take it to 3 + N (up
             // to nine) and make chaining ordinary — park a raise on TikTok, then
             // clear the cap on Instagram, and the first ask is gone. Knowingly
-            // unfixed (spec §6.9); surfacing the displacement in the reply is
-            // the recommended follow-up, and PR 4 lists it under Build status.
+            // unfixed: the reply should name the displaced ask, and does not yet.
             //
             // What is NOT left standing is the second loss that hid behind it.
             // The offer below used to restore blind, so tapping a displaced one
@@ -1770,7 +1768,7 @@ final class AppModel {
     /// that wheel that could set it to 30. One silent wrong write traded for one
     /// silently dead control. Whether a wheel was touched is a fact only the
     /// wheel has; asking it is the fix an index comparison structurally cannot
-    /// be. (Spec §6.2 prescribes the index form and is amended.)
+    /// be. (An index comparison was the original design; this replaces it.)
     func commitPicker(_ kind: PickerKind, picks: [Int]?) {
         // Only the overlay's teardown rides the overlay's curve. Everything
         // below this line is a policy commit, a wall reconcile and a toast —
@@ -2064,21 +2062,21 @@ final class AppModel {
 
     /// Remove: the door leaves the policy AND its selection, and the wall is
     /// re-applied — one motion, mirroring completeSetup's never-half-saved
-    /// ordering. Instant by decision (the task's call; see the receipt's
-    /// undo): removal reads as tighten-adjacent housekeeping.
+    /// ordering. Instant by decision, with the receipt's undo behind it:
+    /// removal reads as tighten-adjacent housekeeping.
     ///
     /// **Known exemption from the polarity rule, accepted:** removing a capped
     /// door and adding it back is an instant, keyless uncapping. Doors are keyed
-    /// by UUID (spec §2.1, deliberately, so a re-added name cannot inherit a
-    /// ceiling the user never set on it), and both halves are instant, so the
-    /// door returns with a fresh id and no cap while clearing that cap from the
-    /// wheel would have parked until tomorrow. It is not the loosening it looks
-    /// like from the outside — between the two taps the app is not blocked at
-    /// all, so the re-add is strictly a tightening on the state it starts from —
-    /// but the two-tap route does reach a place rule 3 makes the one-tap route
-    /// wait for. Closing it means keying a removed cap by name for the rest of
-    /// the Silk day, which is a model change and belongs in the spec first.
-    /// Recorded here; PR 4 lists it under Build status.
+    /// by UUID — deliberately, so a re-added name cannot inherit a ceiling the
+    /// user never set on it — and both halves are instant, so the door returns
+    /// with a fresh id and no cap while clearing that cap from the wheel would
+    /// have parked until tomorrow. It is not the loosening it looks like from
+    /// the outside — between the two taps the app is not blocked at all, so the
+    /// re-add is strictly a tightening on the state it starts from — but the
+    /// two-tap route does reach a place rule 3 makes the one-tap route wait
+    /// for. Closing it means keying a removed cap by name for the rest of the
+    /// Silk day, which is a model change and belongs in the spec first.
+    /// Recorded here, and not yet acted on.
     ///
     /// The undo is surgical: the one door back at its old seat, its one
     /// selection back in the dictionary. The undo window runs up to five
@@ -2538,9 +2536,9 @@ final class AppModel {
         // neither see nor undo, and it is invisible: the footnote counts today's
         // unlocks off the ledger, and a key tap that changes no policy opens no
         // door, so nothing on any page would move. The pending stays parked.
-        // `pendingChange` hides the button before it comes to this; the guard is
-        // here because the key will also arrive over NFC, where nothing consults
-        // the screen.
+        // `pendingLoosening` hides the button before it comes to this; the
+        // guard is here because the key will also arrive over NFC, where
+        // nothing consults the screen.
         guard next != policy else { return }
         policy = next
         park(nil, baseline: nil)

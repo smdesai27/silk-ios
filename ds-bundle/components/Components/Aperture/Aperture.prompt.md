@@ -1,5 +1,11 @@
 # Aperture
 
+> **Note, 19 September 2026.** This describes the July-2026 mockup, not the app
+> as it ships now — see the note at the top of [`README.md`](../../../README.md).
+> Setup is the one place the app draws it, with the time wheels laid over an
+> empty pane (`Silk/OnboardingView.swift`), so there it is a control rather
+> than a label and the night face below is never drawn at all.
+
 The down-hours window — a piece of sky held by the page. It shows the sleep
 window and is the one object in Silk with real material depth: everything else
 is ink on paper, this is a recessed pane of glass.

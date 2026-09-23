@@ -6,12 +6,13 @@ import UIKit
 
 // **An undo applies whole or not at all.**
 //
-// Every ledger undo closure snapshots the ledger wholesale (AppModel.swift:21-31),
-// so an offer may only restore its snapshot while the live ledger still descends
-// from it. Two offers can stand at once — the pill's window runs to five minutes
-// — and without the per-mutation generation the older one puts back a pre-both
-// ledger and erases the newer turn whole: a grant the user was answered for
-// vanishes, or a close she made a moment ago quietly lifts.
+// Every ledger undo closure snapshots the ledger wholesale (`AppModel`'s
+// `ledgerGeneration` carries the rule), so an offer may only restore its
+// snapshot while the live ledger still descends from it. Two offers can stand
+// at once — the pill's window runs to five minutes — and without the
+// per-mutation generation the older one puts back a pre-both ledger and erases
+// the newer turn whole: a grant the user was answered for vanishes, or a close
+// she made a moment ago quietly lifts.
 //
 // `TurnLifecycleTests.anOlderBudgetPillCannotUndoANewerTighten` pins that shape
 // for the POLICY's offers. The LEDGER's — the close, the close-all and the grant

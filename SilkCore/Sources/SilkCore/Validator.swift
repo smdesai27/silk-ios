@@ -13,9 +13,10 @@ public enum Verdict: Equatable, Sendable {
     /// open time at all — the door is already open past them — while debiting
     /// both currencies and pushing the cap to exhausted. `SpendIntent` has had
     /// this guard since it shipped ("a double debit would be catastrophic for
-    /// the single-currency promise", SpendIntent.swift:21-25); the bar never
-    /// needed it because the shared pool is large, and a cap makes the door's
-    /// own remaining systematically smaller than the time left on its own grant.
+    /// the single-currency promise", on `SpendIntent.perform` in the app
+    /// target); the bar never needed it because the shared pool is large, and a
+    /// cap makes the door's own remaining systematically smaller than the time
+    /// left on its own grant.
     case restated(door: Door, until: Date)
     /// A rule change, with its polarity already computed by state diff.
     case ruleChange(proposed: PolicyState, polarity: Polarity)
