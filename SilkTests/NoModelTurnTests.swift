@@ -12,10 +12,10 @@ import FoundationModels
 // Silk's parser is two tiers: `DeterministicParser` is the grammar and runs on
 // every sentence; `SilkModelParser` is the widener, and it answers `.silence`
 // whenever `SystemLanguageModel.default.availability` is anything but
-// `.available` (SilkModelParser.swift:180). A phone with Apple Intelligence
-// switched off, unsupported, or still downloading its assets is therefore the
-// grammar alone — and the claim the product rests on is that the grammar alone
-// is the whole hot path.
+// `.available` (the availability guard in `SilkModelParser.parse`). A phone
+// with Apple Intelligence switched off, unsupported, or still downloading its
+// assets is therefore the grammar alone — and the claim the product rests on
+// is that the grammar alone is the whole hot path.
 //
 // This file is that claim, measured rather than asserted. `testForceSilent`
 // makes the widener answer exactly as an unavailable one does, and every
@@ -214,8 +214,8 @@ private let table: [NoModelRow] = [
     .init(say: "down hours end at 7am", reply: .movedOrParked, grammar: true),
     // A BARE END HOUR IS STILL DISAMBIGUATED WITH NO MODEL IN THE LOOP. The
     // Validator refuses a reading that would LENGTHEN the night out of an hour
-    // whose meridiem was never stated (Validator.swift:336) — and the answer is
-    // the question, not the four words.
+    // whose meridiem was never stated (the Validator's `.refuseSayAmOrPm`) —
+    // and the answer is the question, not the four words.
     .init(say: "down hours end at 7",
           reply: .exact(SilkStrings.amOrPm(TimeOfDay(hour: 7))), grammar: true),
 
@@ -226,9 +226,11 @@ private let table: [NoModelRow] = [
           reply: .contains(["Tomorrow:", "TikTok", "no cap"]), grammar: true),
 
     // ---- REFUSALS ----
-    // Nothing left in the pool. A WHOLE sentence, because the guidance reply is
-    // answered ahead of the balance (Validator.swift:127): a partial ask on an
-    // empty pool is written out, not refused with the balance.
+    // Nothing left in the pool. The shape of the ask does not change that:
+    // `Validator.validate` checks `remaining` inside the `.writeItOut` arm as
+    // well as in the spend arm, so a partial ask on an empty pool is refused
+    // with the balance and not written out. What `.writeItOut` is answered
+    // ahead of is the provenance check, not the balance.
     .init(given: ["give me 40 minutes of instagram"], say: "unlock tiktok for 10",
           reply: .exact("0 left today."), grammar: true, remaining: 0),
     // Inside the night.
@@ -314,8 +316,8 @@ private let table: [NoModelRow] = [
     /// The record of what machine this ran on. The simulator carries Apple
     /// Intelligence, so every "Didn't get that." below is the SEAM answering
     /// and not the absence of a model — which is the point: on a phone with no
-    /// model the same code path is taken one branch earlier
-    /// (SilkModelParser.swift:180) and the app cannot tell the difference.
+    /// model the same code path is taken one branch earlier (the availability
+    /// guard in `SilkModelParser.parse`) and the app cannot tell the difference.
     @Test func theModelIsActuallyAvailableHere() async {
         #if canImport(FoundationModels)
         let availability = SystemLanguageModel.default.availability
@@ -519,11 +521,11 @@ private let table: [NoModelRow] = [
     /// THE SILENT WIDENER ANSWERS ON THE SPOT, not on its clock.
     ///
     /// `parse` returns `.silence` before it builds a session, starts a
-    /// generation or arms the deadline — the forced-silent branch at
-    /// SilkModelParser.swift:177 and the availability guard at :180 both
-    /// return ahead of the `AsyncStream`. This pins that: a regression that
-    /// moved either check below the race would show up here as a two-second
-    /// answer and nowhere else.
+    /// generation or arms the deadline — `SilkModelParser.parse`'s
+    /// forced-silent branch and its availability guard both return ahead of the
+    /// `AsyncStream`. This pins that: a regression that moved either check
+    /// below the race would show up here as a two-second answer and nowhere
+    /// else.
     /// The reading is the BEST of twenty and not the worst, and the inversion
     /// is the fix rather than a weakening.
     ///

@@ -248,8 +248,8 @@ public struct PolicyState: Hashable, Codable, Sendable {
     /// and the policy keeps moving under it: tightening is instant, and
     /// Settings edits doors now. Assigning that snapshot wholesale at maturity
     /// reverts whatever was tightened since it was parked — the loosening wins
-    /// by outliving the tightening, which is rule 3 exactly backwards. So the
-    /// snapshot is merged, field by field, and never assigned.
+    /// by outliving the tightening, which is README rule 3 exactly backwards.
+    /// So the snapshot is merged, field by field, and never assigned.
     ///
     /// A field matures on two conditions, and needs both. The pending must
     /// actually have *proposed* it — a snapshot carries every field, but a

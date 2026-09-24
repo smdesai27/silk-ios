@@ -294,9 +294,8 @@ struct ConversationThread: View {
         }
         // justify-content: flex-end — the newest words sit nearest the bar.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        // New turns fade in on the one curve, short end of the band — the
-        // canon grants no second easing family (canon.md: one motion curve,
-        // 350–450ms).
+        // New turns fade in on the one curve, short end of the 350–450ms band —
+        // there is no second easing family in Silk.
         .animation(Silk.motion(0.35), value: model.visibleTurns)
         // overflow: hidden + the top fade in one stroke: the mask is sized to
         // the box, so anything pushed past its top edge is already invisible —

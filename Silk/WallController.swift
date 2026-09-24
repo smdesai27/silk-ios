@@ -86,40 +86,6 @@ final class WallController {
         Wall.reconcile(restating: true)
     }
 
-    // MARK: - Granting
-
-    /// Opens a door until `relockAt`, then arms the re-lock layers:
-    ///   1. a one-shot DeviceActivity schedule ending on the first minute mark
-    ///      at or after expiry — or after the 15-minute schedule floor (+30 s
-    ///      margin) when expiry is closer, because a sub-minimum interval fails
-    ///      to arm at all; clamped it fires late, and the ledger makes late
-    ///      harmless
-    ///   2. a staggered backup 2 minutes after the primary
-    ///   3. a usage-threshold event at the true granted minutes, on the
-    ///      door's own tokens — its failure mode is independent of the
-    ///      schedules', which is the point
-    ///   4. every app foreground / shield render / shield tap reconciles
-    /// If every layer fails, the door closes at the next wake: late, never never.
-
-    /// The scheduling half of a grant, without the unshielding, reporting
-    /// whether BOTH schedules took. The Spend intent gates a grant on the
-    /// answer, because nothing wakes that path: Shortcuts performs the intent
-    /// in a background launch with no scene, so `foregrounded()` never runs,
-    /// the process is suspended the moment `perform` returns, and the granted
-    /// door is unshielded — so its own shield never renders either. A door
-    /// opened there with nothing scheduled behind it stays open until Silk is
-    /// next opened by hand, which is invariant 4 read backwards.
-    ///
-    /// Both schedules, and not either: a schedule end carries hours and
-    /// minutes only, and the daemon that reads them can die. `RelockWindow`
-    /// states both ends ON the minute mark the schedule will fire on, so the
-    /// primary is the one that closes the door and the stagger is what covers a
-    /// wake that never came — which is only a backstop while BOTH are armed.
-    ///
-    /// In the app the answer is discarded, and not because a wake is
-    /// guaranteed there — `apply(.grant)` hands the phone straight to the
-    /// granted app, which suspends Silk's own clock. Refusing a spend she
-    /// asked for out loud is a product decision and waits for its own change.
     // MARK: - The heartbeat
 
     /// Arm the permanent daily schedule — the one liveness signal Silk has.
@@ -131,13 +97,13 @@ final class WallController {
     /// A day with no firing behind it writes `observed: false` and draws a
     /// ring, so a silently dead wall stops accruing a perfect score.
     ///
-    /// **Judged as a wall change, not a Mirror change** (growth-metaphor §9
-    /// P1). Two things are unverified against real hardware and the device
-    /// test is what settles them: Apple's limit on concurrent activities, and
-    /// whether a permanent daily schedule coexists with the per-grant ones.
-    /// Both failure modes are contained — arming is idempotent, a throw is
-    /// logged and swallowed, and the cost of it never arming is that days read
-    /// unobserved rather than that anything stops locking.
+    /// **Judged as a wall change, not a Mirror change.** Two things are
+    /// unverified against real hardware and the device test is what settles
+    /// them: Apple's limit on concurrent activities, and whether a permanent
+    /// daily schedule coexists with the per-grant ones. Both failure modes are
+    /// contained — arming is idempotent, a throw is logged and swallowed, and
+    /// the cost of it never arming is that days read unobserved rather than
+    /// that anything stops locking.
     ///
     /// Idempotent by construction: `stopMonitoring` before `startMonitoring`,
     /// so re-arming on every launch restates one activity rather than stacking
@@ -177,6 +143,40 @@ final class WallController {
         }
     }
 
+    // MARK: - Granting
+
+    /// The scheduling half of a grant, without the unshielding, reporting
+    /// whether BOTH schedules took. The Spend intent gates a grant on the
+    /// answer, because nothing wakes that path: Shortcuts performs the intent
+    /// in a background launch with no scene, so `foregrounded()` never runs,
+    /// the process is suspended the moment `perform` returns, and the granted
+    /// door is unshielded — so its own shield never renders either. A door
+    /// opened there with nothing scheduled behind it stays open until Silk is
+    /// next opened by hand, which is rule 4 read backwards.
+    ///
+    /// The re-lock layers behind a door granted until `relockAt`:
+    ///   1. a one-shot DeviceActivity schedule ending on the first minute mark
+    ///      at or after expiry — or after the 15-minute schedule floor (+30 s
+    ///      margin) when expiry is closer, because a sub-minimum interval fails
+    ///      to arm at all; clamped it fires late, and the ledger makes late
+    ///      harmless
+    ///   2. a staggered backup 2 minutes after the primary
+    ///   3. a usage-threshold event at the true granted minutes, on the
+    ///      door's own tokens — its failure mode is independent of the
+    ///      schedules', which is the point
+    ///   4. every app foreground / shield render / shield tap reconciles
+    /// If every layer fails, the door closes at the next wake: late, never never.
+    ///
+    /// Both schedules, and not either: a schedule end carries hours and
+    /// minutes only, and the daemon that reads them can die. `RelockWindow`
+    /// states both ends ON the minute mark the schedule will fire on, so the
+    /// primary is the one that closes the door and the stagger is what covers a
+    /// wake that never came — which is only a backstop while BOTH are armed.
+    ///
+    /// Both spend paths now read the answer: `SpendIntent` refuses, and the
+    /// bar's landing takes its own grant back. The restatements after an undo,
+    /// a restore or a reload have no grant of their own to withdraw, and ignore
+    /// it — see `AppModel.restateRelockLayers`.
     @discardableResult
     func arm(door: Door, until relockAt: Date) -> Bool {
         #if DEBUG

@@ -32,8 +32,9 @@ private func summarise(grants: [Grant] = [],
 // MARK: - The inversion test
 //
 // This is the defect the whole mechanic exists to repair: the shipped hero is
-// strictly higher on a day you spent than a day you resisted. mirror-continuity
-// §2.2 runs this by hand; it is run here so it cannot regress silently.
+// strictly higher on a day you spent than a day you resisted. The
+// Mirror-continuity design works it by hand; it is run here so it cannot
+// regress silently.
 
 @Suite struct TheInversionIsRepaired {
 
@@ -238,10 +239,10 @@ private func summarise(grants: [Grant] = [],
 
 // MARK: - Liveness
 //
-// The defect §3.4 concedes cannot be closed by `standing` alone: a wall that is
-// dead and never reached looks exactly like a wall that is alive and never
-// reached, and the second one scores a perfect day. The heartbeat is the only
-// signal that tells them apart.
+// The defect the design concedes cannot be closed by `standing` alone: a wall
+// that is dead and never reached looks exactly like a wall that is alive and
+// never reached, and the second one scores a perfect day. The heartbeat is the
+// only signal that tells them apart.
 
 @Suite struct ADeadWallDoesNotAccrue {
 
@@ -428,9 +429,10 @@ private func summarise(grants: [Grant] = [],
     }
 
     @Test func withNoRecordsAtAllItBootstrapsWithOneDay() {
-        // §3.6 deletes firstRun, so nothing stamps the install and there is no
-        // anchor. One day back starts the chain; on a real first run the wall
-        // was not up, so that day writes a ring and the hero reads 0 (§2.6).
+        // The model carries no firstRun, so nothing stamps the install and
+        // there is no anchor. One day back starts the chain; on a real first
+        // run the wall was not up, so that day writes a ring and the hero
+        // reads 0.
         let missing = DayLog.missingBoundaries(recorded: [], upTo: day, calendar: cal)
         #expect(missing == [at(6, 9, 7)])
     }

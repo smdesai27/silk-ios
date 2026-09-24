@@ -7,11 +7,12 @@ import Testing
 // Three suites in this package already assert about cost, and not one of them
 // would have gone red if the hot path had got ten times slower. They measure
 // TEN-THOUSAND-WORD inputs — `hugeInputStaysCheapAndSilent`, `ClauseIndexCost`,
-// `aHugeInputStaysLinear` — against five-second backstops and against ratios
-// whose two arms move together. That is the right instrument for the question
-// they ask (does a paste stay linear) and it is blind to the question this file
-// asks: what does "give me 20 minutes of instagram" cost, on the MainActor,
-// inside the 480 ms beat the user is watching.
+// `tenThousandWordsInOneBreathCostWhatTheyCostInTen` — against five-second
+// backstops and against ratios whose two arms move together. That is the right
+// instrument for the question they ask (does a paste stay linear) and it is
+// blind to the question this file asks: what does "give me 20 minutes of
+// instagram" cost, on the MainActor, inside the 480 ms beat the user is
+// watching.
 //
 // It was not a hypothetical gap. `tokenize` was building and INVERTING a
 // Unicode CharacterSet on every call, and the same sentence is tokenized many
@@ -276,14 +277,15 @@ private let darwinFoundation: Bool = {
 
     /// **THE VALIDATOR IS ON THE COST BUDGET TOO.** Every huge-input bound in the
     /// package stops at `DeterministicParser.parse` — `hugeInputStaysCheapAndSilent`
-    /// and `aHugeInputStaysLinear` never call `Validator.validate` — and the gap
-    /// was not hypothetical: `statedTimes` re-ran `statedTime` on the utterance
-    /// with one leading token dropped per iteration, each run re-tokenizing
-    /// everything that remained. A clock near the END of a long text made the
-    /// provenance guards quadratic: three thousand ordinary words ending "night
-    /// should start at 10" parsed in ~50 ms and then hung validation for ~4.6 s on
-    /// the machine that measured it — a paste plus one sentence, on the
-    /// deterministic path, worse on a phone and 4x worse per doubling.
+    /// and `tenThousandWordsInOneBreathCostWhatTheyCostInTen` never call
+    /// `Validator.validate` — and the gap was not hypothetical: `statedTimes`
+    /// re-ran `statedTime` on the utterance with one leading token dropped per
+    /// iteration, each run re-tokenizing everything that remained. A clock near
+    /// the END of a long text made the provenance guards quadratic: three
+    /// thousand ordinary words ending "night should start at 10" parsed in
+    /// ~50 ms and then hung validation for ~4.6 s on the machine that measured
+    /// it — a paste plus one sentence, on the deterministic path, worse on a
+    /// phone and 4x worse per doubling.
     ///
     /// The hang case, end to end. The input is prose that compiles (rule 2
     /// reads the trailing clause), so validation must run the very guard that

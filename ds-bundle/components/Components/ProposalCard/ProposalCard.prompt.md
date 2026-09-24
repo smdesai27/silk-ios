@@ -1,5 +1,10 @@
 # Proposal card
 
+> **Note, 19 September 2026.** Nothing in the app draws this card. Mirror — the
+> one screen it was ever to appear on — is the score, the week band and today's
+> unlocks, standing in a hedgerow. What follows is the mockup's record, not
+> something to build from.
+
 How Silk asks for something. It appears when Silk has noticed a pattern and wants
 to propose a rule change. The structure is fixed and it is a small argument:
 **observation → ask → one clear yes, one quiet exit.**

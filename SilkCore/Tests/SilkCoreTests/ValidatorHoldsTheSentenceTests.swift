@@ -14,7 +14,7 @@ import Testing
 // TikTok while "tiktok for 2 mins", typed, wrote itself out.
 //
 // The Validator's spend arm now asks the grammar's own question
-// (`DeterministicParser.asksToOpen`) of every spend from every source. These
+// (`DeterministicParser.judgeSpend`) of every spend from every source. These
 // rows feed it the widener's proposals directly — `.command(.spend)` with the
 // sentence the model saw — so the check is pinned without a model in the loop.
 

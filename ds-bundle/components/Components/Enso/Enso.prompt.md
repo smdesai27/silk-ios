@@ -1,5 +1,11 @@
 # Ensō — the living circle
 
+> **Note, 19 September 2026.** The stroke is still the budget, and the geometry
+> below is what `Silk/EnsoPath.swift` draws. Two of the variants moved:
+> Mirror's ring is a dusk slate by day and paper at night rather than ink
+> (`scoreRing` in `Silk/DesignSystem.swift`), and there is no resting ensō —
+> after dark Now keeps the minutes on the hero and only the colour crosses.
+
 Silk's hero element and its brand mark. A single brush-drawn circle whose
 **stroke length is the remaining budget**. It is not a progress ring.
 

@@ -10,7 +10,7 @@
 @import url("./_ds_bundle.css");
 
 /* Silk's mockups are authored against a zeroed box model. Every canonical
- * measurement in silk.css assumes it. */
+ * measurement in _ds_bundle.css assumes it. */
 *, *::before, *::after {
   margin: 0;
   padding: 0;

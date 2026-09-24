@@ -26,19 +26,19 @@ ensō whose stroke length *is* the remaining budget.
 | | |
 |---|---|
 | `Colors` | two grounds, two ramps, two rationed pops |
-| `Type` | the sans/serif split and the eleven type roles |
+| `Type` | the sans/serif split and the twelve type roles |
 
 **Components**
 
 | | |
 |---|---|
 | `Enso` | the living circle — 5 variants, and the rule against drawing a track |
-| `Aperture` | the down-hours window; recessed by day, the only lit thing at night |
+| `Aperture` | the down-hours window; recessed by day, the only lit thing at night. Setup is the one place the app still draws it |
 | `Doors` | the app list — `--live` / `--rest` / `--open` |
 | `CommandBar` | the single input. A hairline, never a filled field |
 | `Shield` | the wall that appears instead of the app. One button, no escape hatch |
-| `ProposalCard` | observation → ask → one yes, one quiet exit |
-| `AttemptsChart` | seven bare strokes; today carries the pop |
+| `ProposalCard` | observation → ask → one yes, one quiet exit. Retired — nothing in the app draws it |
+| `AttemptsChart` | seven bare strokes; today carries the pop. Retired — Mirror draws a week band |
 
 **Screens**
 
@@ -46,12 +46,13 @@ ensō whose stroke length *is* the remaining budget.
 |---|---|
 | `NowDay` | the canonical composition — start here |
 | `NowNight` | the same screen after the down-hours window opens |
-| `Mirror` | the reflection: score, equation, week, proposal |
+| `Mirror` | the reflection: score, equation, week, proposal — the app keeps the score and the week |
 
 ## Provenance, and what is deliberately absent
 
-This project was converted from 12 self-contained HTML+CSS mockups
-(`silk-ds/` in the source repo). Silk has **no JavaScript component library** —
+This project was converted from 12 self-contained HTML+CSS mockups (`silk-ds/`
+in the source repo, which also carries a thirteenth — a later interaction demo
+with no card here). Silk has **no JavaScript component library** —
 no `package.json`, no build, no `dist/` — so there is no `_ds_bundle.js` and
 there are no `.d.ts` contracts. Nothing was reimplemented to fake one.
 

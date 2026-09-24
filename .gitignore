@@ -11,10 +11,11 @@ xcuserdata/
 
 # Build output. Both spellings matter and only one of them is obvious: SwiftPM
 # writes .build/, but xcodebuild writes build/ whenever it is handed a SYMROOT
-# or a -derivedDataPath inside the repo, and that is how 658 object files and
-# precompiled modules — 73 MB, some of them recording the absolute path of
-# whichever worktree produced them — were once committed here. Nothing in the
-# tree depends on either directory; both regenerate from a clean checkout.
+# or a -derivedDataPath inside the repo — which is how a tree ends up carrying
+# hundreds of object files and precompiled modules, tens of megabytes of them,
+# some recording the absolute path of whichever worktree produced them. Nothing
+# in the tree depends on either directory; both regenerate from a clean
+# checkout.
 .build/
 build/
 

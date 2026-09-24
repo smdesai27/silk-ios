@@ -5,6 +5,11 @@ import Foundation
 /// The on-device model (SilkModelParser, app target) is a widener for unseen
 /// paraphrases of the rare rule intents — its output passes through the same
 /// Validator, and this parser always runs first.
+///
+/// The rules are numbered where they are written, in the ladder inside
+/// `parse`, and a bare "rule n" in this package's comments means one of those
+/// steps. The README's five rules are a different list, cited as "README
+/// rule n".
 public enum DeterministicParser {
 
     /// `recentDoor` is the one thing the grammar is told about the turn
@@ -58,7 +63,7 @@ public enum DeterministicParser {
         // 1. STATUS — a question about the balance, with no number and no door verb.
         //    Ahead of every cap rule by design: "how much of my tiktok budget is
         //    left" is a question, and the answer to a question is never a new
-        //    rule. (spec §5.8 records the imprecision this leaves.)
+        //    rule. The design records the imprecision this leaves.
         //    A KNOWN IMPRECISION LIVES HERE, and it is left alone deliberately.
         //    Five of the six STATUS triggers are substring tests over the whole
         //    sentence, so a close with a balance question riding along — "no
@@ -331,7 +336,7 @@ public enum DeterministicParser {
             // not move on it — "20 a day for youtube and reddit" names two doors
             // and one ceiling, and cutting everyone's budget is not what it
             // asked for. Silence reaches the widener, which cannot produce a cap
-            // at all (§5.7) and so cannot get the door wrong either.
+            // at all and so cannot get the door wrong either.
             //
             // The same question asked the other way round for the sentence
             // whose ceiling word and number were split by a clause opener:
@@ -415,8 +420,9 @@ public enum DeterministicParser {
         //    claimed the sentence, and rule 7 answered it by DEBITING TWENTY
         //    MINUTES AND TAKING THE WALL DOWN on the very app being restricted.
         //    A removal-shaped sentence this rule cannot read compiles to
-        //    nothing. Silence reaches the widener, which per §5.7 can produce
-        //    neither a cap nor a deletion, so it cannot get this wrong either.
+        //    nothing. Silence reaches the widener, which by construction can
+        //    produce neither a cap nor a deletion, so it cannot get this wrong
+        //    either.
         if (tokens.first == "remove" || tokens.first == "drop"), let d = door {
             guard !capNounSharesTheDoorsClause(clauses(), state: state, door: d),
                   !doorsClauseStatesANewCeiling(clauses(), state: state, door: d)
@@ -538,7 +544,7 @@ public enum DeterministicParser {
             // next thing typed is a sentence this rule can mint from. The
             // fragment this rule cannot read — a door spelled as dictation
             // spells it — does reach the widener, and the Validator holds the
-            // model's spend to the same sentence (`asksToOpen`).
+            // model's spend to the same sentence (`judgeSpend`).
             //
             // The commitment frame counts as the verb. "im using instagram for
             // 5 minutes" carries "using" on the list; "i'm going on instagram
@@ -2073,8 +2079,8 @@ public enum DeterministicParser {
             // cap" and "shave 15 off my instagram limit" are the same shape.
             // The grammar cannot write the subtraction (it does not know the
             // old ceiling's number is not the sentence's); silence reaches the
-            // widener, which per §5.7 can produce no cap and no grant out of
-            // this either.
+            // widener, which by construction can produce no cap and no grant
+            // out of this either.
             guard everyNumberLiesInside(phrase, index, clause: clause) else { return .silence }
             return .command(.setDoorCap(door: d, minutes: nil))
         }
@@ -2843,9 +2849,9 @@ public enum DeterministicParser {
         // describing. It terminates instead. Over a 1,942-sentence sweep the
         // gate turns 498 ceilings into silence, and 294 of those are sentences
         // `main` answered with a GRANT — that is the price, and it is the
-        // doctrinally right one: silence reaches the widener, which per §5.7 can
-        // produce neither a cap nor a deletion, and a grant out of a report
-        // cannot be taken back. Zero of the 498 become grants.
+        // doctrinally right one: silence reaches the widener, which by
+        // construction can produce neither a cap nor a deletion, and a grant out
+        // of a report cannot be taken back. Zero of the 498 become grants.
         if reportsRatherThanSets(t, clause: clause, phraseStart: numberAt ?? doorStart,
                                  state: state) {
             return .silence
@@ -2869,7 +2875,7 @@ public enum DeterministicParser {
         // tiktok cap by 5" landed 5 where the sentence meant 15 (FINDINGS
         // 13-14). "by" is deliberately absent from `ceilingPrepositions`
         // because it never aims an absolute; silence reaches the widener,
-        // which per §5.7 can produce no cap out of this either.
+        // which by construction can produce no cap out of this either.
         if let numberAt, numberAt > clause.lowerBound, t[numberAt - 1] == "by" {
             return .silence
         }
@@ -2878,8 +2884,8 @@ public enum DeterministicParser {
             // Two doors and one ceiling. Falling through answered it by debiting
             // the pool and unshielding whichever name was spelled first — a
             // grant, out of a sentence asking to tighten two doors. Silence
-            // reaches the widener, which cannot produce a cap at all (§5.7) and
-            // so cannot get the door wrong either.
+            // reaches the widener, which cannot produce a cap at all and so
+            // cannot get the door wrong either.
             return .silence
         }
         // TWO numbers state no ceiling this rule can write. "drop the tiktok
@@ -3895,7 +3901,7 @@ public enum DeterministicParser {
     /// name standing alone in the breath before the number is the stranded
     /// topic of the number's own sentence; the sentence is about that door,
     /// and the pool must not move on it. Silence reaches the widener, which
-    /// per §5.7 cannot produce a cap and so cannot get the door wrong either.
+    /// cannot produce a cap and so cannot get the door wrong either.
     ///
     /// The PREVIOUS clause only, and only when it holds nothing beyond the
     /// door's own name — or an attribution frame ending in it ("my notes say

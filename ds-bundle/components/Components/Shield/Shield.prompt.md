@@ -1,5 +1,13 @@
 # Shield
 
+> **Note, 19 September 2026.** The wall users actually meet is drawn by
+> `SilkShield/ShieldConfigurationExtension.swift` against Apple's
+> `ShieldConfiguration` — nine tintable slots and no serif, so the title is
+> always "Silk" and the *when* moved down into the sans subtitle. The single
+> button and the refusal to add a second one survive; the markup and the
+> three-shield table below do not. `ShieldOverlay` in `Silk/MirrorParts.swift`
+> keeps the mockup's shape for the copy drawn inside the app.
+
 The wall that appears instead of the app. It is Silk's most important moment and
 its most restrained: the user has just been stopped, and the screen's job is to
 be **unarguable** rather than persuasive.

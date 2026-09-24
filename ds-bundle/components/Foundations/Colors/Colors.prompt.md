@@ -1,5 +1,11 @@
 # Color
 
+> **Note, 19 September 2026.** This describes the July-2026 mockup, not the app
+> as it ships now — see the note at the top of [`README.md`](../../../README.md).
+> The pops below moved: `--silk-open-sky` is unused now that Now has no
+> aperture to glow, and Mirror's is a dusk slate rather than the leaf
+> (`Silk/DesignSystem.swift`).
+
 Silk has two grounds and almost no hues. Everything you see is an alpha ramp of
 ink on warm paper, or of paper on night lacquer. Introducing a new colour is
 almost always the wrong move.

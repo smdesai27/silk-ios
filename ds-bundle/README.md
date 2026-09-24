@@ -1,5 +1,21 @@
 # Building with Silk
 
+> **Note, 19 September 2026.** This bundle is Silk's design language as
+> extracted from the `silk-ds/` mockups on 28 July 2026. It is what the mockups
+> contain, not what the app ships now. The app has since moved on in four
+> places:
+>
+> - Now, Mirror and Settings are three pager pages, not two screens.
+> - The aperture left Now. Setup is the one place left that draws it, as the
+>   pane the time wheels sit on; Settings carries the down-hours window as a
+>   row that opens a wheel.
+> - Mirror dropped the equation, the attempts chart and the proposal card, and
+>   gained a hedgerow and a today's-unlocks footnote.
+> - The night text ramp was lifted onto a WCAG AA floor — paper `.55`, ink `.65`
+>   by day — so the low end of the ramps below is not a text colour.
+>
+> `Silk/DesignSystem.swift` and the views beside it are the current truth.
+
 Silk is a **CSS design language, not a component library.** There is no
 `_ds_bundle.js` and nothing to import — you build with plain HTML and the
 `silk-*` classes defined in `styles.css`. Every class below is real and
@@ -60,8 +76,8 @@ paper ramps run `--silk-ink-92 … --silk-ink-055` and `--silk-paper-92 … --si
 4. **Nothing is pure white or black,** and there is no semantic colour — no red
    error, no amber warning. Things recede down the ramp instead.
 
-Silk has no bold (nothing above weight 500), no icons in lists, no tab bar, and
-only two screens. When something new needs a home, it goes on Mirror.
+Silk has no bold (nothing above weight 500), no icons in lists, and no tab bar.
+It is three pages deep — Now, Mirror and Settings — reached by swiping.
 
 ## Where the truth lives
 
@@ -121,19 +137,19 @@ ensō whose stroke length *is* the remaining budget.
 | | |
 |---|---|
 | `Colors` | two grounds, two ramps, two rationed pops |
-| `Type` | the sans/serif split and the eleven type roles |
+| `Type` | the sans/serif split and the twelve type roles |
 
 **Components**
 
 | | |
 |---|---|
 | `Enso` | the living circle — 5 variants, and the rule against drawing a track |
-| `Aperture` | the down-hours window; recessed by day, the only lit thing at night |
+| `Aperture` | the down-hours window; recessed by day, the only lit thing at night. Setup is the one place the app still draws it |
 | `Doors` | the app list — `--live` / `--rest` / `--open` |
 | `CommandBar` | the single input. A hairline, never a filled field |
 | `Shield` | the wall that appears instead of the app. One button, no escape hatch |
-| `ProposalCard` | observation → ask → one yes, one quiet exit |
-| `AttemptsChart` | seven bare strokes; today carries the pop |
+| `ProposalCard` | observation → ask → one yes, one quiet exit. Retired — nothing in the app draws it |
+| `AttemptsChart` | seven bare strokes; today carries the pop. Retired — Mirror draws a week band |
 
 **Screens**
 
@@ -141,12 +157,13 @@ ensō whose stroke length *is* the remaining budget.
 |---|---|
 | `NowDay` | the canonical composition — start here |
 | `NowNight` | the same screen after the down-hours window opens |
-| `Mirror` | the reflection: score, equation, week, proposal |
+| `Mirror` | the reflection: score, equation, week, proposal — the app keeps the score and the week |
 
 ## Provenance, and what is deliberately absent
 
-This project was converted from 12 self-contained HTML+CSS mockups
-(`silk-ds/` in the source repo). Silk has **no JavaScript component library** —
+This project was converted from 12 self-contained HTML+CSS mockups (`silk-ds/`
+in the source repo, which also carries a thirteenth — a later interaction demo
+with no card here). Silk has **no JavaScript component library** —
 no `package.json`, no build, no `dist/` — so there is no `_ds_bundle.js` and
 there are no `.d.ts` contracts. Nothing was reimplemented to fake one.
 

@@ -5,7 +5,7 @@
 # in the right order by hand; this script refuses to do the last two until the
 # first two are provably true of the exact tree it is about to archive.
 #
-#   scripts/release.sh            gate, tag, archive, upload
+#   scripts/release.sh            gate, archive, upload, tag
 #   scripts/release.sh --no-gate  skip scripts/ci.sh all (only if it just ran
 #                                 green on THIS tree — the script checks the
 #                                 log's timestamp against the tree's)

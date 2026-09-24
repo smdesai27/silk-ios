@@ -646,11 +646,12 @@ private func clauseStrings(_ text: String) -> [[String]] {
         // whitespace gap — 83 ms and 14 ms.
         //
         // Best of three against a coarse backstop, for the reason stated at
-        // length on `aHugeInputStaysLinear`: this was a single un-repeated
-        // measurement against a bound 12× above it, which is the shape that
-        // reddened one push in six. Five seconds is where a wall clock can still
-        // say something honest — the quadratic version of either shape is tens of
-        // seconds and this catches it, while a busy afternoon no longer does.
+        // length on `tenThousandWordsInOneBreathCostWhatTheyCostInTen`: this was
+        // a single un-repeated measurement against a bound 12× above it, which
+        // is the shape that reddened one push in six. Five seconds is where a
+        // wall clock can still say something honest — the quadratic version of
+        // either shape is tens of seconds and this catches it, while a busy
+        // afternoon no longer does.
         let dashes = String(repeating: "aaaa - ", count: 5000)
         #expect(bestOfThree { _ = NumberParser.ClauseIndex(dashes) } < .seconds(5))
         let longGap = "a" + String(repeating: " ", count: 40_000) + "- b"
@@ -676,13 +677,14 @@ private func clauseStrings(_ text: String) -> [[String]] {
     /// machine exceeds by 3.4× is not coarsened, it is replaced.
     ///
     /// So what is left is the property the doorless path deserves in its own
-    /// right, in the shape `aHugeInputStaysLinear` uses: equal total work in
-    /// both arms, interleaved, minimum of seven rounds, and a ratio rather than
-    /// a clock. It is not redundant with the stress suite's bound, which parses
-    /// arms that END in a cap sentence and therefore measures the index path.
-    /// This one measures the ladder every sentence walks — the common case, and
-    /// the one prose reaches — so when the two disagree the pair says where the
-    /// regression is rather than only that there is one.
+    /// right, in the shape `tenThousandWordsInOneBreathCostWhatTheyCostInTen`
+    /// uses: equal total work in both arms, interleaved, minimum of seven
+    /// rounds, and a ratio rather than a clock. It is not redundant with the
+    /// stress suite's bound, which parses arms that END in a cap sentence and
+    /// therefore measures the index path. This one measures the ladder every
+    /// sentence walks — the common case, and the one prose reaches — so when
+    /// the two disagree the pair says where the regression is rather than only
+    /// that there is one.
     ///
     /// Measured healthy across three full-suite runs, which is the contended
     /// case rather than the quiet one: **0.99, 1.35, 1.03** against the bound of
@@ -702,9 +704,10 @@ private func clauseStrings(_ text: String) -> [[String]] {
         }
         let inOneBreath = noise(repeats: 2000)
         // Ten separately built strings rather than one string parsed ten times,
-        // for the reason `aHugeInputStaysLinear` states: the long arm walks its
-        // input out of cold memory, and one short string read ten times would
-        // sit in cache and win on the strength of that alone.
+        // for the reason `tenThousandWordsInOneBreathCostWhatTheyCostInTen`
+        // states: the long arm walks its input out of cold memory, and one
+        // short string read ten times would sit in cache and win on the
+        // strength of that alone.
         let inTenBreaths = (0..<10).map { _ in noise(repeats: 200) }
 
         // What the parser ANSWERS, asserted outside the measurement — inside, the

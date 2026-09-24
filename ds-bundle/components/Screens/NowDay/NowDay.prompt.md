@@ -1,5 +1,10 @@
 # Now (day)
 
+> **Note, 19 September 2026.** This describes the July-2026 mockup, not the app
+> as it ships now — see the note at the top of [`README.md`](../../../README.md).
+> The aperture is gone from the stacking order below: its slot was closed up
+> and the down-hours window moved to a row on Settings (`Silk/NowView.swift`).
+
 Silk's home screen, and the canonical composition — if you are building a new
 Silk screen, start from this stacking order.
 

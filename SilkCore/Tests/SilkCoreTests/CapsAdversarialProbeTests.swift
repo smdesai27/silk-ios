@@ -4,7 +4,7 @@ import Foundation
 
 // The caps adversarial round.
 //
-// Four lenses attacked the per-app cap grammar on main tip 47993b4: clause
+// Four lenses attacked the per-app cap grammar on main tip 2dad4c1: clause
 // boundaries (ClauseIndex openers, commas, dots, newlines, dashes), negation
 // and polarity (capRemovers, nounNegators, the "no cap" slang gate), chatter
 // and report hijacks (the mood gates, the finance/sports/slang senses of
@@ -207,8 +207,8 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// draft expected .removeDoor, but rule 5's own contract (pinned in
     /// StressTests for the "hey," flavor) is that a preambled removal is not
     /// claimed either: "the cap clause declines and rule 5's own removal does
-    /// not claim a preambled clause"; silence reaches the widener, which per
-    /// §5.7 can produce neither a cap nor a deletion.
+    /// not claim a preambled clause"; silence reaches the widener, which can
+    /// produce neither a cap nor a deletion.
     @Test func anOpenerLedRemovalStillClaimsItsFirstBreath() {
         #expect(clearsCap("ok so remove instagram, no cap on tiktok") == nil)
         #expect(parse("ok so remove instagram, no cap on tiktok", capped) == .silence)
@@ -746,7 +746,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 // MARK: - FINDINGS
 //
 // The round's fourteen genuinely-failing probes — verified on main tip
-// 47993b4 and adjudicated against the per-app caps design and the rule
+// 2dad4c1 and adjudicated against the per-app caps design and the rule
 // comments — are all FIXED and PROMOTED into the armor above, each marked
 // "FINDING n, promoted" beside the rule seam it pins. One adjudication moved
 // during the fix pass: FINDING 7's draft expected the removal to land, and
@@ -770,9 +770,9 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 // subject-is-the-rule setter class, "im done" is a closer phrase under the
 // pinned close-hoist, and the bare-door-topic veto is unconditional on the
 // number clause's tail by promoted doctrine — each recorded on its probe. The
-// four seams the grammar genuinely got wrong (six sentences) are commented
-// out as FINDING(n1)-(n4) blocks beside the rules they break; see ROUND 2
-// FINDINGS at the bottom.
+// four seams the grammar genuinely got wrong (six sentences) were commented
+// out as FINDING(n1)-(n4) blocks and are now promoted live beside the rules
+// they broke; see ROUND 2 FINDINGS at the bottom.
 
 @Suite struct CapsAdversarialRound2Setters {
 
@@ -1092,7 +1092,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// ("drop the tiktok drama") claim their breath and park the trailing
     /// clearing. The same silence FINDING 7 pinned for the sincere spelling:
     /// preambled removals are not claimed either, and silence reaches the
-    /// widener, which can produce neither a cap nor a deletion (§5.7).
+    /// widener, which can produce neither a cap nor a deletion.
     /// Direction-safe; pinned as the recall seam it is.
     @Test(arguments: [
         "though remove instagram sounds harsh, no cap on tiktok",
@@ -1264,8 +1264,9 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 // subject-is-the-rule doctrine keeps "my budget would be 40" a budget move,
 // and the polite clearing's starvation is the clearing gate's disclosed
 // no-exemption trade — each recorded on its probe. Seven seams genuinely
-// failed (eight sentences), commented out as FINDING(n5)-(n11) blocks beside
-// the rules they break; see ROUND 3 FINDINGS at the bottom.
+// failed (eight sentences). They were commented out as FINDING(n5)-(n11)
+// blocks and are now promoted live beside the rules they broke; see ROUND 3
+// FINDINGS at the bottom.
 
 @Suite struct CapsAdversarialRound3SubjectGuard {
 
@@ -1353,7 +1354,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// fix's own doc ("an unrecognised word in that slot makes the clause an
     /// attribution, which REFUSES the exemption"), with the family's own
     /// failure direction: the starved setter terminates in silence, which
-    /// reaches the widener, and §5.7 keeps it from ever becoming a cap or a
+    /// reaches the widener, and the widener can never turn it into a cap or a
     /// grant. The greeting flavor has precedent — FINDING 7's adjudication
     /// pinned that a preambled command is not claimed — and "we" sits outside
     /// the closed person list ("i"/"you" are the speaker and the addressee).
@@ -1656,8 +1657,9 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 // pool clause is the subject-is-the-rule setter round 3 already pinned, and
 // the polite clearings starve by the clearing gate's disclosed no-exemption
 // trade — each recorded on its probe. Five seams genuinely failed (seven
-// sentences), commented out as FINDING(n12)-(n16) blocks beside the rules
-// they break; see ROUND 4 FINDINGS at the bottom.
+// sentences). They were commented out as FINDING(n12)-(n16) blocks and are
+// now promoted live beside the rules they broke; see ROUND 4 FINDINGS at the
+// bottom.
 
 @Suite struct CapsAdversarialRound4GerundAndAnswers {
 
@@ -1810,7 +1812,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// clause-leading verb outside every closed class with the door as its
     /// object and a cap noun in the wake terminates, whatever the verb).
     /// The failure direction is the family's own — silence reaches the
-    /// widener, which per §5.7 can produce neither a cap nor a grant — and
+    /// widener, which can produce neither a cap nor a grant — and
     /// a future widening of the frame must bring its own adversarial
     /// round. Pinned as the disclosed seam it is; above all, never a grant.
     @Test(arguments: [
@@ -2056,8 +2058,9 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 // the bare "goes", the wh-guard on the "how about" proposal, and the
 // declined-question veto's subtract-only inventory against a relayed
 // third-party decline — each recorded on its probe. Three seams genuinely
-// failed (six sentences), commented out as FINDING(n17)-(n19) blocks beside
-// the rules they break; see ROUND 5 FINDINGS at the bottom.
+// failed (six sentences). They were commented out as FINDING(n17)-(n19)
+// blocks and are now promoted live beside the rules they broke; see ROUND 5
+// FINDINGS at the bottom.
 
 @Suite struct CapsAdversarialRound5GerundSeams {
 
@@ -2100,8 +2103,8 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// the ceiling it complains about: the exact n12 class. The go-ahead
     /// lives one comma over, where "do it" carries no door, no number and
     /// no lexeme, and no rule reads a neighbouring clause's anaphora. A
-    /// starved setter terminates and reaches the widener (§5.7: never a cap,
-    /// never a grant); the sealed restate that lands is pinned one probe up.
+    /// starved setter terminates and reaches the widener (never a cap, never
+    /// a grant); the sealed restate that lands is pinned one probe up.
     @Test func theEvaluativeTailStaysAReportAndNeverGrants() {
         #expect(parse("capping tiktok at 20 sounds right, do it") == .silence)
         #expect(spend("capping tiktok at 20 sounds right, do it") == nil)
@@ -2457,8 +2460,9 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
 // pinning; one moved to the parser's side — the restate-then-command
 // sentence terminates on its first cap-shaped breath, by `capOutcome`'s own
 // disclosed termination doctrine — recorded on its probe. Six seams
-// genuinely failed (nine sentences), commented out as FINDING(n20)-(n25)
-// blocks beside the rules they break; see ROUND 6 FINDINGS at the bottom.
+// genuinely failed (nine sentences). They were commented out as
+// FINDING(n20)-(n25) blocks and are now promoted live beside the rules they
+// broke; see ROUND 6 FINDINGS at the bottom.
 
 @Suite struct CapsAdversarialRound6GerundLead {
 
@@ -2516,7 +2520,7 @@ private func verdict(_ utterance: String, _ state: PolicyState = makeState(),
     /// that must bring its own round. The landing spellings are one comma
     /// away ("capping tiktok at 20, do it") or one breath shorter ("cap
     /// tiktok at 20"). A starved setter terminates and reaches the widener
-    /// (§5.7: never a cap, never a grant); above all, no grant.
+    /// (never a cap, never a grant); above all, no grant.
     @Test func theRestateThenCommandStaysTheFirstBreathsSilence() {
         #expect(parse("capping tiktok at 20 sounds right, cap tiktok at 20") == .silence)
         #expect(spend("capping tiktok at 20 sounds right, cap tiktok at 20") == nil)

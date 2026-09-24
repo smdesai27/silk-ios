@@ -9,13 +9,13 @@ on:
   pull_request:
   push:
     # main, and any branch a build is cut from. 1.0.0 (2) was archived off a
-    # branch this list did not name, so even with Actions billing in place the
-    # release commit would never have been gated here.
+    # branch this list did not name, so that release commit was never gated
+    # here.
     branches: [main, 'release/**', 'fable-*', 'claude/**']
 
-# A second push to the same branch retires the first run. This repo is private,
-# where macOS runners bill at ten times the Linux rate, and a superseded commit
-# has nothing left to tell us.
+# A second push to the same branch retires the first run: a superseded commit
+# has nothing left to tell us, and the macOS lanes below are the slowest thing
+# in this file.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -41,7 +41,7 @@ jobs:
   # case run somewhere that is not a Mac: a container, a Linux runner, a cloud
   # session with no Xcode in it. This job is what keeps that true. The day
   # someone reaches into UIKit from the spine for one convenience, this is the
-  # thing that says no — on a runner that bills at a tenth of the ones below it.
+  # thing that says no — on the cheapest, fastest runner in the file.
   #
   # The spine's whole count minus the one Darwin-only case, not the spine's
   # whole count, because the tests carry exactly one `#if`, and it is worth
@@ -111,8 +111,8 @@ jobs:
     name: SilkTests + SilkUITests
     runs-on: macos-26
     # The same short-circuit scripts/ci.sh makes locally, and for the same
-    # reason plus a bill: a red spine already refuses the PR, and thirteen
-    # minutes of simulator at the 10x macOS rate cannot change that answer.
+    # reason plus the clock: a red spine already refuses the PR, and thirteen
+    # minutes of simulator cannot change that answer.
     needs: spine
     timeout-minutes: 45
     steps:
@@ -200,9 +200,9 @@ jobs:
   # Everything above pins Debug — the shared scheme does, and neither test
   # invocation passes -configuration. Without this job the Release-only settings
   # are first exercised by an App Store archive, which is the worst place to
-  # learn one is wrong: CODE_SIGN_IDENTITY = Apple Distribution, the Release-only
-  # -file-prefix-map, wholemodule -O, and every `#if DEBUG` block, which compiles
-  # *out* here and nowhere else.
+  # learn one is wrong: the Release-only -file-prefix-map, ENABLE_TESTABILITY
+  # NO, the asset-catalog optimization, wholemodule -O, and every `#if DEBUG`
+  # block, which compiles *out* here and nowhere else.
   #
   # Build, not test: the suites already ran under Debug. The only question is
   # whether Release still compiles and links. No simulator, no signing.
@@ -219,6 +219,11 @@ jobs:
       - name: Toolchain
         run: xcodebuild -version
 
+      # DerivedData outside the checkout, for the reason scripts/release.sh
+      # gives at step 5: with it inside SRCROOT, -file-prefix-map rewrites the
+      # module-cache paths and the build emits a run of "No such file or
+      # directory" warnings that are about nothing. The warnings this job prints
+      # are only worth reading if those are absent.
       - name: xcodebuild build — Release
         run: |
           xcodebuild build \
@@ -226,5 +231,5 @@ jobs:
             -scheme Silk \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -derivedDataPath DerivedData/release \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData/release" \
             CODE_SIGNING_ALLOWED=NO

@@ -21,9 +21,9 @@ import FamilyControls
 // house for a gesture that was supposed to undo something.
 //
 // Sentences are grammar-claimed and asserted so before they are typed — the
-// simulator has Apple Intelligence, and per spec §5.7 the widener can produce
-// neither a cap nor a deletion, so a removal that fell through to it would
-// answer with silence and this file would be testing the weather.
+// simulator has Apple Intelligence, and the widener can produce neither a cap
+// nor a deletion, so a removal that fell through to it would answer with
+// silence and this file would be testing the weather.
 //
 // Hosted by the app, so `SharedStore` resolves against the real App Group.
 

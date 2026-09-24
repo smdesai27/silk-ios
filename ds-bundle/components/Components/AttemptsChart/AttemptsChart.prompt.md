@@ -1,5 +1,10 @@
 # Attempts chart
 
+> **Note, 19 September 2026.** The app retired this chart. Mirror draws a week
+> band instead — one colour, opacity carrying the score, no axis and no numerals
+> (`WeekBand` in `Silk/MirrorParts.swift`). What follows is the mockup's record,
+> not something to build from.
+
 Seven days of attempts — the number of times a door was tried. It lives on Mirror
 and it is the only chart in Silk.
 

@@ -70,10 +70,9 @@ public enum LaunchCatalog {
         .init(display: "Netflix", names: ["netflix"], scheme: "nflx://", universalLink: "https://www.netflix.com/browse"),
         .init(display: "LinkedIn", names: ["linkedin"], scheme: "linkedin://", universalLink: "https://www.linkedin.com/"),
 
-        // The five the owner chose to widen the setup list with. Grouped and
-        // annotated rather than folded in above, because two of them ship on a
-        // scheme nobody has been able to verify and the reader has to be able
-        // to see which two.
+        // The five that widened the setup list. Grouped and annotated rather
+        // than folded in above, because two of them ship on a scheme nobody has
+        // been able to verify and the reader has to be able to see which two.
 
         // Discord is BACK, and the line that kept it out was wrong. This file
         // said "Discord and WhatsApp are deliberately absent — no reliable
@@ -106,8 +105,8 @@ public enum LaunchCatalog {
 
         // DEVICE-UNVERIFIED (1 of 2). `hinge://` is a guess. Hinge publishes no
         // scheme, no third-party app queries one, and the App Store binary
-        // (co.hinge.mobile.ios) could not be read. The owner chose to ship it
-        // and check it on the next physical-device session.
+        // (co.hinge.mobile.ios) could not be read. It ships on the guess and
+        // gets checked on the next physical-device session.
         //   WHAT TO CHECK: tap the Hinge door and see whether Hinge comes to
         //   the front.
         //   IF IT IS WRONG: `open` gets `false` from the scheme, the fallback

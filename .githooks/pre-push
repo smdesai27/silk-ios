@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# The fast half of the gate. GitHub Actions is meant to run every suite on
-# every pull request and push to main — but until Actions is enabled for the
-# repository it has never run, and `scripts/ci.sh all` on the exact tree is the
-# gate that has held (scripts/release.sh enforces it). This hook exists to
-# catch the cheap failures before they cost a round trip, not to be the gate.
+# The fast half of the gate. GitHub Actions runs every suite on every pull
+# request and every push to main, and that is the authority; `scripts/ci.sh
+# all` on the exact tree is what scripts/release.sh enforces before an archive.
+# This hook exists to catch the cheap failures before they cost a round trip,
+# not to be the gate.
 #
-# So it runs the spine and stops. The spine's tests run in about eight seconds
+# So it runs the spine and stops. The spine's tests run in about four seconds
 # and catch most of what breaks; the simulator walks take five minutes locally
 # and thirteen on a runner, and paying that on every push to learn what the PR
 # is about to tell you anyway is how a hook gets deleted. (Counts deliberately
@@ -17,7 +17,7 @@
 #
 #   git config core.hooksPath .githooks
 #
-#   SILK_RUN_UI=1 git push   both suites, ~6 min — before a PR you want green
+#   SILK_RUN_UI=1 git push   every lane, incl. the Release build — the full gate
 #   git push --no-verify     skip the hook entirely
 
 set -euo pipefail
@@ -42,9 +42,9 @@ fi
 
 # The hook's stdin is consumed; ci.sh must not inherit it.
 if [ "${SILK_RUN_UI:-}" = "1" ]; then
-  echo "pre-push: SILK_RUN_UI=1 — both suites, ~6 min."
+  echo "pre-push: SILK_RUN_UI=1 — every lane, including the Release build."
   exec scripts/ci.sh all </dev/null
 fi
 
-echo "pre-push: the spine. SILK_RUN_UI=1 adds the simulator, --no-verify skips."
+echo "pre-push: the spine. SILK_RUN_UI=1 runs every lane, --no-verify skips."
 exec scripts/ci.sh spine </dev/null

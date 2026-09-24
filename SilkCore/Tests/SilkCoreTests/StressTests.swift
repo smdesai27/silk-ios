@@ -409,8 +409,8 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
 /// fix, asserted by name so a regression says which one.
 ///
 /// Both were live and both were dangerous in the direction Silk must never be
-/// wrong in. Neither was reachable until PR #16 printed the word "Daily cap" on
-/// a Settings row — nobody says "cap tiktok" to a Silk with no caps — and this
+/// wrong in. Neither was reachable until a Settings row started printing the
+/// word "Daily cap" — nobody says "cap tiktok" to a Silk with no caps — and this
 /// feature manufactures both utterances.
 @Suite struct TheTwoShippedCapBugs {
     @Test func capTiktokAt20NoLongerGrantsTwentyMinutes() {
@@ -845,7 +845,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     /// PR both found the door and wrote the ceiling: a loosening out of nothing.
     /// The possessive was the whole difference — "the tiktok cap sits at 60" was
     /// already correctly silent — which is what makes this the test that earns
-    /// §5.9's claim that the two spellings never disagree.
+    /// the per-app caps design's claim that the two spellings never disagree.
     @Test func aDoorHeadingANounPhraseIsASubject() {
         // The setting half: 160 sentences in one sweep, sampled across the
         // spellings, the ceiling words and the verbs that report a number.
@@ -936,9 +936,9 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         // THE RESIDUE, PINNED WRONG SO A CHANGE IS LOUD. "the tiktok cap could
         // be 60" and "should the tiktok cap be 60" are structurally identical to
         // the pinned "my tiktok limit should be 20 a day" modulo one determiner,
-        // so no structural rule separates them. Disclosed in §5.9 under "the
-        // residue the modal narrowing leaves"; the direction is LOOSENING, and
-        // this is the honest record of it.
+        // so no structural rule separates them. Disclosed in the per-app caps
+        // design under "the residue the modal narrowing leaves"; the direction
+        // is LOOSENING, and this is the honest record of it.
         expectCap("the tiktok cap could be 60", door: "TikTok", minutes: 60)
         expectCap("should the tiktok cap be 60", door: "TikTok", minutes: 60)
     }
@@ -979,8 +979,8 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         //
         // The answer is SILENCE rather than the removal: the cap clause declines
         // and rule 5's own removal does not claim a preambled clause either.
-        // Silence reaches the widener, which per §5.7 can produce neither a cap
-        // nor a deletion, so the loosening is closed in the safe direction.
+        // Silence reaches the widener, which by construction can produce neither
+        // a cap nor a deletion, so the loosening is closed in the safe direction.
         for text in ["hey, remove instagram, no cap on tiktok",
                      "hi, remove instagram, no cap on tiktok",
                      "hey, drop instagram, no limit on tiktok"] {
@@ -1694,9 +1694,9 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
 
 // MARK: - CAPS: every row of the disambiguation table
 
-/// The design's §5.5 table, asserted row for row — including every row marked
-/// "unchanged", because those are the regressions a new rule is most likely to
-/// cause and the only place they would show.
+/// The design's disambiguation table, asserted row for row — including every
+/// row marked "unchanged", because those are the regressions a new rule is most
+/// likely to cause and the only place they would show.
 ///
 /// Every row is a sentence run through the live parser. The rows carrying a
 /// CORRECTED expectation are marked; each is a sentence the previous attempt
@@ -1896,7 +1896,7 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
         row("give me 60 a day max on tiktok and thats it",
             .command(.setDoorCap(door: tiktok, minutes: 60))),
         // Held: `setBudget`, and the design itself called the budget reading
-        // wrong ("§5.5: Wrong reading, but it is today's reading"). One clause,
+        // wrong ("Wrong reading, but it is today's reading"). One clause,
         // one door, one number, one period phrase — it is a ceiling.
         row("i want 60 minutes a day for instagram",
             .command(.setDoorCap(door: instagram, minutes: 60))),
@@ -2955,12 +2955,13 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     /// arms are different sizes the longer arm's window is proportionally less
     /// likely to find a quiet slice, so the two arms are contended UNEQUALLY even
     /// when interleaved — and the bias is one-directional: the numerator inflates
-    /// while the denominator does not. PR #33 measured that naive design ranging
-    /// **10.3 to 23.3** against a bound of 25 on a loaded machine and predicted it
-    /// would flake. It did: on 2026-08-12 at load average ~146 on eight cores the
-    /// scaling reached **25.9**, and the five-second backstop reached **6.0, 6.8,
-    /// 8.2, 9.6 and 17.2 seconds** — five failures in eight consecutive runs, with
-    /// nothing whatever wrong with the parser.
+    /// while the denominator does not. The ratio's first version measured that
+    /// naive design ranging **10.3 to 23.3** against a bound of 25 on a loaded
+    /// machine and predicted it would flake. It did: on 2026-08-12 at load
+    /// average ~146 on eight cores the scaling reached **25.9**, and the
+    /// five-second backstop reached **6.0, 6.8, 8.2, 9.6 and 17.2 seconds** —
+    /// five failures in eight consecutive runs, with nothing whatever wrong
+    /// with the parser.
     ///
     /// **So both arms do the same total work in the same-length window.** Ten
     /// thousand words as ONE string against ten thousand words as TEN strings of a
@@ -2969,10 +2970,11 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     /// because ten times the length is a hundred times the work spread over a
     /// tenth as many calls. The signal is preserved and the estimator bias is
     /// gone, because a quiet slice is now exactly as easy to find on both sides.
-    /// (`ClauseIndexCost.aHugeInputStaysLinear` reached the same design by the
-    /// same route; this is that fix applied to the gate PR #33 left behind.)
+    /// (`ClauseIndexCost.tenThousandWordsInOneBreathCostWhatTheyCostInTen`
+    /// reached the same design by the same route; this is that fix applied to
+    /// the gate the ratio's first version left behind.)
     ///
-    /// **The numbers.** Debug, Apple silicon, best of three. Healthy sits at
+    /// **The numbers.** Debug, Apple silicon, best of seven. Healthy sits at
     /// **1.0**: over 20 consecutive runs on a quiet machine the ratio stayed inside
     /// **0.976–1.033**, and over 20 runs under twelve spinning processes on eight
     /// cores — load averages 3.6 to 74, which stretched both arms from 0.62 s to
@@ -3032,12 +3034,13 @@ private func expectCap(_ text: String, door: String, minutes: Int?,
     /// a quiet one — the trade `PerformanceMeasurement.swift` recommends
     /// everywhere else and this test declined.
     ///
-    /// **It costs about eight seconds**, and the spine suite goes from roughly
-    /// eight seconds to sixteen with the doorless ratio's four beside it. Priced
-    /// deliberately: the hook's whole argument is that it is cheap enough to keep
-    /// switched on, and a gate that reddens on a busy afternoon gets switched off
-    /// long before a slow one does. Measured healthy across three full-suite
-    /// runs: **1.01, 1.03, 1.01** against the bound of 3.
+    /// **It costs about 1.8 seconds run on its own**, the doorless ratio beside
+    /// it about half a second, and the whole spine still finishes in about three
+    /// seconds with both of them inside it. Priced deliberately: the hook's whole
+    /// argument is that it is cheap enough to keep switched on, and a gate that
+    /// reddens on a busy afternoon gets switched off long before a slow one does.
+    /// Measured healthy across three full-suite runs: **1.01, 1.03, 1.01**
+    /// against the bound of 3.
     @Test func hugeInputStaysCheapAndSilent() {
         func noise(words: Int) -> String {
             Array(repeating: "lorem ipsum dolor sit amet", count: words / 5).joined(separator: " ")

@@ -1,8 +1,8 @@
 {
   "shape": "static-html",
-  "note": "Not converter-produced. Silk has no JS component library; this layout was authored off-script from 12 static HTML+CSS mockups. Any resync driver keying on shape==storybook|package will not match this envelope and will correctly re-verify everything. See .design-sync/NOTES.md.",
-  "keyRecipe": "sha256[:12] per file; sourceHashes over silk-ds/**, renderHashes over each uploaded card, styleSha over styles.css+tokens+_ds_bundle.css concatenated",
-  "styleSha": "1651e0102fba",
+  "note": "Not converter-produced. Silk has no JS component library; this layout was authored off-script from 12 of the 13 static HTML+CSS mockups in silk-ds/. The thirteenth, screens/interactive.html, was added after the first sync and has no card, so it is in sourceHashes with no renderHashes entry. Any resync driver keying on shape==storybook|package will not match this envelope and will correctly re-verify everything. See .design-sync/NOTES.md.",
+  "keyRecipe": "sha256[:12] per file; sourceHashes over silk-ds/**, renderHashes over each uploaded card, bundleSha12 over _ds_bundle.css alone, styleSha over styles.css + tokens/color.css + tokens/type.css + _ds_bundle.css concatenated in that order with no separator",
+  "styleSha": "cb7a187b04c6",
   "bundleSha12": "66e2b7431ec6",
   "auxSha": "32c33a02b16b",
   "sourceHashes": {
@@ -15,6 +15,7 @@
     "silk-ds/components/shield.html": "758b674e4c73",
     "silk-ds/foundations/colors.html": "26ee1ec9768d",
     "silk-ds/foundations/type.html": "2b57e1526627",
+    "silk-ds/screens/interactive.html": "a025b8d60cf3",
     "silk-ds/screens/mirror.html": "56d20c2eae52",
     "silk-ds/screens/now-day.html": "8c4f03fa68a2",
     "silk-ds/screens/now-night.html": "5c47083ad21e"

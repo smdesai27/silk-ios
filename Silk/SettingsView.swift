@@ -112,14 +112,14 @@ struct SettingsView: View {
                 // The one section title on the page — VoiceOver can jump by it.
                 .accessibilityAddTraits(.isHeader)
 
-            // Per-door rows. These rows tap now: the owner asked to edit the
-            // apps behind Silk after setup, so a tap raises the editor
-            // (Rebind / Remove) the way the three global rows raise the
-            // wheel. This deliberately amends the earlier canon note that
-            // door rows were statements only — the row's *value* is still
-            // not a control (a door's minutes are changed by asking Silk at
-            // the bar), and the rows still carry no state dot: this list is
-            // the rules, Now's list is the day.
+            // Per-door rows. These rows tap now: a door's apps are editable
+            // after setup, so a tap raises the editor (Rebind / Remove) the
+            // way the three global rows raise the wheel. This deliberately
+            // amends the earlier canon note that door rows were statements
+            // only — the row's *value* is still not a control (a door's
+            // minutes are changed by asking Silk at the bar), and the rows
+            // still carry no state dot: this list is the rules, Now's list
+            // is the day.
             VStack(spacing: 0) {
                 ForEach(doors) { door in
                     SettingsRow(name: door.name, value: door.value,
@@ -190,8 +190,8 @@ private struct SettingsRow: View {
     /// The row's name in the accessibility tree. Carried in rather than
     /// applied from outside, because the row is a `Button` now — see `body`.
     var axID: String
-    /// Every row taps — the doors group opens the editor since the owner asked
-    /// for post-setup editing (this amends the earlier "statements, not
+    /// Every row taps — the doors group opens the editor because a door's apps
+    /// are editable after setup (this amends the earlier "statements, not
     /// controls" canon note deliberately).
     var action: () -> Void
 

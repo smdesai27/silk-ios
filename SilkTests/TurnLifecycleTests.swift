@@ -189,12 +189,12 @@ import UIKit
     /// This test held the opposite fact once: the shorthand spent on its door,
     /// and its absence was what let a green CI and a broken product coexist.
     /// The nicknames went out with the bare shortcut form, for the reason
-    /// PolicyState.swift:44 states — a short nickname answers yes far more often
-    /// than the user meant one, and what one now reaches is a "Write it out:"
-    /// hint on a door the sentence may never have named. The fact reversed; the
-    /// assertion stayed, on the same door made exactly the way the app makes
-    /// one, because a nickname table quietly coming back is the regression this
-    /// file is placed to catch.
+    /// `Door.spokenForms`' own doc comment states — a short nickname answers
+    /// yes far more often than the user meant one, and what one now reaches is
+    /// a "Write it out:" hint on a door the sentence may never have named. The
+    /// fact reversed; the assertion stayed, on the same door made exactly the
+    /// way the app makes one, because a nickname table quietly coming back is
+    /// the regression this file is placed to catch.
     ///
     /// The widener is silenced so the reply is assertable: a nickname is prose
     /// now, and prose on a phone with a model is the model's business.

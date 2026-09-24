@@ -139,10 +139,11 @@ extension DoorState {
 
     /// The row's serif slot, or nil when there is nothing to say. The separator
     /// belongs to the string — "· 5:00" is one serif span, not a name plus a
-    /// time (Interactive.html:276). The gap before it does not: the mockup opens
-    /// that span with an &nbsp; only because CSS gives `.silk-door__time` no
-    /// margin (_ds_bundle.css:236), and in SwiftUI that gap is the row's
-    /// spacing. A resting door leaves the slot empty so the baseline stays put.
+    /// time (`silk-ds/screens/interactive.html:276`). The gap before it does
+    /// not: the mockup opens that span with an &nbsp; only because CSS gives
+    /// `.silk-door__time` no margin (`ds-bundle/_ds_bundle.css:236`), and in
+    /// SwiftUI that gap is the row's spacing. A resting door leaves the slot
+    /// empty so the baseline stays put.
     ///
     /// Meridiem-less on purpose. The row is read in the moment, and there is
     /// only one 4:52 she could mean.
@@ -197,7 +198,8 @@ extension TimeOfDay {
 
 extension DownHours {
 
-    /// The aperture's one line: "☾  10:00 PM – 7:00 AM" (Interactive.html:273).
+    /// The aperture's one line: "☾  10:00 PM – 7:00 AM"
+    /// (`silk-ds/screens/interactive.html:273`).
     /// The glyph is part of the string because the aperture is a single centred
     /// label, not an icon beside text, and the gap after it is nbsp + space
     /// exactly as the mockup sets it. En dash, never a hyphen — this is a range.
