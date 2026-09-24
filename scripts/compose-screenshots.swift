@@ -9,9 +9,10 @@
 //  the finished store images at the same size: Silk's paper ground, the
 //  caption set in the system serif above, and the capture below it.
 //
-//  Two of the six carry no capture at all — they are the claims no competitor
+//  One of the five carries no capture at all — it is the claim no competitor
 //  can put on their own page, and a screenshot of a screen would only get in
-//  the way of them.
+//  the way of it. (A sixth, "Silk is free.", was cut before the 1.0 resubmission:
+//  App Review Guideline 2.3.7 says screenshots should not include prices.)
 //
 //  Every colour here is `Silk/DesignSystem.swift`'s: paper #F6F3EC, ink
 //  #211E17, and the serif is the system's serif design (New York), which is
@@ -196,9 +197,7 @@ struct Shot {
 let shots = [
     Shot(number: "01",
          caption: """
-         In down hours,
-         a blocked app shows
-         the hour it opens again.
+         Down hours.
          """,
          capture: "shot-01.png", slack: 0),
     Shot(number: "02",
@@ -211,10 +210,10 @@ let shots = [
     Shot(number: "03",
          caption: """
          Write \u{201C}unlock Instagram
-         for 10 min.\u{201D} It opens
-         for ten and locks again.
+         for 10 min.\u{201D} It opens,
+         then locks again.
          """,
-         capture: "shot-03.png", slack: 0),
+         capture: "shot-03-thread.png", slack: 0),
     // Broken short and even rather than at the sentence's own comma. One
     // size is fitted across every captioned page and it is the smallest any
     // one of them needs, so a single long line here does not just set this
@@ -228,7 +227,7 @@ let shots = [
          caption: """
          The score
          for the last full day,
-         and the week beside it.
+         and the week below it.
          """,
          capture: "shot-04.png", slack: 0),
     // The two pages with no phone on them are set larger, and the measure is
@@ -237,18 +236,11 @@ let shots = [
     // short.
     Shot(number: "05",
          caption: """
+         Minimal.
          Silk sends
          no notifications
          and keeps
          no streaks.
-         """,
-         capture: nil, slack: 0),
-    Shot(number: "06",
-         caption: """
-         Silk is free.
-         The blocking
-         never depends
-         on a payment.
          """,
          capture: nil, slack: 0)
 ]
