@@ -119,16 +119,17 @@ git config core.hooksPath .githooks
 
 ## Status
 
-1.0.0 (build 3) is with App Review, resubmitted on 2026-09-19 with the Family Controls
-distribution entitlement on all four bundles. Release is set to Manual, so it is not on the App
-Store yet. *Status as of 2026-09-19.*
+1.0.0 (build 3) is [on the App Store](https://apps.apple.com/app/silk-app-blocker-screen-time/id6802485815),
+released on 2026-09-24 in 175 countries and regions. It is free and iPhone only. The next build
+is 4. *Status as of 2026-09-25.*
 
 ## Links
 
+[App Store](https://apps.apple.com/app/silk-app-blocker-screen-time/id6802485815) ·
 [Privacy policy](https://smdesai27.github.io/silk-ios/privacy.html) ·
-[Support](https://smdesai27.github.io/silk-ios/support.html) — the two pages the app itself links
-to (`Silk/Links.swift`), served from the `gh-pages` branch. Anything security- or privacy-relevant
-goes to the address on the support page rather than to a public issue; see
+[Support](https://smdesai27.github.io/silk-ios/support.html). The last two are the pages the app
+itself links to (`Silk/Links.swift`), served from the `gh-pages` branch. Anything security- or
+privacy-relevant goes to the address on the support page rather than to a public issue; see
 [SECURITY.md](.github/SECURITY.md).
 
 ## License
