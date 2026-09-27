@@ -53,7 +53,7 @@ half-steps — so a bare "rule 7" inside the spine means that list, not this one
 4. **The wall fails closed.** The ledger is the truth; a dead extension closes doors late, never
    leaves them open. The model proposes; the validator disposes.
 5. **No notification permission, ever.** Every word the app says comes from
-   `SilkCore/Sources/SilkCore/Strings.swift` — 76 of them today, 66 constants and 10 that compose.
+   `SilkCore/Sources/SilkCore/Strings.swift` — 77 of them today, 67 constants and 10 that compose.
    The file is the vocabulary, and nothing outside it may speak.
 
 ## Architecture
@@ -126,8 +126,9 @@ is 4. *Status as of 2026-09-25.*
 ## Links
 
 [App Store](https://apps.apple.com/app/silk-app-blocker-screen-time/id6802485815) ·
+[How it works](https://smdesai27.github.io/silk-ios/how.html) ·
 [Privacy policy](https://smdesai27.github.io/silk-ios/privacy.html) ·
-[Support](https://smdesai27.github.io/silk-ios/support.html). The last two are the pages the app
+[Support](https://smdesai27.github.io/silk-ios/support.html). The last three are the pages the app
 itself links to (`Silk/Links.swift`), served from the `gh-pages` branch. Anything security- or
 privacy-relevant goes to the address on the support page rather than to a public issue; see
 [SECURITY.md](.github/SECURITY.md).

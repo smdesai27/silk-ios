@@ -568,6 +568,7 @@ private struct SettingsPage: View {
                      onTapUndo: { model.raisePicker(.undo) },
                      onTapDoor: { model.editDoor(named: $0) },
                      onAddDoor: { model.beginAddDoor() },
+                     onTapHowItWorks: { UIApplication.shared.open(SilkLinks.howItWorks) },
                      onTapPrivacy: { UIApplication.shared.open(SilkLinks.privacyPolicy) },
                      onTapSupport: { UIApplication.shared.open(SilkLinks.support) })
     }

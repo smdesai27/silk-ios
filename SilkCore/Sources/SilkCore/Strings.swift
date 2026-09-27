@@ -194,6 +194,7 @@ public enum SilkStrings {
     public static let downHours = "Down hours"
     public static let budget = "Budget"
     public static let apps = "Apps"
+    public static let howItWorks = "How it works"          // the row that opens the how-it-works page (SilkLinks)
     public static let privacy = "Privacy"                  // the row that opens the policy (SilkLinks)
     public static let support = "Support"                  // the row that opens the support page (SilkLinks)
     /// A closed app's state word, where no reopen time applies: "closed".

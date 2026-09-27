@@ -37,6 +37,9 @@ struct SettingsView: View {
     /// as the three global rows raise the wheel.
     var onTapDoor: (String) -> Void
     var onAddDoor: () -> Void
+    /// The page that says how Silk works, opened in Safari. First of the
+    /// quiet rows at the foot, because it is the one a new install needs.
+    var onTapHowItWorks: () -> Void = {}
     /// The privacy policy, opened in Safari. A quiet row at the foot of the
     /// page: not a rule, so it wears the add-row's affordance costume.
     var onTapPrivacy: () -> Void
@@ -66,11 +69,11 @@ struct SettingsView: View {
     /// The first two are the scaffold's seat, mounted by `silkFittedColumn` and
     /// counted here because they are part of the height being fitted.
     /// The add row is a row like any other: 52 when it shows. The foot is 34
-    /// of air and two more rows, Privacy and Support.
+    /// of air and three more rows, How it works, Privacy and Support.
     private var columnHeight: CGFloat {
         62 + 13 + 64 + 3 * 52 + 44 + 15 + 14
             + CGFloat(doors.count + (showsAddRow ? 1 : 0)) * 52
-            + 34 + 2 * 52
+            + 34 + 3 * 52
     }
 
     private var column: some View {
@@ -142,17 +145,25 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 46)
 
+            // How it works, the hosted page (`SilkLinks`) that says what no
+            // screen here explains at length: a blocked app opens from Silk,
+            // by a sentence, after a wait. Quiet, at the foot, off the rules'
+            // group: it states nothing about the day.
+            SettingsRow(name: SilkStrings.howItWorks, value: "",
+                        night: night, showsRule: true, quiet: true,
+                        axID: "silk.settings.how",
+                        action: onTapHowItWorks)
+                .padding(.horizontal, 46)
+                .padding(.top, 34)
             // The policy, reachable from inside the app as the guideline asks
-            // (5.1.1(i)); it opens the hosted page (`SilkLinks`). Quiet, at the
-            // foot, off the rules' group: it states nothing about the day.
+            // (5.1.1(i)); it opens the hosted page too, in the same costume.
             SettingsRow(name: SilkStrings.privacy, value: "",
                         night: night, showsRule: true, quiet: true,
                         axID: "silk.settings.privacy",
                         action: onTapPrivacy)
                 .padding(.horizontal, 46)
-                .padding(.top, 34)
-            // Support, in the same costume, directly under it: the pair is one
-            // quiet group at the foot, so only the last row drops its rule.
+            // Support, in the same costume, directly under it: the three are
+            // one quiet group at the foot, so only the last row drops its rule.
             SettingsRow(name: SilkStrings.support, value: "",
                         night: night, showsRule: false, quiet: true,
                         axID: "silk.settings.support",

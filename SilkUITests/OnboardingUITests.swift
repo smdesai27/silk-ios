@@ -702,6 +702,10 @@ final class OnboardingUITests: SilkWalk {
         // not only the listing's Support URL).
         let supportRow = element(app, "silk.settings.support")
         expect(supportRow, labelContains: "Support", "the Support row did not read its name")
+        // And, above both, the page a new install needs: how a blocked app
+        // opens. Not tapped either, for the same reason.
+        let howRow = element(app, "silk.settings.how")
+        expect(howRow, labelContains: "How it works", "the How it works row did not read its name")
     }
 
     /// The feature end to end, from the only surface that has it: set a ceiling
