@@ -59,6 +59,9 @@ final class NoModelUITests: SilkWalk {
             // re-lock row's assertion on the far side of a wait this test is
             // not about, and the refusal's timing is the number being measured.
             "-silkWait", "0",
+            // The sheet setup ends on would stand over the bar every
+            // sentence below is typed into.
+            "-silkNoHowItWorks", "YES",
             "-silkDownStart", "\(start)", "-silkDownEnd", "\((start + 1) % 24)",
         ]
         app.launch()

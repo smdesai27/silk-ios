@@ -114,7 +114,9 @@ final class ScreenshotWalk: SilkWalk {
     /// Settings reads the window a real install would show. Every capture runs
     /// mid-afternoon, nowhere near the edge.
     private static let launchArguments: [String] = [
-        "-silkReset", "YES", "-silkWait", "0"
+        "-silkReset", "YES", "-silkWait", "0",
+        // Setup ends on How it works in Safari's sheet; no shot is of it.
+        "-silkNoHowItWorks", "YES"
     ]
 
     // MARK: - The shots

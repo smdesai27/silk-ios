@@ -8,8 +8,9 @@ import SilkCore
 /// There is no page title and no section header above the first group — both
 /// were cut as unnecessary: the wordmark already signs
 /// the screen, and three rows reading "Down hours / Budget / Undo" are their
-/// own heading. Only the doors group earns a title, because door names are
-/// user data and would otherwise read as more settings.
+/// own heading. The doors group earns a title, because door names are user
+/// data and would otherwise read as more settings, and so does Info at the
+/// foot, because its rows open pages rather than set rules.
 ///
 /// Every value arrives pre-formatted — "☾ 10:00 PM – 7:00 AM", "60 min · day",
 /// "60 s" — because the model owns the clock and the composition rules
@@ -37,11 +38,11 @@ struct SettingsView: View {
     /// as the three global rows raise the wheel.
     var onTapDoor: (String) -> Void
     var onAddDoor: () -> Void
-    /// The page that says how Silk works, opened in Safari. First of the
-    /// quiet rows at the foot, because it is the one a new install needs.
+    /// The page that says how Silk works, in Safari's sheet. First of the
+    /// Info rows, because it is the one a new install needs.
     var onTapHowItWorks: () -> Void = {}
-    /// The privacy policy, opened in Safari. A quiet row at the foot of the
-    /// page: not a rule, so it wears the add-row's affordance costume.
+    /// The privacy policy, the same way. A quiet row in the Info group: not a
+    /// rule, so it wears the add-row's affordance costume.
     var onTapPrivacy: () -> Void
     /// The support page, the same way. Guideline 1.5 wants a way to reach a
     /// person from inside the app, not only from the listing.
@@ -68,12 +69,12 @@ struct SettingsView: View {
     /// 62 + wordmark 13 + 64, then 52 a row, then the title block 44 + 15 + 14.
     /// The first two are the scaffold's seat, mounted by `silkFittedColumn` and
     /// counted here because they are part of the height being fitted.
-    /// The add row is a row like any other: 52 when it shows. The foot is 34
-    /// of air and three more rows, How it works, Privacy and Support.
+    /// The add row is a row like any other: 52 when it shows. The foot is the
+    /// Info title block, the same 44 + 15 + 14, and its three rows.
     private var columnHeight: CGFloat {
         62 + 13 + 64 + 3 * 52 + 44 + 15 + 14
             + CGFloat(doors.count + (showsAddRow ? 1 : 0)) * 52
-            + 34 + 3 * 52
+            + 44 + 15 + 14 + 3 * 52
     }
 
     private var column: some View {
@@ -100,20 +101,7 @@ struct SettingsView: View {
             .padding(.horizontal, 46)
             .padding(.top, 64)
 
-            // Mirror's .silk-chart__title, borrowed whole: sans 12, .04em,
-            // margins 44/46/14, and the same ink as Mirror's own "Week" —
-            // ink-48 / paper-32 in the sheet, at the AA floor here.
-            // (ds-bundle/_ds_bundle.css:377-382)
-            Text(SilkStrings.apps)
-                .font(Silk.sans(12))
-                .tracking(Silk.track(0.04, 12))
-                .foregroundStyle(night ? Silk.paperAlpha(0.59) : Silk.inkAlpha(0.69))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 44)
-                .padding(.horizontal, 46)
-                .padding(.bottom, 14)
-                // The one section title on the page — VoiceOver can jump by it.
-                .accessibilityAddTraits(.isHeader)
+            groupTitle(SilkStrings.apps)
 
             // Per-door rows. These rows tap now: a door's apps are editable
             // after setup, so a tap raises the editor (Rebind / Remove) the
@@ -145,31 +133,50 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 46)
 
-            // How it works, the hosted page (`SilkLinks`) that says what no
-            // screen here explains at length: a blocked app opens from Silk,
-            // by a sentence, after a wait. Quiet, at the foot, off the rules'
-            // group: it states nothing about the day.
+            // Info: three rows that open a page (`SilkLinks`) in Safari's
+            // sheet. Quiet, at the foot, off the rules' groups: they state
+            // nothing about the day.
+            groupTitle(SilkStrings.info)
+            // How it works, the page that says what no screen here explains at
+            // length: a blocked app opens from Silk, by a sentence, after a
+            // wait. Setup shows it once; this is the way back to it.
             SettingsRow(name: SilkStrings.howItWorks, value: "",
                         night: night, showsRule: true, quiet: true,
                         axID: "silk.settings.how",
                         action: onTapHowItWorks)
                 .padding(.horizontal, 46)
-                .padding(.top, 34)
             // The policy, reachable from inside the app as the guideline asks
-            // (5.1.1(i)); it opens the hosted page too, in the same costume.
+            // (5.1.1(i)), in the same costume.
             SettingsRow(name: SilkStrings.privacy, value: "",
                         night: night, showsRule: true, quiet: true,
                         axID: "silk.settings.privacy",
                         action: onTapPrivacy)
                 .padding(.horizontal, 46)
             // Support, in the same costume, directly under it: the three are
-            // one quiet group at the foot, so only the last row drops its rule.
+            // one group, so only the last row drops its rule.
             SettingsRow(name: SilkStrings.support, value: "",
                         night: night, showsRule: false, quiet: true,
                         axID: "silk.settings.support",
                         action: onTapSupport)
                 .padding(.horizontal, 46)
         }
+    }
+
+    /// A group's title. Mirror's .silk-chart__title, borrowed whole: sans 12,
+    /// .04em, margins 44/46/14, and the same ink as Mirror's own "Week" —
+    /// ink-48 / paper-32 in the sheet, at the AA floor here.
+    /// (ds-bundle/_ds_bundle.css:377-382)
+    private func groupTitle(_ title: String) -> some View {
+        Text(title)
+            .font(Silk.sans(12))
+            .tracking(Silk.track(0.04, 12))
+            .foregroundStyle(night ? Silk.paperAlpha(0.59) : Silk.inkAlpha(0.69))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 44)
+            .padding(.horizontal, 46)
+            .padding(.bottom, 14)
+            // A section title, so VoiceOver can jump by it.
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
