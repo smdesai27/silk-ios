@@ -60,6 +60,9 @@ import XCTest
 //                       ago so the hedgerow has that much growth (shot 04).
 //                       Reachable ONLY from inside the -silkReset wipe, so it
 //                       can never write over a store anyone is keeping.
+//    -silkNoHowItWorks YES
+//                       keep How it works from rising over Now at the end of
+//                       setup (every shot)
 //
 //  The attachments out, named. `export attachments` writes UUID filenames and a
 //  manifest mapping each to the name this file gave it ("shot-01_0_<uuid>.png"):
@@ -171,9 +174,11 @@ final class ScreenshotWalk: SilkWalk {
         let readBack = reply(app, containing: "Instagram is open for 10")
         XCTAssertTrue(readBack.waitForExistence(timeout: Self.answer), "the grant did not land")
 
-        // The thread over the dimmed page, kept as an alternate: it is the
-        // sentence and the receipt in one frame, and the door row it produced
-        // is invisible behind it (the stage dims to .05).
+        // The thread over the dimmed page: it is the sentence and the receipt
+        // in one frame, and the door row it produced is invisible behind it
+        // (the stage dims to .05). This is the capture
+        // scripts/compose-screenshots.swift sets under page 03 and the README
+        // shows; shot-03 below, the row itself, is kept as the alternate.
         settle(1.0)
         capture("shot-03-thread")
 

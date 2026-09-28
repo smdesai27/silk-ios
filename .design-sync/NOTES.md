@@ -60,7 +60,7 @@ Those three harness pages are the local reference. They are **not uploaded**
 (`.design-sync/` is outside the sync's write globs) and should stay that way.
 
 Verified at the first sync: Now (day), Now (night), Shield ×3, Mirror hero +
-equation + chart + proposal card, and Doors in all four states across both
+equation + chart + proposal card, and Doors in all three states (live, open, rest) across both
 themes. Several of those have since left the app — see the note at the top of
 `ds-bundle/README.md`. They are still what the mockups draw, and the mockups are
 what this harness checks.

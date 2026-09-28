@@ -187,8 +187,10 @@ extension TimeOfDay {
 
     /// "10:00 PM", "7:00 AM". `display` stays meridiem-less because it lives
     /// inside sentences that already carry the context ("Till 7:00."). This form
-    /// is for the two labels that stand alone with no sentence to lean on: the
-    /// aperture and the night hero, where 7:00 must not be read as the evening.
+    /// is for any hour where nothing around it already names the night:
+    /// Settings' Down hours row (through apertureText), the shield's night line
+    /// and the "Opens 7:00 AM." / "Till 7:00 AM." replies, where 7:00 must not
+    /// be read as the evening.
     /// Non-breaking space before the meridiem, as the mockup sets it — "7:00 AM"
     /// must never wrap.
     public var displayWithMeridiem: String {

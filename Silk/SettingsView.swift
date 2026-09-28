@@ -162,8 +162,9 @@ struct SettingsView: View {
         }
     }
 
-    /// A group's title. Mirror's .silk-chart__title, borrowed whole: sans 12,
-    /// .04em, margins 44/46/14, and the same ink as Mirror's own "Week" —
+    /// A group's title. Mirror's .silk-chart__title: sans 12, .04em, margins
+    /// 44/46 (.silk-chart) and 14 below, 2 tighter than the sheet's 16 and
+    /// Mirror's own "Week", and the same ink as that "Week" —
     /// ink-48 / paper-32 in the sheet, at the AA floor here.
     /// (ds-bundle/_ds_bundle.css:377-382)
     private func groupTitle(_ title: String) -> some View {
@@ -246,7 +247,7 @@ private struct SettingsRow: View {
             // copies of the row's name on elements reading "Budget" and
             // "60 min · day" and the whole row on neither. `combine` folds the
             // pair into one element first; the identifier then rides that
-            // element, whose label is the row entire, which is what the six
+            // element, whose label is the row entire, which is what the
             // walks match on.
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
@@ -539,12 +540,13 @@ struct DoorDetailCard: View {
     /// app" is neither — it is a label on a control, which is sans 15 medium
     /// everywhere else in the app.
     ///
-    /// Their ink is the app's own secondary-action pair — the ramp's quiet-action
-    /// step, which setup's "Other apps" and the page's quiet add row both speak at
-    /// (the sheet's `--silk-ink-45` / `--silk-paper-40`, `.silk-btn-later`, the
-    /// "Not now" of a proposal, lifted to the AA floor). Quieter than the cap row
-    /// in both faces, which is the demotion — and it stays quieter after the lift,
-    /// because the whole ramp moved together rather than the floor alone.
+    /// Their ink is the app's own secondary-action pair — by day the ramp's
+    /// quiet-action step that setup's "Other apps" and the page's quiet add row
+    /// both speak at (`--silk-ink-45`), and at night `--silk-paper-40`
+    /// (`.silk-btn-later`, the "Not now" of a proposal), both lifted to the AA
+    /// floor. Quieter than the cap row in both faces, which is the demotion —
+    /// and it stays quieter after the lift, because the whole ramp moved
+    /// together rather than the floor alone.
     private func actionRow(_ label: String, id: String,
                            action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -565,8 +567,9 @@ struct DoorDetailCard: View {
 
     /// What the card states — the door's name, and the ceiling in force. The
     /// overlay's full voice (`--silk-paper-85` at night), not the page's: the
-    /// page dims its names to .36 because it is a list under a wordmark on the
-    /// open ground, and this card is the only thing on the screen.
+    /// page dims its names to .61 (the sheet's paper-36, lifted to the AA
+    /// floor) because it is a list under a wordmark on the open ground, and
+    /// this card is the only thing on the screen.
     private var statedInk: Color {
         night ? Silk.paperAlpha(0.85) : Silk.inkAlpha(0.92)
     }
@@ -728,11 +731,12 @@ struct DoorAddOverlay: View {
 
 /// The handoff's exact card, composed the way the model will compose it. The
 /// window string is spelled in escapes because the gaps are load-bearing and
-/// invisible: ☾, then nbsp + space, and an en dash between the hours — this
-/// is a range, never a hyphen (ApertureView.swift's preview sets the
-/// precedent; SilkCore's DownHours.apertureText builds the same string).
+/// invisible: ☾, then nbsp + space, an en dash between the hours — this is a
+/// range, never a hyphen — and nbsp before each meridiem (ApertureView.swift's
+/// preview sets the precedent; SilkCore's DownHours.apertureText builds the
+/// same string).
 private enum PreviewValues {
-    static let window = "\u{263E}\u{00A0} 10:00 PM \u{2013} 7:00 AM"
+    static let window = "\u{263E}\u{00A0} 10:00\u{00A0}PM \u{2013} 7:00\u{00A0}AM"
     static let budget = "60 min \u{00B7} \(SilkStrings.perDay)"
     static let undo = "60 s"
     /// A door's own ceiling, or the wheel's first seat where it has none. Most
@@ -742,7 +746,7 @@ private enum PreviewValues {
                         SettingsDoorItem(name: "TikTok", value: "15 min"),
                         SettingsDoorItem(name: "Clash", value: SilkStrings.noCap),
                         SettingsDoorItem(name: "YouTube", value: SilkStrings.noCap)]
-    /// The whole catalogue minus the four doors above — what the add overlay
+    /// Part of the catalogue, minus the doors above — what the add overlay
     /// offers a user four apps in, and enough names to see the flow wrap inside
     /// the 280 column.
     static let addable = ["X", "Reddit", "Snapchat", "Facebook", "Threads",

@@ -4,13 +4,13 @@ import SilkCore
 // The toast: every refusal, and every change still worth taking back. A "no"
 // weighs less than a decision, so it never earns a line on the page — it
 // arrives, it is read, it leaves, and the page is unchanged.
-// (the design principles: "Refusals are toast-weight" · Interactive.html:157-165, 393-402)
+// (the design principles: "Refusals are toast-weight" · interactive.html:157-165, 393-402)
 
 /// Undo is leaf lifted until it reads on ink, and pine shadow when it sits on
 /// linen — deliberately not leaf itself: the page owns the screen's one pop, so
 /// a toast borrows a cousin. The night value is a real token; the day one is
 /// the single hue the toast introduces, and it exists nowhere else.
-/// (Interactive.html:162 #9FC08F, :165 #4A5A50 = tokens/color.css:19 pine-shadow)
+/// (interactive.html:162 #9FC08F, :165 #4A5A50 = tokens/color.css:19 pine-shadow)
 private extension Color {
     static let toastUndoDay = Color(red: 0.624, green: 0.753, blue: 0.561)    // #9FC08F
     static let toastUndoNight = Color(red: 0.290, green: 0.353, blue: 0.314)  // #4A5A50
@@ -65,7 +65,7 @@ final class ToastCenter {
     @ObservationIgnored private var expiry: Task<Void, Never>?
 
     /// Long enough to read; short enough that it is gone before it nags.
-    /// (Interactive.html:401 — `undoFn?4500:2200`)
+    /// (interactive.html:401 — `undoFn?4500:2200`)
     private static let plainLifetime: Duration = .milliseconds(2200)
 
     /// An action buys longer because it asks for a decision, not just a glance.
@@ -138,7 +138,7 @@ final class ToastCenter {
 
 /// Ink on paper flips here, and only here. A toast is laid *on* the page, so
 /// it takes the opposite ground of whatever it covers — dark on the day paper,
-/// light on the night ground. (Interactive.html:158, 164)
+/// light on the night ground. (interactive.html:158, 164)
 ///
 /// So the night pill wears `Silk.linen` and `Silk.ink`, the DAY cloth, and that
 /// is not an oversight left over from the slate: the flip is the whole design of
@@ -161,7 +161,7 @@ final class ToastCenter {
 /// Door names come from the catalogue and nowhere else (`addDoor` is only reached
 /// from the add overlay's chips and setup's; the bar's `.addDoor` is refused with
 /// "Add it in Settings."), so nine characters is a bound and not a hope — and
-/// `ParkedReceiptTests` walks every catalogue entry against it, so a thirteenth
+/// `ParkedReceiptTests` walks every catalogue entry against it, so a new
 /// name long enough to crowd the glass fails in the spine rather than on a phone.
 private struct ToastCapsule: View {
     var toast: SilkToast
@@ -169,7 +169,7 @@ private struct ToastCapsule: View {
     var onAction: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {                       // .undo margin-left:12px (Interactive.html:162)
+        HStack(spacing: 12) {                       // .undo margin-left:12px (interactive.html:162)
             Text(toast.message)
                 .font(Silk.sans(13, weight: .medium))
                 // Refusals are time-statements; tabular so a replacement can
@@ -196,7 +196,7 @@ private struct ToastCapsule: View {
         .lineLimit(1)
         // white-space:nowrap — a refusal that needs two lines is not a refusal.
         .fixedSize(horizontal: true, vertical: false)
-        .padding(.vertical, 10)                     // padding:10px 18px (Interactive.html:159)
+        .padding(.vertical, 10)                     // padding:10px 18px (interactive.html:159)
         .padding(.horizontal, 18)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -231,7 +231,7 @@ struct ToastHost<Content: View>: View {
                 .environment(center)
 
             // The toast takes the short end of the 350–450ms band — it is an
-            // aside, not a state change (Interactive.html:159, `.4s`).
+            // aside, not a state change (interactive.html:159, `.4s`).
             //
             // Scoped to this layer and no wider: ToastHost wraps the whole app,
             // and a toast almost always arrives in the same transaction as the
@@ -252,16 +252,16 @@ struct ToastHost<Content: View>: View {
     private var toastLayer: some View {
         if let toast = center.current {
             ToastCapsule(toast: toast, night: night) { center.performAction() }
-                .padding(.top, 58)                  // top:58px (Interactive.html:158)
+                .padding(.top, 58)                  // top:58px (interactive.html:158)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 // 58 is measured from the glass, not from the safe area —
                 // the toast sits over the status bar's own margin.
                 .ignoresSafeArea()
                 // Hidden, it rests 14pt high; it arrives by falling into
                 // place and leaves the way it came.
-                // (Interactive.html:158, 161 — translate(-50%,-14px) → 0)
+                // (interactive.html:158, 161 — translate(-50%,-14px) → 0)
                 .transition(.offset(y: -14).combined(with: .opacity))
-                .zIndex(30)                         // z-index:30 (Interactive.html:160)
+                .zIndex(30)                         // z-index:30 (interactive.html:160)
                 // A toast lives seconds and never takes focus, so its words
                 // are announced. Replacement is a text change on the same
                 // view, which is why this keys on the message, not appearance.

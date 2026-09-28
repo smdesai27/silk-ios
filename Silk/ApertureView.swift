@@ -180,11 +180,12 @@ struct ApertureView: View {
 #Preview("Aperture — day, night, setup") {
     @Previewable @State var night = false
 
-    // What DownHours.apertureText composes at run time (SilkCore/DoorState.swift).
-    // Spelled in escapes because the gaps are load-bearing and invisible: ☾,
-    // then nbsp + space, and an en dash between the hours — this is a range,
-    // never a hyphen. Times are user data, so no SilkStrings entry buys this.
-    let window = "\u{263E}\u{00A0} 10:00 PM \u{2013} 7:00 AM"
+    // What DownHours.apertureText composes at run time
+    // (SilkCore/Sources/SilkCore/DoorState.swift). Spelled in escapes because
+    // the gaps are load-bearing and invisible: ☾, then nbsp + space, an en dash
+    // between the hours — this is a range, never a hyphen — and nbsp before
+    // each meridiem. Times are user data, so no SilkStrings entry buys this.
+    let window = "\u{263E}\u{00A0} 10:00\u{00A0}PM \u{2013} 7:00\u{00A0}AM"
 
     VStack(spacing: 0) {
         VStack(spacing: 26) {

@@ -7,7 +7,7 @@ import SilkCore
 // (_ds_bundle.css: .silk-dots, .silk-wordmark, .silk-door, .silk-cmdbar)
 
 // One curve for everything, from Silk.motion. Dots answer the thumb at .4s
-// (Interactive.html:126); doors take .5s (_ds_bundle.css:234, 239, 245) — a
+// (interactive.html:126); doors take .5s (_ds_bundle.css:234, 239, 245) — a
 // door changing state is a fact about the day, not a flick.
 
 // ============================================================
@@ -640,7 +640,7 @@ private struct SilkFittedColumn: ViewModifier {
     let columnHeight: CGFloat
 
     /// Bar bottom 44 (`SilkApp`'s `.padding(.bottom, 44)`) + bar height 52
-    /// (`ComposerBar`, _ds_bundle.css:271). The one place this sum is stated.
+    /// (`CommandBar`, _ds_bundle.css:271). The one place this sum is stated.
     private static let chromeReserve: CGFloat = 96
 
     /// The wordmark's seat: 62 above it, 13 of it. Both pages count these two

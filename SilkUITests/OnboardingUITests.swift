@@ -63,10 +63,12 @@ final class OnboardingUITests: SilkWalk {
                 // the overlay "rises, pauses and lands in every walk below",
                 // which overstated the net by five times.)
                 "-silkWait", "0.6",
-                // How it works rises once over Now at the end of setup, and
-                // every walk here finishes setup to type at the bar beneath
-                // it. Off for all of them; the one walk about the sheet
-                // launches without this and asserts it.
+                // How it works rises once over Now at the end of setup, over
+                // the bar and the dots a walk goes on to use. Off for every
+                // walk that shares these arguments;
+                // testHowItWorksRisesOnceAfterSetup launches without it to
+                // watch that rise (the Settings walk raises the sheet from its
+                // row, flag on).
                 "-silkNoHowItWorks", "YES"]
     }()
 
@@ -588,8 +590,8 @@ final class OnboardingUITests: SilkWalk {
     // The Settings wheel is the only surface that sets a cap, so these walks are
     // the whole feature's front door: what the door's card states, what the wheel
     // writes, what the row and the card read back, and — in
-    // `…ClampsTheGrantAtTheBar` — that the ceiling is real by the time the bar is
-    // asked for minutes past it.
+    // `testSettingsCapCommitTightensAndTheRowReadsItBack` — that the ceiling
+    // is real by the time the bar is asked for minutes past it.
 
     /// **The card states before it offers.** A door row raises the door's own
     /// detail card, and the cap row is not merely present on it: it carries the

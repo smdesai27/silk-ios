@@ -61,7 +61,6 @@ struct SafariSheet: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> SFSafariViewController {
         let safari = SFSafariViewController(url: url)
         safari.dismissButtonStyle = .done
-        safari.preferredControlTintColor = UIColor(Silk.ink)
         safari.delegate = context.coordinator
         return safari
     }

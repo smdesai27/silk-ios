@@ -82,7 +82,7 @@ struct NoModelRow: Sendable, CustomStringConvertible {
         case contains([String])
         /// `SilkStrings.didntGetThat` — the four words, and nothing else.
         case refused
-        /// `SilkStrings.writeItOut(door:minutes:)` — the sentence written out
+        /// `SilkStrings.writeItOut(_:minutes:)` — the sentence written out
         /// for HALF a spend: a door and a number with no verb between them, a
         /// door asked for with no duration, or either half standing alone.
         /// `minutes` is nil when the sentence named none, and the hint then

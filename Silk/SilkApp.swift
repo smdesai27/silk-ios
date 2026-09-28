@@ -357,8 +357,8 @@ struct RootView: View {
                         // closures that could not fire.
                         //
                         // The card is a pure value view like SettingsView: it
-                        // takes a name, an icon, a finished cap string and four
-                        // closures. `settingsCap(for:)` composes the string
+                        // takes a name, an icon, a finished cap string, an
+                        // optional pending string and five closures. `settingsCap(for:)` composes the string
                         // through `Caps.settingsValue`, and `doorIcons` is a
                         // stored property so the icon actually refreshes after a
                         // rebind — see its note in AppModel.

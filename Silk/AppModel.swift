@@ -133,7 +133,7 @@ final class AppModel {
         // QA: -silkNoModel YES runs the app as a phone with no Apple
         // Intelligence does — the widener answers `.silence` for every
         // sentence, exactly as `SilkModelParser.parse`'s availability guard
-        // makes it (SilkModelParser.swift:179), and the deterministic grammar
+        // makes it (SilkModelParser.swift:198), and the deterministic grammar
         // is the whole parser.
         //
         // It exists because the simulator HAS the model, so a walk that types
@@ -919,7 +919,7 @@ final class AppModel {
         ///
         /// This is load bearing, and it cost a UI walk to learn. The Validator
         /// runs a **number-provenance check** — `NumberParser.allNumbers(in:
-        /// utterance).contains(minutes)`, Validator.swift:149 — so the minutes
+        /// utterance).contains(minutes)`, Validator.swift:211 — so the minutes
         /// it is asked for must be words the user actually said. But the
         /// minutes a `.grant` verdict carries are the **clamped** ones: ask for
         /// sixty against a budget of forty and the verdict says 40, which
