@@ -26,9 +26,10 @@
 # each parse ten thousand words per arm, seven rounds over. Skipping those two
 # takes about a third off the run; the thousand tests behind them are the rest.
 # The wait's own frame-budget bounds are about one percent of it, and worth
-# knowing about anyway: they and HotPathCostTests are the assertions here that
-# can fail on "buttery smooth", and PerformanceMeasurement.swift says what a
-# bound like that holds and, just as importantly, what it cannot.
+# knowing about anyway: they, HotPathCostTests and CostCoverageTests are the
+# assertions here that can fail on "buttery smooth", and
+# PerformanceMeasurement.swift says what a bound like that holds and, just as
+# importantly, what it cannot.
 #
 # The seconds above are with SilkCore/.build warm; a fresh clone pays the
 # SwiftPM compile first, which is minutes.
@@ -194,8 +195,8 @@ fi
 # Three of the four lanes are built out of xcodebuild, which exists only on a
 # Mac. The spine is not: SilkCore is a plain SwiftPM package importing
 # Foundation and nothing else, so `swift test` answers for it on Linux exactly
-# as it does here — 1,060 of the repo's 1,201 tests, one short of the spine's
-# whole 1,061 because a single Darwin-shaped ratio names itself and skips. That
+# as it does here — 1,072 of the repo's 1,216 tests, two short of the spine's
+# whole 1,074 because two Darwin-shaped ratios name themselves and skip. That
 # is deliberate, and .github/workflows/ci.yml has a job holding it true: it is
 # what lets the tests that matter most run in a container or a cloud session
 # instead of waiting on a runner.

@@ -95,7 +95,7 @@ public enum DeterministicParser {
         //    door a closing verb governs — clause-scoped, the way the cap rules
         //    already read their own — and until it can, nothing above it should
         //    be routing sentences to it on the strength of a substring.
-        if isStatusAsk(text, hasDoor: door != nil) { return .command(.status) }
+        if isStatusAsk(text, tokens: tokens, hasDoor: door != nil) { return .command(.status) }
 
         // 2. DOWN HOURS — must be checked before budget: both can carry a number.
         //    With a time it is a setter; without one it is a question, and the
@@ -116,7 +116,7 @@ public enum DeterministicParser {
             // One reading of the edge, used twice: the evening assumption and
             // the setter must never disagree about which edge this is, or a
             // stated 7 becomes 19:00 and then lands on the end.
-            let edgeIsStart = isStart(text)
+            let edgeIsStart = isStart(tokens)
             // A STATED MERIDIEM IS STATED. "at 3 in the morning" names its
             // half of the day as surely as "3 am" does, and the evening
             // assumption exists only for hours that named none — a guess must
@@ -126,7 +126,7 @@ public enum DeterministicParser {
             // morning, and a stated evening reads as one even on the end
             // edge, where the bare-hour assumption is a morning.
             if let t = NumberParser.timeOfDay(in: strip(text, of: "down hours"),
-                                              assumeEvening: statedDayHalf(text) ?? edgeIsStart),
+                                              assumeEvening: statedDayHalf(tokens) ?? edgeIsStart),
                // THE HOUR'S OWN CLAUSE MUST BE ABOUT THE WINDOW. The setter
                // used to fire on a window word ANYWHERE in the sentence plus
                // the first hour-shaped number anywhere else, so ordinary prose
@@ -157,8 +157,10 @@ public enum DeterministicParser {
         // and the hoisted CLOSE below is never wrong in direction. The window
         // word still poisons SPEND through `windowMention`, so nothing on the
         // grant side opens by walking past this line.
-        if tokens.contains("night"), door == nil || !hasClosingVerb(text) { return .silence }
-        if says(text, bedtime) || says(text, quiet), door == nil {
+        if tokens.contains("night"), door == nil || !hasClosingVerb(text, tokens: tokens) {
+            return .silence
+        }
+        if door == nil, says(text, bedtime) || says(text, quiet) {
             return .command(.downHoursQuery)
         }
 
@@ -192,7 +194,7 @@ public enum DeterministicParser {
         //    and a sentence naming a close first has never had a second
         //    compilation. A doorless "cut off my budget at 30 a day" is
         //    unaffected: rule 4 declines without a door and rule 3 still has it.
-        if hasClosingVerb(text) {
+        if hasClosingVerb(text, tokens: tokens) {
             let until = restUntil(in: text)
             if let d = door {
                 return .command(.closeDoorToday(door: d, until: until))
@@ -440,7 +442,10 @@ public enum DeterministicParser {
         //    work" is a rule she is stating, not a sentence to be written out
         //    for her; the refusal below is rule 7's own, read here so the two
         //    halves of the spend grammar cannot disagree about "dont".
-        if let d = door, hasPlaceBinding(text), numbers.isEmpty {
+        //    The empty number list is asked before the fourteen place
+        //    searches: every spend carries a number, so the cheap test is the
+        //    one that says no.
+        if let d = door, numbers.isEmpty, hasPlaceBinding(text) {
             guard !aNegatorRefusesTheAsk(clauses()), !asksForLess(tokens) else { return .silence }
             return .writeItOut(door: d, minutes: nil)
         }
@@ -669,7 +674,12 @@ public enum DeterministicParser {
         for tok in tokens {
             if let d = door(tok, in: state) { return d }
         }
-        // Two-token names ("focus friend" style), just in case.
+        // Two-token names ("focus friend" style), just in case — and only when
+        // the roster holds one. This loop runs on every sentence that names
+        // no single-token door, a whole paste included, and against a roster
+        // with no space in any key every probe is a concatenation and a
+        // lowercasing that cannot match: the invariant at `doorAt`.
+        guard anyDoorNameIsTwoTokens(state) else { return nil }
         for i in 0..<max(0, tokens.count - 1) {
             if let d = door(tokens[i] + " " + tokens[i + 1], in: state) { return d }
         }
@@ -789,6 +799,18 @@ public enum DeterministicParser {
     /// short keys, against a string built and lowercased per token otherwise.
     private static func anyDoorNameIsTwoTokens(_ state: PolicyState) -> Bool {
         state.doors.contains { $0.key.utf8.contains(UInt8(ascii: " ")) }
+    }
+
+    /// The door whose two-token name is `a b`, asked only when the roster
+    /// holds a two-token name — the same gate `doorAt` puts on its bigram.
+    /// Exact, not a heuristic: the bigram carries a space, lowercasing and
+    /// `deinflected` both keep it, and a space has no other canonical
+    /// spelling, so no key without one can equal it. For the scans that ask
+    /// the bigram question in a shape `doorAt` does not answer — a name
+    /// ending at a token, or either half of one.
+    private static func doorSpanning(_ a: String, _ b: String, state: PolicyState) -> Door? {
+        guard anyDoorNameIsTwoTokens(state) else { return nil }
+        return door(a + " " + b, in: state)
     }
 
     /// How many doors a clause names, and which. One door named twice — once
@@ -1426,8 +1448,8 @@ public enum DeterministicParser {
         // The door names the ceiling — "the TIKTOK cap" — and a two-token name
         // is admitted from either half, since neither word alone is the door.
         if door(w, in: state) != nil { return true }
-        if i + 1 < t.count, door(w + " " + t[i + 1], in: state) != nil { return true }
-        if i > 0, door(t[i - 1] + " " + w, in: state) != nil { return true }
+        if i + 1 < t.count, doorSpanning(w, t[i + 1], state: state) != nil { return true }
+        if i > 0, doorSpanning(t[i - 1], w, state: state) != nil { return true }
         // The possessive's orphan. "tiktok's limit" reaches here as [tiktok,
         // s, limit] — the tokenizer splits on the apostrophe — and that "s" is
         // the door's own name continuing, not a word of the phrase's own.
@@ -2196,7 +2218,8 @@ public enum DeterministicParser {
                 governs = !emphatic && !(i + 1..<h).contains { j in
                     determiners.contains(t[j])
                         || door(t[j], in: state) != nil
-                        || (j + 1 < clause.upperBound && door(t[j] + " " + t[j + 1], in: state) != nil)
+                        || (j + 1 < clause.upperBound
+                            && doorSpanning(t[j], t[j + 1], state: state) != nil)
                 } && spansOneNounPhrase(t, i + 1..<h, state: state)
             } else {
                 governs = false
@@ -2385,7 +2408,20 @@ public enum DeterministicParser {
         // The clause reads its OWN numbers. Asking the whole utterance would put
         // "im at 9. cap tiktok at 20" — two numbers, two breaths — beyond every
         // rule here, and would hand a clause its neighbour's quantity.
-        let numbers = NumberParser.allNumbers(in: t[clause].joined(separator: " "))
+        //
+        // READ ONLY WHEN ASKED, and at most once. Every question put to the
+        // clause's numbers below stands behind a ceiling word or a period
+        // phrase, and the hot spend — "give me 20 minutes of instagram" — has
+        // neither, so reading them up front was a join and a whole second
+        // number reading whose answer nothing looked at. The same memo shape
+        // `parse` uses for `clauses()`.
+        var numbersMemo: [Int]?
+        func clauseNumbers() -> [Int] {
+            if let numbersMemo { return numbersMemo }
+            let read = NumberParser.allNumbers(in: t[clause].joined(separator: " "))
+            numbersMemo = read
+            return read
+        }
         // Where the number STANDS, when it stands anywhere: a number the reader
         // only finds through an idiom ("an hour a day") occupies no token, so
         // the tests below fall back to the door. Guessing a position for it
@@ -2431,10 +2467,10 @@ public enum DeterministicParser {
         // sentences like it lost the grant that is README rule 1, and "i want a
         // limit on tiktok" lost the written-out sentence rule 8 exists to give. A
         // clause that states no number has PROPOSED nothing. The idiom case is
-        // why the test is on `numbers` and not on `numberAt`: "cap tiktok at an
+        // why the test is on `clauseNumbers()` and not on `numberAt`: "cap tiktok at an
         // hour" has a quantity and no token holding it.
         let leadsTheDoor = lexeme.map { l in
-            l < doorStart && !numbers.isEmpty && capNouns.contains(t[l])
+            l < doorStart && !clauseNumbers().isEmpty && capNouns.contains(t[l])
         } ?? false
         if let lexeme, leadsTheNumber || leadsTheDoor {
             // A REMOVER STANDING BETWEEN THE CEILING WORD AND ITS DOOR MARKS
@@ -2581,7 +2617,7 @@ public enum DeterministicParser {
         // instead — "remove instagram, no cap on tiktok" already had its
         // clearing suppressed by the earlier removal, and this arm may not
         // overrule the same first breath from one rule over.
-        if let lexeme, capNouns.contains(t[lexeme]), lexeme < doorStart, numbers.isEmpty,
+        if let lexeme, capNouns.contains(t[lexeme]), lexeme < doorStart, clauseNumbers().isEmpty,
            !(clause.lowerBound..<lexeme).contains(where: { negators.contains(t[$0]) }),
            !statesAVolition(t, clause: clause) {
             // A POLITE QUESTION IS STILL A CAP PROPOSAL, and it terminates
@@ -2624,7 +2660,7 @@ public enum DeterministicParser {
         // of its own — keeps its grant; the ask-verb exemption keeps the hedged
         // elliptical asks walking ("give me tiktok max" still reaches rule
         // 8's written-out sentence); and the mood exemptions are the noun arm's own.
-        if let lexeme, capQuantifiers.contains(t[lexeme]), lexeme > doorEnd, numbers.isEmpty,
+        if let lexeme, capQuantifiers.contains(t[lexeme]), lexeme > doorEnd, clauseNumbers().isEmpty,
            lexeme == clause.upperBound - 1,
            !clause.contains(where: { askVerbs.contains(t[$0]) }),
            !(clause.lowerBound..<lexeme).contains(where: { negators.contains(t[$0]) }),
@@ -2648,7 +2684,7 @@ public enum DeterministicParser {
         // is the wrong one. The test is the word standing directly after the
         // door, asked with the noun-phrase whitelist every other rule here uses,
         // so an unrecognised word declines.
-        if periodPhrase(t, in: clause), numbers.count == 1, !t.contains("budget"),
+        if periodPhrase(t, in: clause), clauseNumbers().count == 1, !t.contains("budget"),
            doorIsATopic(t, clause: clause, doorStart: doorStart, state: state) {
             // A PARTICIPLE HEADING THE CLAUSE IS A HABIT REPORT WITH ITS
             // SUBJECT ELIDED, NOT A RULE. `doorIsATopic` answers yes
@@ -2901,6 +2937,7 @@ public enum DeterministicParser {
         // in rule 8. The guard keeps the `count == 1` form rather than testing
         // `> 1`, so that a future shape which forgets to require a number fails
         // silent rather than crashing on `numbers.first`.
+        let numbers = clauseNumbers()
         guard numbers.count == 1, let n = numbers.first else { return .silence }
         // A QUESTION THE SENTENCE ITSELF ANSWERS "no" IS DECLINED. The
         // requestModals exemption admits "should i cap tiktok at 20" as a
@@ -3099,11 +3136,8 @@ public enum DeterministicParser {
     /// no unit can rescue: "cap tiktok at 10 in the evening" is a schedule, and
     /// per-app schedules are out of scope.
     private static func numberIsNotMinutes(_ t: [String], in clause: Range<Int>) -> Bool {
-        let boundaries: Set<String> = ["after", "until", "untill", "till", "til"]
-        let clockWords: Set<String> = ["am", "pm", "oclock", "clock", "noon", "midnight",
-                                       "tonight", "morning", "evening", "afternoon"]
         for i in clause where NumberParser.readsAsNumber(t[i]) {
-            if i > clause.lowerBound, boundaries.contains(t[i - 1]) { return true }
+            if i > clause.lowerBound, numberBoundaryWords.contains(t[i - 1]) { return true }
             // "N TIMES a day" is a COUNT of occurrences, not a count of
             // minutes — "checking tiktok 50 times a day" is a habit report,
             // and writing its 50 as a fifty-minute ceiling turned a
@@ -3154,6 +3188,14 @@ public enum DeterministicParser {
         }
         return false
     }
+
+    /// The words that make the number after them a boundary rather than a
+    /// quantity, and the words that make it a clock — `numberIsNotMinutes`'s
+    /// two tables, built once here rather than from a literal on every
+    /// cap-shaped clause.
+    private static let numberBoundaryWords: Set<String> = ["after", "until", "untill", "till", "til"]
+    private static let clockWords: Set<String> = ["am", "pm", "oclock", "clock", "noon", "midnight",
+                                                  "tonight", "morning", "evening", "afternoon"]
 
     /// Whether the clause a spend would read — the clause holding the
     /// sentence's first number, or, when the quantity is an idiom's and
@@ -3386,15 +3428,29 @@ public enum DeterministicParser {
 
     private static func aNegatorRefusesTheAsk(_ index: NumberParser.ClauseIndex) -> Bool {
         let t = index.tokens
-        for i in t.indices where negators.contains(t[i]) {
-            // The window is the negator's own clause, walked forward to the
-            // first opening verb in it. "ever" used to be stepped over by
-            // name — "dont EVER open tiktok" — and needs no name now: every
-            // word English glues between a negator and the verb it refuses is
-            // inside the clause, and so is the speech verb ("i never SAID
-            // give me…") and the promise ("i PROMISED NOT TO unlock…").
-            guard let clause = index.clauseRange(containing: i) else { continue }
-            for verbAt in (i + 1)..<clause.upperBound {
+        // WHAT A CLAUSE CAN ANSWER, READ ONCE PER CLAUSE. The scan used to walk
+        // forward from every negator to every opening verb after it and, for
+        // each such pair, re-read the whole clause for a number and for a
+        // "more than" — facts that depend on the clause alone, so a clause
+        // dense in negators and verbs cost the cube of its length. What the
+        // pair loop asked is answered from these: whether ANY candidate verb
+        // stands after the negator, and whether any ask verb does, is whether
+        // the LAST one in the clause does.
+        struct Facts {
+            /// The last opening verb in the clause, ask verb or derived stem.
+            var lastVerb = -1
+            /// The last of those that is an ask verb.
+            var lastAskVerb = -1
+            /// Where the clause's last "more than" begins.
+            var lastMoreThan = -1
+            /// Whether any token of the clause reads as a number.
+            var hasNumber = false
+        }
+        var memo: [Int: Facts] = [:]
+        func facts(_ clause: Range<Int>) -> Facts {
+            if let known = memo[clause.lowerBound] { return known }
+            var f = Facts()
+            for v in clause {
                 // THE LEXICON IS THE ONE THE MINT USES. `askVerbs` predates the
                 // spend grammar's opening-verb authority and never learned its
                 // last four stems, so "dont USE instagram for 10 minutes", "dont
@@ -3409,46 +3465,61 @@ public enum DeterministicParser {
                 // STEMS ONLY, and only here: `askVerbs` is read by the cap family
                 // too, and this is the spend path's own refusal, whose every
                 // answer is a silence.
-                guard askVerbs.contains(t[verbAt]) || openingVerbStems.contains(t[verbAt])
-                else { continue }
+                //
                 // AND THOSE TWO NEED THEIR PARTICLE. "go" and "get" mean the app
                 // only as "go on"/"get on" — the same fact `particledGerunds`
                 // reads on the commitment side. Without this the refusal claims
                 // "dont get mad, give me 10 minutes of instagram", which is an ask
                 // with a preamble, and a guard that eats asks is how a widening
                 // pays for itself twice.
-                if t[verbAt] == "go" || t[verbAt] == "get" {
-                    guard verbAt + 1 < t.count, t[verbAt + 1] == "on" else { continue }
+                let isAsk = askVerbs.contains(t[v])
+                if isAsk || openingVerbStems.contains(t[v]),
+                   !(t[v] == "go" || t[v] == "get") || (v + 1 < t.count && t[v + 1] == "on") {
+                    f.lastVerb = v
+                    if isAsk { f.lastAskVerb = v }
                 }
-                // A DERIVED STEM REFUSES ONLY THE CLAUSE THAT CARRIES THE ASK.
-                // "i dont use instagram much, unlock instagram for 10 min" opens
-                // with a negated "use" in a clause that asks for nothing, and
-                // then asks in the next one — with Silk's own hint sentence. The
-                // ask-verb family keeps its whole-sentence reading, which its
-                // rows were pinned against; the stems the tightening added
-                // ("use", "spend", "go on", "get on") are ordinary verbs of
-                // ordinary preambles, so their negation refuses the sentence only
-                // when the number stands in the same clause as the negator.
-                // The bare negators — "no", "not", "never", "none" — keep the whole-
-                // sentence reading even on a derived stem: "no use, instagram for
-                // 10" and "never use instagram for 10 minutes" are refusals wearing
-                // the noun and the imperative, and neither has a preamble to
-                // exempt. Only the verbal contractions ("dont", "shouldnt", …)
-                // open a preamble a real ask can follow.
-                if !askVerbs.contains(t[verbAt]), !bareNegators.contains(t[i]),
-                   !clause.contains(where: { NumberParser.readsAsNumber(t[$0]) }) { continue }
-                // The bounded-ask carve is scoped to the immediate "dont": "dont
-                // give me more than 10 of tiktok" negates the exceeding. "NEVER
-                // open instagram for more than 20 minutes" is a standing rule, and
-                // granting its 20 is the wrong answer twice over — so the durative
-                // negators keep the refusal and the sentence goes to the widener.
-                let immediate = t[i] == "dont" || t[i] == "don't"
-                    || (t[i] == "not" && i > t.startIndex && t[i - 1] == "do")
-                let bounded = immediate && (i + 1..<clause.upperBound).dropLast().contains {
-                    t[$0] == "more" && t[$0 + 1] == "than"
-                }
-                if !bounded { return true }
+                if !f.hasNumber, NumberParser.readsAsNumber(t[v]) { f.hasNumber = true }
+                if t[v] == "more", v + 1 < clause.upperBound, t[v + 1] == "than" { f.lastMoreThan = v }
             }
+            memo[clause.lowerBound] = f
+            return f
+        }
+        for i in t.indices where negators.contains(t[i]) {
+            // The window is the negator's own clause, walked forward to the
+            // first opening verb in it. "ever" used to be stepped over by
+            // name — "dont EVER open tiktok" — and needs no name now: every
+            // word English glues between a negator and the verb it refuses is
+            // inside the clause, and so is the speech verb ("i never SAID
+            // give me…") and the promise ("i PROMISED NOT TO unlock…").
+            guard let clause = index.clauseRange(containing: i) else { continue }
+            let f = facts(clause)
+            // The bounded-ask carve is scoped to the immediate "dont": "dont
+            // give me more than 10 of tiktok" negates the exceeding. "NEVER
+            // open instagram for more than 20 minutes" is a standing rule, and
+            // granting its 20 is the wrong answer twice over — so the durative
+            // negators keep the refusal and the sentence goes to the widener.
+            // A "more than" anywhere after this negator in its clause bounds
+            // every verb it could refuse, so none of them refuses.
+            let immediate = t[i] == "dont" || t[i] == "don't"
+                || (t[i] == "not" && i > t.startIndex && t[i - 1] == "do")
+            if immediate, f.lastMoreThan > i { continue }
+            // A DERIVED STEM REFUSES ONLY THE CLAUSE THAT CARRIES THE ASK.
+            // "i dont use instagram much, unlock instagram for 10 min" opens
+            // with a negated "use" in a clause that asks for nothing, and
+            // then asks in the next one — with Silk's own hint sentence. The
+            // ask-verb family keeps its whole-sentence reading, which its
+            // rows were pinned against; the stems the tightening added
+            // ("use", "spend", "go on", "get on") are ordinary verbs of
+            // ordinary preambles, so their negation refuses the sentence only
+            // when the number stands in the same clause as the negator.
+            // The bare negators — "no", "not", "never", "none" — keep the whole-
+            // sentence reading even on a derived stem: "no use, instagram for
+            // 10" and "never use instagram for 10 minutes" are refusals wearing
+            // the noun and the imperative, and neither has a preamble to
+            // exempt. Only the verbal contractions ("dont", "shouldnt", …)
+            // open a preamble a real ask can follow.
+            let last = (bareNegators.contains(t[i]) || f.hasNumber) ? f.lastVerb : f.lastAskVerb
+            if last > i { return true }
         }
         return false
     }
@@ -3463,12 +3534,16 @@ public enum DeterministicParser {
     /// once for the re-ask after them).
     private static func theNumberIsADeadline(_ index: NumberParser.ClauseIndex) -> Bool {
         let t = index.tokens
-        let deadlineMarkers: Set<String> = ["until", "untill", "till", "til"]
         return t.indices.contains { i in
             i > t.startIndex && deadlineMarkers.contains(t[i - 1])
                 && NumberParser.readsAsNumber(t[i])
         }
     }
+
+    /// The markers that make a number a deadline. Built once: the deadline
+    /// test runs on every spend, in `parse` and again in `judgeSpend` when the
+    /// Validator checks the grant.
+    private static let deadlineMarkers: Set<String> = ["until", "untill", "till", "til"]
 
     /// Whether a seconds unit stands on any number in the sentence. The unit
     /// lexicon and the intensifier walk both belong to `NumberParser`, so the
@@ -3535,7 +3610,7 @@ public enum DeterministicParser {
         let anchor = numberAt
             ?? t.indices.first { i in
                 door(t[i], in: state) != nil
-                    || (i + 1 < t.count && door(t[i] + " " + t[i + 1], in: state) != nil)
+                    || (i + 1 < t.count && doorSpanning(t[i], t[i + 1], state: state) != nil)
             }
         guard let anchor, let clause = index.clauseRange(containing: anchor),
               let first = clause.first
@@ -3638,7 +3713,7 @@ public enum DeterministicParser {
             // against any shipping roster — see the invariant at `doorAt` —
             // and here for the day the catalogue carries a two-word entry.
             if predicateAt < clause.upperBound,
-               door(t[anchor] + " " + t[predicateAt], in: state) != nil {
+               doorSpanning(t[anchor], t[predicateAt], state: state) != nil {
                 predicateAt += 1
             }
             if predicateAt < clause.upperBound,
@@ -3791,14 +3866,24 @@ public enum DeterministicParser {
         // leaving its minutes to the next breath ("she said give me tiktok,
         // 20 minutes") or by naming the door as "it". The quote in a preamble
         // is the price, and it reaches the widener.
-        for i in t.indices where askVerbs.contains(t[i]) || openingVerbStems.contains(t[i]) {
-            if t[i] == "go" || t[i] == "get" {
-                guard i + 1 < t.count, t[i + 1] == "on" else { continue }
-            }
+        //
+        // One walk, carrying whether a frame has stood earlier in the current
+        // breath. It used to rescan the breath's prefix for every verb in it,
+        // which a breath of nothing but verbs made quadratic; clauses are
+        // contiguous and in order, so the flag resets exactly where a breath
+        // begins, and a verb is tested against the frames strictly before it.
+        var clauseStart = -1
+        var framed = false
+        for i in t.indices {
             guard let clause = index.clauseRange(containing: i) else { continue }
-            if (clause.lowerBound..<i).contains(where: {
-                reportingSpeechVerbs.contains(t[$0]) || wishVerbs.contains(t[$0])
-            }) { return true }
+            if clause.lowerBound != clauseStart {
+                clauseStart = clause.lowerBound
+                framed = false
+            }
+            let candidate = (askVerbs.contains(t[i]) || openingVerbStems.contains(t[i]))
+                && (!(t[i] == "go" || t[i] == "get") || (i + 1 < t.count && t[i + 1] == "on"))
+            if framed, candidate { return true }
+            if reportingSpeechVerbs.contains(t[i]) || wishVerbs.contains(t[i]) { framed = true }
         }
         return false
     }
@@ -3844,7 +3929,7 @@ public enum DeterministicParser {
         let anchor = t.indices.first { NumberParser.readsAsNumber(t[$0]) }
             ?? t.indices.first { i in
                 door(t[i], in: state) != nil
-                    || (i + 1 < t.count && door(t[i] + " " + t[i + 1], in: state) != nil)
+                    || (i + 1 < t.count && doorSpanning(t[i], t[i + 1], state: state) != nil)
             }
         let clause = anchor.flatMap { index.clauseRange(containing: $0) }
         switch clause.map({ doors(in: $0, of: index, state: state) }) ?? .none {
@@ -3929,7 +4014,7 @@ public enum DeterministicParser {
         // of a two-token name has to answer yes on its own account.
         func doorToken(_ i: Int) -> Bool {
             doorAt(t, i, within: prev.upperBound, state: state) != nil
-                || (i > prev.lowerBound && door(t[i - 1] + " " + t[i], in: state) != nil)
+                || (i > prev.lowerBound && doorSpanning(t[i - 1], t[i], state: state) != nil)
         }
         if case .one = prevDoors, prev.allSatisfy(doorToken) { return true }
         // AND THE ATTRIBUTED SPELLING OF THE SAME STRANDED TOPIC. "my notes
@@ -4079,9 +4164,10 @@ public enum DeterministicParser {
     /// The whole-sentence substring tests are the grammar's second-largest cost
     /// after the number reader, and almost every one of them is looking for
     /// something that is not there: `hasPlaceBinding` runs fourteen searches on
-    /// every doorful sentence, `isStatusAsk` five on every sentence at all,
-    /// and the answer is nearly always no. Foundation's search decides
-    /// canonical equivalence — the right question, and an expensive one.
+    /// every doorful sentence with no number, `isStatusAsk` five on every
+    /// sentence at all, and the answer is nearly always no. Foundation's
+    /// search decides canonical equivalence — the right question, and an
+    /// expensive one.
     ///
     /// So the NEGATIVE is settled first and cheaply, and the positive is not
     /// settled here at all. `utf8Contains` asks whether the phrase's bytes are
@@ -4114,6 +4200,15 @@ public enum DeterministicParser {
     /// drifting from it — the same reason `isStart` asks `readsAsHour` rather
     /// than repeating the number reader's rules.
     static func hasClosingVerb(_ text: String) -> Bool {
+        hasClosingVerb(text, tokens: NumberParser.tokenize(text))
+    }
+
+    /// The same question, handed the words. `tokens` MUST be
+    /// `NumberParser.tokenize(text)` — `parse` already holds them, and a
+    /// second tokenization here was wasted work on every sentence that reaches
+    /// rule 4, plus a set built from every word of it to ask about eight.
+    /// Tokens of any other string answer about a different sentence.
+    private static func hasClosingVerb(_ text: String, tokens: [String]) -> Bool {
         // Exactly two closer phrases embed an opener word, and only those may
         // outrank the opener veto: "stop letting me OPEN instagram" is a
         // close the veto must not see first. The rest stay behind the veto,
@@ -4124,9 +4219,8 @@ public enum DeterministicParser {
         // Openers win: "unlock instagram" contains the substring "lock",
         // which is precisely the silent polarity flip the research warned
         // about. Token-boundary matching only; never bare substring for verbs.
-        let tokens = Set(NumberParser.tokenize(text))
-        if !tokens.isDisjoint(with: openerTokens) { return false }
-        if !tokens.isDisjoint(with: closerTokens) { return true }
+        if tokens.contains(where: { openerTokens.contains($0) }) { return false }
+        if tokens.contains(where: { closerTokens.contains($0) }) { return true }
 
         // "no more THAN ten" is a quantifier on an ask, not a close; the word
         // boundary keeps "no more thanksgiving football" a close.
@@ -4810,13 +4904,15 @@ public enum DeterministicParser {
     private static let periodNouns: Set<String> = ["day", "days", "week", "weeks"]
     private static let periodDeterminers: Set<String> = ["a", "per", "every", "each", "these"]
 
-    private static func isStatusAsk(_ text: String, hasDoor: Bool) -> Bool {
+    /// `tokens` MUST be `NumberParser.tokenize(text)`, which `parse` already
+    /// holds; the word test reads them instead of tokenizing again.
+    private static func isStatusAsk(_ text: String, tokens: [String], hasDoor: Bool) -> Bool {
         // The bare word is the design's first listed example, and "left today"
         // its fourth. The word
         // matches as a token so "status?" and "check status" read too — but
         // only doorless: "block instagram and give me my status" must not
         // swallow the close into a balance readback.
-        if !hasDoor, NumberParser.tokenize(text).contains("status") { return true }
+        if !hasDoor, tokens.contains("status") { return true }
         if says(text, leftToday) { return true }
         return saysAny(text, statusAsks)
     }
@@ -4837,12 +4933,11 @@ public enum DeterministicParser {
     /// inflection the substring caught for free is spelled out; a dropped word
     /// hands the time to the wrong edge, and both directions of that mistake
     /// buy hours of lockdown under a reply that never mentions the window.
-    private static func isStart(_ text: String) -> Bool {
-        let tokens = NumberParser.tokenize(text)
-        let startWords: Set<String> = ["start", "starts", "started", "starting"]
-        let endWords: Set<String> = ["end", "ends", "ended", "ending",
-                                     "finish", "finishes", "finished", "finishing",
-                                     "until", "untill", "till", "til"]
+    ///
+    /// Takes the sentence's TOKENS — `NumberParser.tokenize` of the same text
+    /// the setter reads its time from, which `parse` already holds. Tokens of
+    /// any other string would pick an edge for a different sentence.
+    private static func isStart(_ tokens: [String]) -> Bool {
         // The setter moves one edge and the reader takes one time — the first
         // one in the sentence — so the word that owns it is the last marker
         // BEFORE it, not the first in the sentence. "until further notice down
@@ -4855,6 +4950,13 @@ public enum DeterministicParser {
         }) else { return true }
         return startWords.contains(tokens[slot])
     }
+
+    /// `isStart`'s two marker lists, built once rather than on every window
+    /// sentence.
+    private static let startWords: Set<String> = ["start", "starts", "started", "starting"]
+    private static let endWords: Set<String> = ["end", "ends", "ended", "ending",
+                                                "finish", "finishes", "finished", "finishing",
+                                                "until", "untill", "till", "til"]
 
     /// Whether the clause holding the sentence's stated hour is itself about
     /// the window — rule 2's setter gate. The setter fires on a window word
@@ -4956,7 +5058,14 @@ public enum DeterministicParser {
     /// morning", "half past 9 in the morning"), so the tie is adjacency:
     /// the token before the phrase must itself read as a clock hour.
     private static func statedDayHalf(_ text: String) -> Bool? {
-        let t = NumberParser.tokenize(text)
+        statedDayHalf(NumberParser.tokenize(text))
+    }
+
+    /// The same reading over tokens already in hand. `t` MUST be
+    /// `NumberParser.tokenize` of the text whose hour is being read: `parse`
+    /// passes its own, and `restUntil`, which reads a tail of the sentence,
+    /// goes through the text entry above.
+    private static func statedDayHalf(_ t: [String]) -> Bool? {
         for i in t.indices where i > 0 && readsAsHour(t[i - 1]) {
             if t[i] == "in", i + 2 < t.count, t[i + 1] == "the" {
                 if t[i + 2].hasPrefix("morning") { return false }
@@ -4973,8 +5082,23 @@ public enum DeterministicParser {
     /// asks the reader itself instead of restating its rules, because the two
     /// have to agree on which time is the stated one — disagree, and the marker
     /// chosen governs a different hour than the one that lands.
+    ///
+    /// `token` MUST come from `tokenize`: lowercased, with no separator left
+    /// in it. The reader still decides every token that could be an hour; the
+    /// guard only settles the ones it cannot accept, without running it. The
+    /// reader takes an hour from ASCII digits (`Int` reads nothing else) or
+    /// from a spelled hour in its word tables, and re-tokenizing a token
+    /// splits it only at a glued unit, which needs a digit — so a token with
+    /// no ASCII digit that is no number word reads as no hour. Most of the
+    /// words the three window scans walk are such tokens, and each of them was
+    /// a whole clock reading to be told so. An uppercase "TEN" would be
+    /// refused here where the reader, which lowercases, would read it — which
+    /// is why the precondition is stated.
     private static func readsAsHour(_ token: String) -> Bool {
-        NumberParser.timeOfDay(in: token, assumeEvening: false) != nil
+        guard token.utf8.contains(where: { $0 >= UInt8(ascii: "0") && $0 <= UInt8(ascii: "9") })
+                || NumberParser.isNumberWord(token)
+        else { return false }
+        return NumberParser.timeOfDay(in: token, assumeEvening: false) != nil
     }
 
     private static func strip(_ text: String, of phrase: String) -> String {

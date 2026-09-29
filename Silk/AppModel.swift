@@ -490,9 +490,13 @@ final class AppModel {
         // the day closed. The attempts bucket is only the fallback for a day
         // no record vouches for.
         let records = dayRecords
+        // Once for the band, not once per bucket: `dayStart` is derived from
+        // the Calendar on every read, and nothing it reads can move inside
+        // this getter.
+        let today = dayStart
         return weekAttemptBuckets.dropLast().enumerated().map { i, bucket in
             // Bucket i covers [dayStart - (6 - i) days, +1 day).
-            guard let end = cal.date(byAdding: .day, value: i - 5, to: dayStart),
+            guard let end = cal.date(byAdding: .day, value: i - 5, to: today),
                   end > installed else { return nil }
             if let start = cal.date(byAdding: .day, value: -1, to: end),
                let record = records.first(where: {

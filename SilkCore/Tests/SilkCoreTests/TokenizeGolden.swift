@@ -1,4 +1,6 @@
 import Foundation
+import Testing
+@testable import SilkCore
 
 // GENERATED from `NumberParser.tokenize` as it stood before the clause index
 // was added, over every string in `ParserCorpus.all`.
@@ -53,6 +55,20 @@ import Foundation
 // that is punctuation rather than a clock ("instagram: 10" loosens to two
 // tokens, "10:" to one), and a unit glued to a non-ASCII digit, which DOES
 // split — the peel is on the unit and not on the digit's script.
+//
+// `apostropheSpellings` BELOW IS A SECOND, SMALLER FREEZE, and it is not in
+// `pairs` on purpose: `theCorpusIsTheWholeSuite` holds `pairs` to exactly the
+// strings of `ParserCorpus`, and these are not test sentences but the edges of
+// one rewrite. `tokenize` now straightens a U+2019 that is the only non-ASCII
+// scalar in its string and folds an ASCII apostrophe a byte at a time, instead
+// of walking Characters; each row is a place those two could have disagreed
+// with the Character fold they replace — the string's ends, a CRLF beside the
+// mark, a digit or a letter beyond the "t", a second apostrophe, a colon or a
+// hyphen in the same string, and the strings that must keep the Unicode road.
+// Its tokens were derived BY HAND from `tokenize` as it stood before that
+// change (the Character fold, `components(separatedBy:)`), not generated: there
+// was no toolchain to run it. A row that goes red here is the rewrite being
+// wrong, not the row.
 
 enum TokenizeGolden {
     static let pairs: [(input: String, tokens: [String])] = [
@@ -3122,4 +3138,45 @@ enum TokenizeGolden {
         ("tiktok 299", ["tiktok", "299"]),
         ("instagram ninety", ["instagram", "ninety"]),
     ]
+
+    /// Hand-derived from the pre-byte-fold `tokenize`; see the header.
+    static let apostropheSpellings: [(input: String, tokens: [String])] = [
+        ("don\u{2019}t", ["dont"]),
+        ("tiktok\u{2019}ll be capped at 20", ["tiktok", "ll", "be", "capped", "at", "20"]),
+        ("i\u{2019}m at 7:30", ["i", "m", "at", "7:30"]),
+        ("it\u{2019}t", ["itt"]),
+        ("it't", ["itt"]),
+        ("\u{2019}t", ["t"]),
+        ("'t", ["t"]),
+        ("x\r\n\u{2019}t", ["x", "t"]),
+        ("x\r\n't", ["x", "t"]),
+        ("don\u{2019}t\r\n", ["dont"]),
+        ("don't\r\n", ["dont"]),
+        ("can\u{2019}t2", ["can", "t2"]),
+        ("can't2", ["can", "t2"]),
+        ("can\u{2019}tx", ["can", "tx"]),
+        ("can'tx", ["can", "tx"]),
+        ("2\u{2019}t", ["2", "t"]),
+        ("2't", ["2", "t"]),
+        ("1\u{2019}20", ["1", "20"]),
+        ("don\u{2019}\u{2019}t", ["don", "t"]),
+        ("don''t", ["don", "t"]),
+        ("DON\u{2019}T", ["dont"]),
+        ("DON'T", ["dont"]),
+        ("don\u{2019}t-stop", ["dont", "stop"]),
+        ("don\u{2019}t:", ["dont"]),
+        ("10min\u{2019}s", ["10", "min", "s"]),
+        ("don\u{2019}t won\u{2BC}t", ["dont", "wont"]),
+        ("caf\u{E9}\u{2019}t", ["caf\u{E9}t"]),
+    ]
+}
+
+/// The second freeze in this file, asked the same question `tokenizeIsUnchanged`
+/// asks of `pairs`.
+@Suite struct ApostropheSpellingGolden {
+    @Test(arguments: TokenizeGolden.apostropheSpellings)
+    func apostropheSpellingIsUnchanged(_ pair: (input: String, tokens: [String])) {
+        #expect(NumberParser.tokenize(pair.input) == pair.tokens,
+                "tokenize moved on \(pair.input.debugDescription)")
+    }
 }

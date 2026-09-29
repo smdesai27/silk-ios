@@ -190,7 +190,7 @@ private let ratioBound = 4.0
     /// the table depend on the frame size, make it testable. A computed property
     /// returns identical values, so every assertion above and every assertion
     /// about where the flick lands keeps passing, and the ~24 µs build moves from
-    /// once per process to twice per frame.
+    /// once per process to every read of the table — several on every frame.
     ///
     /// Asserted by identity rather than by a clock, because identity cannot
     /// flake. Two accesses to a stored `let` share one buffer; a computed
@@ -207,6 +207,26 @@ private let ratioBound = 4.0
         #expect(first.count == second.count)   // `first` is alive past the comparison
     }
 
+    /// The frame's one-lookup answer is the named questions' answer, exactly.
+    ///
+    /// `EnsoFlick.path(in:)` reads the tip and its direction through
+    /// `pointAndTangent`, which carries its own copy of the interpolation, the
+    /// fit and the normalisation; the ratio test below times `locate` through
+    /// `point` and `tangent`. That arrangement leans on the three agreeing, so
+    /// it is pinned rather than assumed — at both clamps, at both fractions the
+    /// ratio test reads, and in the middle. Same arithmetic in the same order,
+    /// so the comparison is exact and cannot flake.
+    @Test func theFlickReadsTheSameAnswerTheNamedQuestionsDo() {
+        let rect = CGRect(x: 0, y: 0, width: 132, height: 132)
+        for f in [0.0, 0.02, 0.5, 0.98, 1.0] {
+            let both = EnsoGeometry.pointAndTangent(atFraction: f, in: rect)
+            #expect(both.point == EnsoGeometry.point(atFraction: f, in: rect),
+                    "the flick's tip at \(f) is not where `point` puts the brush")
+            #expect(both.tangent == EnsoGeometry.tangent(atFraction: f),
+                    "the flick's direction at \(f) is not `tangent`'s")
+        }
+    }
+
     /// Finding the brush tip costs the same at the start of the stroke as at the
     /// end, because `EnsoGeometry.locate` is a binary search and must stay one.
     ///
@@ -218,8 +238,8 @@ private let ratioBound = 4.0
     ///
     /// — is shorter, reads better, returns the same index for every input, and
     /// passes every existing assertion about where the flick lands. It also
-    /// turns a nine-step lookup into a scan of up to 513 entries, twice per
-    /// frame (`point` and `tangent` each locate), on the one surface in Silk
+    /// turns a nine-step lookup into a scan of up to 513 entries on every frame
+    /// (the flick's `pointAndTangent` locates once), on the one surface in Silk
     /// that redraws at 120 Hz. And it does it *asymmetrically*: cheap near the
     /// start of the stroke, worst at the end — so the wait would get more
     /// expensive the closer it came to landing, which is precisely the moment it
@@ -229,6 +249,14 @@ private let ratioBound = 4.0
     /// 0.98 is still only microseconds, comfortably inside any absolute budget
     /// this file could defend. What gives it away is that it is ~50× the cost of
     /// the same call at 0.02, where bisection is flat.
+    ///
+    /// **Measured through `point` and `tangent`, not the frame's
+    /// `pointAndTangent`, on purpose.** The subject is `locate`, and all three
+    /// share it — `pointAndTangent`'s own note says this test is where the
+    /// bisection is measured. Two lookups per iteration is twice the signal for
+    /// the same scan, and the 30.3 below was built and measured against exactly
+    /// this loop. That the three read one answer is pinned just above; what the
+    /// frame itself pays is the backstop below, which calls what ships.
     @Test func findingTheBrushTipCostsTheSameWhereverItIs() {
         let iterations = 10_000
         let rect = CGRect(x: 0, y: 0, width: 132, height: 132)
@@ -271,8 +299,9 @@ private let ratioBound = 4.0
     /// Everything in the loop is what `WaitOverlay`'s body does, in order and at
     /// the size it ships at (132 pt, not Now's 232): a monotonic reading, a
     /// fraction, the five body strokes plus the dry-brush hair, and the flick's
-    /// point and tangent. Measured at ~16 µs, against a share of 833 µs — 52×
-    /// under, and 0.19% of the whole frame.
+    /// point and tangent, read off one lookup through `pointAndTangent` as
+    /// `EnsoFlick.path(in:)` reads them. Measured at ~16 µs, against a share of
+    /// 833 µs — 52× under, and 0.19% of the whole frame.
     ///
     /// **This is a backstop and not a sharp instrument, and it is worth being
     /// clear about which.** Path construction is 14 µs of the 16 µs — legitimate
@@ -297,9 +326,11 @@ private let ratioBound = 4.0
                 let f = w.fraction(at: Monotonic.reading)
                 // Five body layers and the hair — six paths, all `EnsoPath`.
                 for _ in 0..<6 { sink += EnsoPath().path(in: rect).boundingRect.width }
-                // The flick, which is the only part that reads the arc table.
-                sink += EnsoGeometry.point(atFraction: max(f, 0.04), in: rect).x
-                sink += EnsoGeometry.tangent(atFraction: max(f, 0.04)).dx
+                // The flick, which is the only part that reads the arc table,
+                // through the one call `EnsoFlick.path(in:)` makes — so a cost
+                // added to `pointAndTangent` alone lands in this loop.
+                let (p, t) = EnsoGeometry.pointAndTangent(atFraction: max(f, 0.04), in: rect)
+                sink += p.x + t.dx
             }
         }
         #expect(sink > 0)
@@ -484,5 +515,22 @@ private let ratioBound = 4.0
                 re-validating the ask costs \(elapsed), past the \(silksShare) Silk gets of a \
                 120 Hz frame — the Validator's work is growing with the ledger
                 """)
+    }
+}
+
+// MARK: - The reach after a fold
+
+/// A store that predates `silk.attempts.last` still dedupes a render off the
+/// stored attempts themselves: with no timestamp to ask, the newest attempt in
+/// the blob is what says whether this reach is the same one.
+@Suite(.serialized) @MainActor struct AStoreThatPredatesTheTimestampStillDedupes {
+    @Test func aStoreThatPredatesTheTimestampStillDedupesOffTheBlob() throws {
+        SharedStore.wipeAll()
+        let at = Date()
+        SharedStore.defaults.set(try JSONEncoder().encode([at.addingTimeInterval(-30)]),
+                                 forKey: "silk.attempts")
+        SharedStore.recordAttempt(at: at)
+        #expect(SharedStore.attemptsMerged().count == 1,
+                "a pre-key store counted a render 30 seconds after its newest attempt as a second reach")
     }
 }

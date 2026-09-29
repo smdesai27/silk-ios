@@ -143,16 +143,11 @@ struct RootView: View {
                             // read the wordmark through is not a wall — which is
                             // why it sits inside this container and outside
                             // `silkStage`. The two are different refusals.
-                            VStack {
-                                Wordmark(night: night)
-                                    .opacity(model.page == 1 ? 0 : 1)
-                                    .animation(Silk.motion(0.45), value: model.page)
-                                    .padding(.top, 62)
-                                Spacer()
-                            }
-                            .allowsHitTesting(false)
-                            .ignoresSafeArea(edges: .top)
-                            .ignoresSafeArea(.keyboard, edges: .bottom)
+                            //
+                            // It is the one thing on the root that asks which
+                            // page is showing, so it asks one view down — see
+                            // `WordmarkSeat`.
+                            WordmarkSeat(night: night)
 
                             // Tap-out: the stage is hit-dead while dimmed, so an
                             // invisible catcher under the thread picks up the tap and
@@ -554,6 +549,33 @@ private struct BarSlot: View {
         guard !text.isEmpty else { return }
         submittedAt = .now
         Task { await model.handle(text) }
+    }
+}
+
+/// The wordmark's seat: the one reader of `model.page` in the root's stratum.
+///
+/// Read on the root, every page settle — a swipe's end or a dot's tap — re-ran a
+/// body that mounts three pages, the thread, the bar and the overlays, for a
+/// one-line opacity whose answer nothing else on the screen uses. The pager and
+/// the dots take `$model.page` as a binding, which reads nothing on the root, so
+/// this view is the root's only reader of the page number. Same reason as
+/// `BarSlot` and `SettingsPage`: the read lives where the answer is used. The
+/// layout, the curve and the hit-testing are the root's own, moved whole.
+private struct WordmarkSeat: View {
+    @Environment(AppModel.self) private var model
+    var night: Bool
+
+    var body: some View {
+        VStack {
+            Wordmark(night: night)
+                .opacity(model.page == 1 ? 0 : 1)
+                .animation(Silk.motion(0.45), value: model.page)
+                .padding(.top, 62)
+            Spacer()
+        }
+        .allowsHitTesting(false)
+        .ignoresSafeArea(edges: .top)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 }
 

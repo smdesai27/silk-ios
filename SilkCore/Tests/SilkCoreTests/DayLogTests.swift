@@ -408,10 +408,18 @@ private func summarise(grants: [Grant] = [],
     }
 
     @Test func theWalkIsBounded() {
-        // A boundary that has moved absurdly far cannot spin the app.
-        let missing = DayLog.missingBoundaries(recorded: [at(1, 1, 7)],
+        // A boundary that has moved absurdly far cannot spin the app. Anchored
+        // eleven years back, outside `at()`'s 2026, so the days owed (about
+        // 4,380) are more than the cap: the walk has to reach it and stop there,
+        // and a cap that was raised or removed changes the count.
+        let anchor = cal.date(from: DateComponents(year: 2015, month: 1, day: 1, hour: 7))!
+        let missing = DayLog.missingBoundaries(recorded: [anchor],
                                                upTo: at(12, 31, 7), calendar: cal)
-        #expect(missing.count <= DayLog.maxWalk)
+        #expect(missing.count == DayLog.maxWalk, "the walk did not stop at its cap")
+        // Oldest first, from the day after the anchor: the cap keeps the days
+        // nearest the record and drops the ones nearest today.
+        #expect(missing.first == cal.date(byAdding: .day, value: 1, to: anchor))
+        #expect(missing.last == cal.date(byAdding: .day, value: DayLog.maxWalk, to: anchor))
     }
 
     @Test func springForwardIsWalkedExactlyOnce() {
