@@ -243,7 +243,7 @@ struct EnsoView: View {
                 // The lift-off flick — width 1.1, opacity .85 (enso-symbols.svg
                 // 7th path). It must leave the path *tangentially at the point
                 // where the stroke ends*; a flick at the wrong angle reads as a
-                // stray mark (Enso.prompt.md). Interactive.html `setEnso` cuts it
+                // stray mark (Enso.prompt.md). interactive.html `setEnso` cuts it
                 // below 0.03, where there is no stroke left to lift off from.
                 if f > 0.03 {
                     EnsoFlick(fraction: f)
@@ -259,7 +259,7 @@ struct EnsoView: View {
         .accessibilityHidden(true)
     }
 
-    /// Interactive.html `setEnso`: `hd = 8 + 6*frac` percent, offset so the hair
+    /// interactive.html `setEnso`: `hd = 8 + 6*frac` percent, offset so the hair
     /// stays centred at `frac/2` — the middle of whatever is still drawn. The
     /// static symbols freeze this (14 long at -31, or 11 at -18 for #enso-37);
     /// a budget that recedes needs the general form, or the hair strands itself
@@ -281,7 +281,7 @@ struct EnsoView: View {
 }
 
 /// The flick: a straight tangent 10 viewBox-units long, projecting forward from
-/// the tip (Interactive.html `setEnso`). Animatable so it travels with the tip
+/// the tip (interactive.html `setEnso`). Animatable so it travels with the tip
 /// instead of teleporting when the budget changes.
 private struct EnsoFlick: Shape {
     var fraction: Double

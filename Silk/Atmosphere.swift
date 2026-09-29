@@ -175,7 +175,7 @@ struct Atmosphere: View {
             Moonwash().opacity(night ? 1 : 0)
         }
         // .8s is the wash's own transition, slower than any interaction —
-        // the room dims at its pace, not the tap's. (Interactive.html:37, :44)
+        // the room dims at its pace, not the tap's. (interactive.html:37, :44)
         .animation(Silk.motion(Silk.Motion.crossing), value: night)
         .allowsHitTesting(false)
         .accessibilityHidden(true)   // light, not information

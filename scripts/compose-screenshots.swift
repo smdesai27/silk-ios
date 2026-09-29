@@ -170,7 +170,7 @@ func load(_ url: URL) -> CGImage {
     return image
 }
 
-// MARK: - The six
+// MARK: - The five
 
 /// The line breaks are authored, not left to the wrapper. Left to it, a
 /// caption breaks after a full stop and starts the next line on the two-letter
@@ -182,7 +182,7 @@ struct Shot {
     let number: String
     /// Newline-separated. Every line is a phrase that can stand alone.
     let caption: String
-    /// nil for the two typographic pages, whose caption is the whole image.
+    /// nil for the typographic page, whose caption is the whole image.
     let capture: String?
     /// What the wrapper is allowed to add on top of the authored breaks. Zero
     /// for the captions above a capture; the typographic pages let their one
@@ -230,9 +230,9 @@ let shots = [
          and the week below it.
          """,
          capture: "shot-04.png", slack: 0),
-    // The two pages with no phone on them are set larger, and the measure is
-    // what buys the size: a line of about seventeen characters at this width
-    // carries type half again as big as the captions do. So both are broken
+    // The page with no phone on it is set larger, and the measure is what
+    // buys the size: a line of about seventeen characters at this width
+    // carries type half again as big as the captions do. So it is broken
     // short.
     Shot(number: "05",
          caption: """
@@ -254,8 +254,8 @@ let rawDir = URL(fileURLWithPath: arguments[1], isDirectory: true)
 let outDir = URL(fileURLWithPath: arguments[2], isDirectory: true)
 try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
 
-// One size for every captioned capture, and one for the two typographic pages
-// — a store page whose headline changes size from slot to slot reads as six
+// One size for every captioned capture, and one for the typographic page
+// — a store page whose headline changes size from slot to slot reads as five
 // pages rather than one product. The size is the smallest that any single
 // caption needs, so nothing is ever set tighter than the page allows.
 let captioned = shots.filter { $0.capture != nil }

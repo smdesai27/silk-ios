@@ -347,7 +347,7 @@ private struct TurnCell: View {
         VStack(spacing: 0) {
             // .ex-you — 13px sans, +.01em. The
             // mockup's ink-40 / paper-32 are the ramp's old floor and land at
-            // 2.42:1 and 2.66:1; this is their AA-floored image (Silk.swift).
+            // 2.42:1 and 2.66:1; this is their AA-floored image (DesignSystem.swift).
             Text(turn.you)
                 .font(Silk.sans(13))
                 .tracking(Silk.track(0.01, 13))

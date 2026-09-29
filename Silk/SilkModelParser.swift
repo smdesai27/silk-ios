@@ -18,9 +18,9 @@ import FoundationModels
 ///
 /// **THE DOOR FIELD IS A FREE `String` ON PURPOSE**, and this used to say the
 /// opposite — that it was "constrained to the user's actual doors via the
-/// schema", which the code has never done. The eval that shipped alongside this
-/// file recommends the constraint (the language-layer research: a closed enum
-/// "fixed three of four leaks"; its eval harness says "in production this is
+/// schema", which the code has never done. The eval behind this widener (not
+/// in this repository) recommends the constraint (the language-layer research:
+/// a closed enum "fixed three of four leaks"; its eval harness says "in production this is
 /// `DynamicGenerationSchema(name:anyOf:)`"). It was built and
 /// measured on 2026-08-19 — 180 real parses, both shapes, against a five-door
 /// fixture — and the constraint is **worse**:
@@ -89,7 +89,7 @@ actor SilkModelParser {
     /// Measured on an M-series Mac with the assets already resident: a fresh
     /// session answers one of these sentences in ~530–650 ms, and the very
     /// first call of a process — the one that pages the model in — took
-    /// **1650 ms**. A phone is slower, and the repo's own fuzz campaign records
+    /// **1650 ms**. A phone is slower, and the August 2026 fuzz campaign recorded
     /// the model parse as "1–4 s". Two
     /// seconds sits above every honest answer and below the point where the
     /// user has stopped believing the "…", and the prewarm below is what keeps

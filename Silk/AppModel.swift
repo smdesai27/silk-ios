@@ -133,7 +133,7 @@ final class AppModel {
         // QA: -silkNoModel YES runs the app as a phone with no Apple
         // Intelligence does — the widener answers `.silence` for every
         // sentence, exactly as `SilkModelParser.parse`'s availability guard
-        // makes it (SilkModelParser.swift:179), and the deterministic grammar
+        // makes it (SilkModelParser.swift:198), and the deterministic grammar
         // is the whole parser.
         //
         // It exists because the simulator HAS the model, so a walk that types
@@ -301,6 +301,7 @@ final class AppModel {
         // earliest point the schedule can take. Until it fires, days record
         // as unobserved — which is honest, not a bug.
         armHeartbeatRecordingAnchor(downHours)
+        howItWorksPending = true
         onboarded = true
     }
 
@@ -522,6 +523,39 @@ final class AppModel {
     /// three invalidation sites that could go stale leave with it.
     var unlocksToday: Int {
         ledger.unlocks(dayStart: dayStart)
+    }
+
+    // MARK: - Info pages
+
+    /// The page standing in Safari's sheet, or nil. One at a time, whichever
+    /// raised it: a row in Settings' Info group, or setup's last step.
+    var infoPage: InfoPage?
+
+    /// Set by `completeSetup` and nowhere else. An install that set up before
+    /// the page existed never runs setup again, so it never meets this, and
+    /// the Info group in Settings is its way in.
+    @ObservationIgnored private var howItWorksPending = false
+
+    /// Setup's last word: How it works, once, over Now. A new install does not
+    /// know that a blocked app opens from Silk, by a sentence, after a wait,
+    /// and the first block screen is minutes away.
+    ///
+    /// Raised after a beat rather than with `onboarded`: the handover from
+    /// setup to Now is a 0.45s cross-fade, and a sheet asked for mid-transition
+    /// is dropped. A cancelled beat drops it too, rather than presenting over
+    /// a tree that has gone.
+    func showHowItWorksIfPending() async {
+        guard howItWorksPending else { return }
+        howItWorksPending = false
+        #if DEBUG
+        // QA: -silkNoHowItWorks YES keeps the sheet down, so a walk that
+        // finishes setup lands on a Now it can type into. Debug-only, like
+        // -silkNoModel: a switch that hides onboarding has no business in a
+        // shipped build.
+        if UserDefaults.standard.bool(forKey: "silkNoHowItWorks") { return }
+        #endif
+        do { try await Task.sleep(for: .seconds(0.6)) } catch { return }
+        infoPage = .howItWorks
     }
 
     // MARK: - The shield, raised from a door row
@@ -885,7 +919,7 @@ final class AppModel {
         ///
         /// This is load bearing, and it cost a UI walk to learn. The Validator
         /// runs a **number-provenance check** — `NumberParser.allNumbers(in:
-        /// utterance).contains(minutes)`, Validator.swift:149 — so the minutes
+        /// utterance).contains(minutes)`, Validator.swift:211 — so the minutes
         /// it is asked for must be words the user actually said. But the
         /// minutes a `.grant` verdict carries are the **clamped** ones: ask for
         /// sixty against a budget of forty and the verdict says 40, which

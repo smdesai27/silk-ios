@@ -23,7 +23,7 @@ struct FuzzCorpusR2 {
     }
 }
 
-// Round-3 conversation corpus (corpus-r3-conversation.json): run-ons,
+// Round-3 conversation corpus (FuzzCorpusR3Data.swift): run-ons,
 // self-corrections, sign-offs, questions, negations, reported speech.
 // Same spec mini-grammar, same interpreter, separate suite and grep tag.
 @Suite("Fuzz corpus R3")

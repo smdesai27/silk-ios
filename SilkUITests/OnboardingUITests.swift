@@ -62,7 +62,14 @@ final class OnboardingUITests: SilkWalk {
                 // citation that rots silently. (An earlier version also claimed
                 // the overlay "rises, pauses and lands in every walk below",
                 // which overstated the net by five times.)
-                "-silkWait", "0.6"]
+                "-silkWait", "0.6",
+                // How it works rises once over Now at the end of setup, over
+                // the bar and the dots a walk goes on to use. Off for every
+                // walk that shares these arguments;
+                // testHowItWorksRisesOnceAfterSetup launches without it to
+                // watch that rise (the Settings walk raises the sheet from its
+                // row, flag on).
+                "-silkNoHowItWorks", "YES"]
     }()
 
     // MARK: - Reading a state once it has arrived
@@ -583,8 +590,8 @@ final class OnboardingUITests: SilkWalk {
     // The Settings wheel is the only surface that sets a cap, so these walks are
     // the whole feature's front door: what the door's card states, what the wheel
     // writes, what the row and the card read back, and — in
-    // `…ClampsTheGrantAtTheBar` — that the ceiling is real by the time the bar is
-    // asked for minutes past it.
+    // `testSettingsCapCommitTightensAndTheRowReadsItBack` — that the ceiling
+    // is real by the time the bar is asked for minutes past it.
 
     /// **The card states before it offers.** A door row raises the door's own
     /// detail card, and the cap row is not merely present on it: it carries the
@@ -689,8 +696,9 @@ final class OnboardingUITests: SilkWalk {
     }
 
     /// Guideline 5.1.1(i): the privacy policy is reachable inside the app. The
-    /// row stands at the foot of Settings; it is not tapped here, because
-    /// tapping opens Safari and the walk would lose the app.
+    /// row stands in Settings' Info group, under How it works and over Support.
+    /// A row opens its page in Safari's sheet inside Silk, so the walk can tap
+    /// one and still have the app.
     @MainActor
     func testSettingsCarriesThePrivacyPolicyRow() throws {
         let app = launchFresh()
@@ -702,6 +710,40 @@ final class OnboardingUITests: SilkWalk {
         // not only the listing's Support URL).
         let supportRow = element(app, "silk.settings.support")
         expect(supportRow, labelContains: "Support", "the Support row did not read its name")
+        // And, above both, the page a new install needs: how a blocked app
+        // opens. The three stand under their own title.
+        let howRow = element(app, "silk.settings.how")
+        expect(howRow, labelContains: "How it works", "the How it works row did not read its name")
+        XCTAssertTrue(app.staticTexts["Info"].waitForExistence(timeout: Self.appear),
+                      "the Info title is missing")
+        tap(howRow, "the How it works row", raising: element(app, "silk.info"), "the How it works sheet")
+    }
+
+    /// How it works rises once over Now at the end of setup, and never again:
+    /// a later launch of the same install lands on Now with nothing over it.
+    /// The one walk launched without -silkNoHowItWorks.
+    @MainActor
+    func testHowItWorksRisesOnceAfterSetup() throws {
+        let hour = Calendar.current.component(.hour, from: .now)
+        let start = (hour + 6) % 24
+        let app = XCUIApplication()
+        app.launchArguments += ["-silkReset", "YES", "-silkDownStart", "\(start)",
+                                "-silkDownEnd", "\((start + 1) % 24)"]
+        app.launch()
+        completeSetup(app)
+        XCTAssertTrue(element(app, "silk.info").waitForExistence(timeout: Self.overlay),
+                      "How it works did not rise over Now after setup")
+        Self.stop(app)
+
+        // No -silkReset: the install that just finished setup, opened again.
+        app.launchArguments = []
+        app.launch()
+        XCTAssertTrue(app.textFields["silk.bar"].waitForExistence(timeout: Self.launch),
+                      "did not land on Now when already onboarded")
+        // Longer than the beat the sheet waits before rising, so a second
+        // showing would have arrived inside it.
+        XCTAssertFalse(element(app, "silk.info").waitForExistence(timeout: 3),
+                       "How it works rose again on a launch that ran no setup")
     }
 
     /// The feature end to end, from the only surface that has it: set a ceiling
@@ -1090,7 +1132,8 @@ final class OnboardingUITests: SilkWalk {
         // neither of them 0. Nothing in this walk makes a grant, so the parked
         // window every other walk launches with is protecting nothing here.
         let app = XCUIApplication()
-        app.launchArguments += ["-silkReset", "YES", "-silkDownStart", "21", "-silkDownEnd", "8"]
+        app.launchArguments += ["-silkReset", "YES", "-silkDownStart", "21", "-silkDownEnd", "8",
+                                "-silkNoHowItWorks", "YES"]
         app.launch()
         completeSetup(app)
 

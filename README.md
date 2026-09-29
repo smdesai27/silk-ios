@@ -53,14 +53,14 @@ half-steps — so a bare "rule 7" inside the spine means that list, not this one
 4. **The wall fails closed.** The ledger is the truth; a dead extension closes doors late, never
    leaves them open. The model proposes; the validator disposes.
 5. **No notification permission, ever.** Every word the app says comes from
-   `SilkCore/Sources/SilkCore/Strings.swift` — 76 of them today, 66 constants and 10 that compose.
+   `SilkCore/Sources/SilkCore/Strings.swift` — 78 of them today, 68 constants and 10 that compose.
    The file is the vocabulary, and nothing outside it may speak.
 
 ## Architecture
 
 | Path | What it is |
 |---|---|
-| `SilkCore/` | The spine as a pure-Swift package: parser, number tokenizer, clause index, validator, polarity engine, grant ledger, per-app ceilings, the wait's clock and price, the launch catalogue's data. `swift test` runs on macOS **and on Linux** — 1,061 tests across 193 suites (three generations of fuzz corpora, a seeded 20k-input fuzzer, the wait's frame-budget bounds, and the re-lock's lateness bounds), no simulator needed. The sources import Foundation and nothing else and carry no conditional compilation at all, which is what lets 1,060 of the repo's 1,200 tests answer in a container; CI's `spine-linux` job is what keeps that true. |
+| `SilkCore/` | The spine as a pure-Swift package: parser, number tokenizer, clause index, validator, polarity engine, grant ledger, per-app ceilings, the wait's clock and price, the launch catalogue's data. `swift test` runs on macOS **and on Linux** — 1,061 tests across 193 suites (three generations of fuzz corpora, a seeded 20k-input fuzzer, the wait's frame-budget bounds, and the re-lock's lateness bounds), no simulator needed. The sources import Foundation and nothing else and carry no conditional compilation at all, which is what lets 1,060 of the repo's 1,201 tests answer in a container; CI's `spine-linux` job is what keeps that true. |
 | `Silk/` | The app: Now, Mirror + Settings, the bar and its conversation, the compile pipeline, wall controller, the launch catalogue's app half — where the spine's catalogue reaches `UIApplication` — the `Spend` App Intent, the on-device model widener. |
 | `Shared/` | The App Group bridge (`SharedStore`) and the single wall (`Wall.reconcile()`), shared with all three extensions. |
 | `SilkMonitor/` · `SilkShield/` · `SilkShieldAction/` | The Screen Time extensions: re-lock layers, the statement-only shield, the one OK button. |
@@ -126,8 +126,9 @@ is 4. *Status as of 2026-09-25.*
 ## Links
 
 [App Store](https://apps.apple.com/app/silk-app-blocker-screen-time/id6802485815) ·
+[How it works](https://smdesai27.github.io/silk-ios/how.html) ·
 [Privacy policy](https://smdesai27.github.io/silk-ios/privacy.html) ·
-[Support](https://smdesai27.github.io/silk-ios/support.html). The last two are the pages the app
+[Support](https://smdesai27.github.io/silk-ios/support.html). The last three are the pages the app
 itself links to (`Silk/Links.swift`), served from the `gh-pages` branch. Anything security- or
 privacy-relevant goes to the address on the support page rather than to a public issue; see
 [SECURITY.md](.github/SECURITY.md).

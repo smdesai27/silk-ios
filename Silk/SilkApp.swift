@@ -357,8 +357,8 @@ struct RootView: View {
                         // closures that could not fire.
                         //
                         // The card is a pure value view like SettingsView: it
-                        // takes a name, an icon, a finished cap string and four
-                        // closures. `settingsCap(for:)` composes the string
+                        // takes a name, an icon, a finished cap string, an
+                        // optional pending string and five closures. `settingsCap(for:)` composes the string
                         // through `Caps.settingsValue`, and `doorIcons` is a
                         // stored property so the icon actually refreshes after a
                         // rebind — see its note in AppModel.
@@ -420,6 +420,24 @@ struct RootView: View {
                         }
                     }
                 }
+                // The Info pages, in Safari's sheet: Settings' three rows, and
+                // How it works once at the end of setup. On ToastHost and not on
+                // the stage beneath it, because the picker's sheet already
+                // stands there and two presentations on one view conflict.
+                .sheet(item: $model.infoPage) { page in
+                    // A container, as `silk.thread` is, so the walks can find
+                    // the sheet by name without the name landing on Safari's
+                    // own controls.
+                    ZStack {
+                        SafariSheet(url: page.url) { model.infoPage = nil }
+                    }
+                    .ignoresSafeArea()
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("silk.info")
+                }
+                // Mounted with the onboarded tree, so it runs as setup hands
+                // over to Now; it does nothing on any other launch.
+                .task { await model.showHowItWorksIfPending() }
                 // FocusState cannot leave the view, so the model holds its shadow.
                 // A blur within a beat of a send is the return key resigning the
                 // field, not the user leaving the conversation — refocus and keep
@@ -568,7 +586,8 @@ private struct SettingsPage: View {
                      onTapUndo: { model.raisePicker(.undo) },
                      onTapDoor: { model.editDoor(named: $0) },
                      onAddDoor: { model.beginAddDoor() },
-                     onTapPrivacy: { UIApplication.shared.open(SilkLinks.privacyPolicy) },
-                     onTapSupport: { UIApplication.shared.open(SilkLinks.support) })
+                     onTapHowItWorks: { model.infoPage = .howItWorks },
+                     onTapPrivacy: { model.infoPage = .privacy },
+                     onTapSupport: { model.infoPage = .support })
     }
 }
