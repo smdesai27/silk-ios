@@ -20,6 +20,13 @@ public enum NumberParser {
         "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
         "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
     ]
+    /// Every key of the three tables above, in one set. The tables are
+    /// disjoint, so "is this a number word" is one probe here where it was
+    /// three there — and the ordinary word, which is in none of them, paid all
+    /// three. Derived from the tables rather than spelled out, so a word added
+    /// to one of them is a number word here without a second edit.
+    private static let numberWords: Set<String> =
+        Set(units.keys).union(teens.keys).union(tens.keys)
 
     /// Every number expressible in the utterance, **in minutes**, in order of
     /// appearance. Used both for parsing and for the validator's provenance
@@ -145,6 +152,10 @@ public enum NumberParser {
         i = 0
         while i < tokens.count {
             let tok = tokens[i]
+            // Most tokens are no number word at all, and for those the arms
+            // below do nothing but step on: one probe settles that, where the
+            // three table lookups below would each have been paid to say no.
+            guard numberWords.contains(tok) else { i += 1; continue }
             if let t = tens[tok] {
                 if i + 1 < tokens.count, let u = units[tokens[i + 1]] {
                     if !hundredPoisons(i + 1, tokens, opensGroup) {
@@ -605,14 +616,35 @@ public enum NumberParser {
     ///     and by the original Character scan for anything else — the three
     ///     exotic spellings in `apostrophes` are all non-ASCII, so an ASCII
     ///     string cannot be carrying one.
+    ///
+    /// THE APOSTROPHE IS ALSO THE ORDINARY CASE, and the skips above only paid
+    /// off in its absence. iOS smart punctuation spells every contraction with
+    /// U+2019, one non-ASCII scalar that sent the whole sentence down the
+    /// Unicode road: `lowercased()`, a Character-level fold, a Foundation
+    /// split. So a string whose ONLY non-ASCII scalar is U+2019 is rewritten
+    /// with "'" in its place and tokenized as the ASCII string it then is, and
+    /// an ASCII string is folded a byte at a time. Both are exact:
+    ///   - U+2019 and "'" are both in `apostrophes`, neither is a letter or a
+    ///     number, and neither joins a grapheme cluster with an ASCII
+    ///     neighbour, so `foldingApostrophes` treats the two alike — and after
+    ///     the fold no apostrophe of either spelling is left for the split to
+    ///     read;
+    ///   - `foldingASCIIApostrophes` is `foldingApostrophes` restated over
+    ///     bytes; its note says why every neighbour test answers the same.
+    /// Any other non-ASCII scalar keeps the original road.
     static func tokenize(_ text: String) -> [String] {
         let shape = shape(of: text)
+        if !shape.isASCII, let plain = straighteningSmartApostrophes(text) {
+            return tokenize(plain)
+        }
         var lowered = shape.isLowercaseASCII ? text : text.lowercased()
         if shape.hasHyphen { lowered = lowered.replacingOccurrences(of: "-", with: " ") }
         let marked = shape.isASCII
             ? shape.hasApostrophe
             : lowered.contains(where: { apostrophes.contains($0) })
-        if marked { lowered = foldingApostrophes(lowered) }
+        if marked {
+            lowered = shape.isASCII ? foldingASCIIApostrophes(lowered) : foldingApostrophes(lowered)
+        }
         if shape.hasColon { lowered = loosingColons(lowered) }
         // `lowered` is still ASCII if `text` was: case folding, the hyphen and
         // the two folds above all map ASCII to ASCII.
@@ -624,6 +656,54 @@ public enum NumberParser {
             guard let (number, unit) = gluedUnit(tok) else { return [tok] }
             return [number, unit]
         }
+    }
+
+    /// `text` with every U+2019 (UTF-8 E2 80 99) written as "'", or nil when
+    /// the string carries any other non-ASCII scalar. Called only for a string
+    /// that is not ASCII, so a non-nil answer is ASCII and differs from `text`,
+    /// and `tokenize` cannot recurse through here twice.
+    private static func straighteningSmartApostrophes(_ text: String) -> String? {
+        var out: [UInt8] = []
+        out.reserveCapacity(text.utf8.count)
+        var bytes = text.utf8.makeIterator()
+        while let b = bytes.next() {
+            if b < 0x80 { out.append(b); continue }
+            // A String's UTF-8 is valid, so E2 as a lead byte followed by 80 99
+            // is U+2019 and nothing else; any other lead byte is some other
+            // scalar, and the string keeps the Unicode road.
+            guard b == 0xE2, bytes.next() == 0x80, bytes.next() == 0x99 else { return nil }
+            out.append(UInt8(ascii: "'"))
+        }
+        return String(decoding: out, as: UTF8.self)
+    }
+
+    /// `foldingApostrophes` for an ASCII string, a byte at a time, and the same
+    /// answer for every such string: each branch below is a branch there.
+    ///
+    /// On ASCII, `Character.isLetter` is exactly a–z and A–Z and `isNumber` is
+    /// exactly 0–9, so the byte tests ask what the Character tests asked. The
+    /// one ASCII grapheme cluster longer than a byte is "\r\n", and wherever
+    /// it stands as a neighbour it answers "not a letter, not a number" under
+    /// both readings — as the Character "\r\n" there, as its "\r" or "\n"
+    /// byte here — so the join fires on exactly the same apostrophes. The ends
+    /// of the string read as a space in both. The only ASCII apostrophe is "'".
+    private static func foldingASCIIApostrophes(_ text: String) -> String {
+        let u = Array(text.utf8)
+        var out: [UInt8] = []
+        out.reserveCapacity(u.count)
+        for i in u.indices {
+            guard u[i] == UInt8(ascii: "'") else { out.append(u[i]); continue }
+            let before = i > 0 ? u[i - 1] : UInt8(ascii: " ")
+            let after = i + 1 < u.count ? u[i + 1] : UInt8(ascii: " ")
+            let beyond = i + 2 < u.count ? u[i + 2] : UInt8(ascii: " ")
+            let beforeIsLetter = (before >= UInt8(ascii: "a") && before <= UInt8(ascii: "z"))
+                || (before >= UInt8(ascii: "A") && before <= UInt8(ascii: "Z"))
+            if beforeIsLetter, after == UInt8(ascii: "t"), !isAlnumByte(beyond) {
+                continue                    // "'t" joins: don't -> dont
+            }
+            out.append(UInt8(ascii: " "))   // everything else is a boundary
+        }
+        return String(decoding: out, as: UTF8.self)
     }
 
     /// `components(separatedBy: separators)` for a string that is all ASCII,
@@ -702,7 +782,7 @@ public enum NumberParser {
     /// "five" — without running the idiom scanner over it. Read by the
     /// grammar's bare-quantity rule, whose question is one token at a time.
     static func isNumberWord(_ token: String) -> Bool {
-        units[token] != nil || teens[token] != nil || tens[token] != nil
+        numberWords.contains(token)
     }
 
     /// **`!allNumbers(in: s).isEmpty`, and nothing else.** Same answer for every
@@ -863,6 +943,10 @@ public enum NumberParser {
     /// is ["hinge", "s"] and "hinge" is the door.
     ///
     /// "1'20" also keeps splitting into two numbers, which is what it is.
+    ///
+    /// An ASCII string is folded by `foldingASCIIApostrophes` instead, which
+    /// restates this rule over bytes: a change to the rule here is a change
+    /// there too.
     private static func foldingApostrophes(_ text: String) -> String {
         let chars = Array(text)
         var out = String()
@@ -1096,6 +1180,12 @@ extension NumberParser {
         /// of it — LF, VT, FF, CR, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR —
         /// listed out rather than reached through a predicate so that each one
         /// is a thing a test can name.
+        ///
+        /// A SEPARATOR ADDED HERE, or to the conditional arms of `isSeparator`,
+        /// must also be admitted by `mayHoldASeparator`: that byte scan is what
+        /// lets `split` skip a sentence with none of these in it, and a
+        /// separator it does not know of would silently stop cutting any
+        /// sentence that carries no other one.
         private static let unconditionalSeparators: Set<Unicode.Scalar> = [
             ",", ";", "!", "?",
             "\u{000A}", "\u{000B}", "\u{000C}", "\u{000D}",
@@ -1133,6 +1223,13 @@ extension NumberParser {
         ///   contraction would be a sentence boundary.
         /// - "/" and brackets separate items, not clauses.
         private static func split(_ text: String) -> [Substring] {
+            // THE ORDINARY SENTENCE HAS NO SEPARATOR IN IT, and the walk below
+            // steps every Character of it — three grapheme steps, a set probe
+            // and two Unicode properties apiece — to hand back the one piece
+            // it started with. A byte scan settles that first: with no byte
+            // any separator is spelled with, `isSeparator` is false for every
+            // Character, and the walk would return exactly this.
+            guard mayHoldASeparator(text) else { return [text[text.startIndex...]] }
             var pieces: [Substring] = []
             var start = text.startIndex
             var i = text.startIndex
@@ -1194,6 +1291,40 @@ extension NumberParser {
             return pieces
         }
 
+        /// Whether `text` holds a byte that `isSeparator` could fire on — a
+        /// NEGATIVE filter: false means no Character in `text` is a separator,
+        /// true means only that the walk has to ask.
+        ///
+        /// `isSeparator` fires only on a cluster made wholly of
+        /// `unconditionalSeparators` scalars, or on ".", "-", U+2014 or U+2013,
+        /// each of which is one scalar with no other canonical spelling. So a
+        /// string holding none of those scalars cannot fire, and each of them
+        /// has a byte that says it is there:
+        ///   - ASCII: , ; ! ? . - and LF VT FF CR (0x0A–0x0D), which are
+        ///     themselves;
+        ///   - C2, the lead byte of NEL (U+0085, C2 85);
+        ///   - E2, the lead byte of LINE SEPARATOR (U+2028, E2 80 A8),
+        ///     PARAGRAPH SEPARATOR (U+2029, E2 80 A9), the em dash (U+2014,
+        ///     E2 80 94) and the en dash (U+2013, E2 80 93).
+        /// A lead byte never appears as a continuation byte (those are 80–BF),
+        /// so C2 and E2 are seen exactly when a scalar they open is present —
+        /// which also admits their harmless neighbours, the no-break space and
+        /// the ellipsis among them; the walk answers for those. Every other
+        /// non-ASCII byte opens or continues a scalar that no arm of
+        /// `isSeparator` accepts.
+        private static func mayHoldASeparator(_ text: String) -> Bool {
+            text.utf8.contains { b in
+                switch b {
+                case 0x0A...0x0D, 0xC2, 0xE2,
+                     UInt8(ascii: ","), UInt8(ascii: ";"), UInt8(ascii: "!"),
+                     UInt8(ascii: "?"), UInt8(ascii: "."), UInt8(ascii: "-"):
+                    return true
+                default:
+                    return false
+                }
+            }
+        }
+
         /// The word standing to the right of a candidate separator, skipping the
         /// whitespace between. Bounded by the run it reads and by the gap it
         /// skips, and those are disjoint between candidates, so the whole pass
@@ -1226,6 +1357,7 @@ extension NumberParser {
         /// against the character English reserves for ranges.
         /// The three dash spellings, named once so `split` can ask whether the
         /// text carries any of them before it starts tracking words for them.
+        /// A spelling added here is a separator `mayHoldASeparator` must admit.
         private static let dashes: Set<Character> = ["\u{2014}", "\u{2013}", "-"]
 
         private static func isQuantity(_ word: String) -> Bool {
